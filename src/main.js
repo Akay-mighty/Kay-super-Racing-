@@ -8,6 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildCarGeometry, SPORT } from './car-geometry.js';
 import { vehicleContact, resolveVehicleContact } from './vehicle-physics.js';
 import { touch } from './touch.js';
+import { createArena } from './arena.js';
 
 const $ = id => document.getElementById(id);
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -63,6 +64,13 @@ const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAtten
   const sp = []; for (let i = 0; i < 600; i++) { const a = rand(0, 6.283), e = rand(0.05, 1.3), r = 2300; sp.push(Math.cos(a) * Math.cos(e) * r, Math.sin(e) * r, Math.sin(a) * Math.cos(e) * r); }
   const stars = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)), starMat); stars.frustumCulled = false; sky.add(stars);
 }
+const sunSpr = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: canvasTex(128, 128, (g, w, h) => { const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.12, 'rgba(255,255,255,.85)'); gr.addColorStop(0.4, 'rgba(255,255,255,.18)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }),
+  color: 0xfff3d6, fog: false, depthWrite: false, transparent: true, blending: THREE.AdditiveBlending, toneMapped: false
+}));
+sunSpr.scale.set(560, 560, 1); sky.add(sunSpr);
+{
+}
 scene.add(sky);
 const cloudTex = canvasTex(128, 64, (g, w, h) => {
   for (let i = 0; i < 9; i++) {
@@ -86,6 +94,7 @@ sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.
 Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 500 });
 scene.add(sun, sun.target);
 
+const trackStart = scene.children.length;
 /* ---------- track ---------- */
 const CP = [[0,0,-300],[0,0,0],[10,0,250],[120,6,450],[330,14,540],[560,22,500],[700,24,350],[690,18,120],[560,10,-60],[560,4,-260],[640,0,-440],[540,0,-600],[320,0,-640],[140,0,-560],[40,0,-460]];
 const curve = new THREE.CatmullRomCurve3(CP.map(p => V3(...p)), true, 'centripetal');
@@ -176,7 +185,7 @@ let cityMat;
     const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, a); gr.addColorStop(1, b);
     g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.font = 'italic 900 52px Segoe UI,Arial'; g.textAlign = 'center'; g.fillText(txt, w / 2, h / 2 + 18);
   });
-  const texs = [mk('#ff2d78', '#ffb347', 'NITRO'), mk('#00c6ff', '#6a11cb', 'SUPER'), mk('#f7971e', '#ffd200', 'TURBO'), mk('#11998e', '#38ef7d', 'DRIFT')];
+  const texs = [mk('#ff2d78', '#ffb347', 'NITRO'), mk('#00c6ff', '#6a11cb', 'KAY'), mk('#f7971e', '#ffd200', 'TURBO'), mk('#11998e', '#38ef7d', 'DRIFT')];
   [45, 130, 215, 310, 400, 640].forEach((k, n) => {
     const side = n % 2 ? 1 : -1, g = new THREE.Group();
     const board = new THREE.Mesh(new THREE.PlaneGeometry(26, 13), new THREE.MeshBasicMaterial({ map: texs[n % 4], toneMapped: false, side: THREE.DoubleSide }));
@@ -241,6 +250,9 @@ let cityMat;
   }
 }
 
+const trackObjs = scene.children.slice(trackStart);
+const arena = createArena(canvasTex);
+scene.add(arena.group, camera);
 /* ---------- cars ---------- */
 const SPORT_GEO = buildCarGeometry(SPORT);
 const PART = { 1: '#0e1a26', 2: '#09090b', 3: '#c9ced6', 4: '#16191e', 6: '#222222', 7: '#101114', 8: '#101114' };
@@ -283,6 +295,7 @@ function sample(s, lat = 0) {
 const car = makeCar(store.get('sr.color', 0xeef1f5));
 car.headlight = new THREE.SpotLight(0xfff0d0, 0, 170, 0.5, 0.7, 2);
 { const tg = new THREE.Object3D(); tg.position.set(0, 0.4, 30); car.headlight.position.set(0, 0.8, 2); car.add(car.headlight, tg); car.headlight.target = tg; }
+const SUNSPR = { day: [1, 0xfff3d6], dawn: [1, 0xffb070], sunset: [1, 0xff8844], night: [0.45, 0xaec4ff] };
 const ENVS = {
   day:    { sky: [[0, '#2d86ee'], [0.38, '#6db4f2'], [0.5, '#cfe4f6'], [1, '#cfe0f0']], fog: 0xcfe0f0, fn: 260, ff: 1500, hemi: [0xcfe6ff, 0x607080, 1.1], sun: [0xfff0d8, 2.5], pos: [120, 200, 80], env: 0.4, cloud: 0.9, bloom: 0.4, glow: 0, stars: 0, head: 0 },
   dawn:   { sky: [[0, '#34559e'], [0.38, '#b98aa6'], [0.5, '#ffcf9f'], [1, '#f5d2b0']], fog: 0xf0c8a4, fn: 200, ff: 1300, hemi: [0xffd9bd, 0x4a4458, 0.95], sun: [0xffb27a, 2.1], pos: [230, 70, 100], env: 0.3, cloud: 0.75, bloom: 0.45, glow: 0, stars: 0, head: 0 },
@@ -297,6 +310,7 @@ function setEnv(k) {
   scene.environmentIntensity = e.env; clouds.forEach(c => { c.material.opacity = e.cloud; });
   bloomPass.strength = e.bloom; if (cityMat) cityMat.emissiveIntensity = e.glow * 1.4;
   starMat.opacity = e.stars; car.headlight.intensity = e.head * 2000;
+  const ss = SUNSPR[k] || SUNSPR.day; sunSpr.position.set(...e.pos).normalize().multiplyScalar(2300); sunSpr.material.opacity = ss[0]; sunSpr.material.color.setHex(ss[1]);
 }
 const P = { spin: 0, pos: V3(), vel: V3(), h: 0, idx: 0, crosses: 0, nitro: 1, prog: 0, finished: false, rank: 6 };
 {
@@ -324,6 +338,40 @@ function puff(p, v, k = 1) {
   o.s.scale.setScalar(1.4 * k); o.s.visible = true;
 }
 
+/* ---------- arena state, skid marks, speed streaks ---------- */
+const A = { score: 0, comboT: 0, hold: 0, mult: 1, maxMult: 1, cones: 0, dur: 90, t: 90, hit: 0 };
+const SKID = 900;
+const skid = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.4, 1.1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x0b0b0d, transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }), SKID);
+skid.frustumCulled = false; scene.add(skid);
+let skI = 0; const lastSk = [V3(1e9, 0, 1e9), V3(1e9, 0, 1e9)];
+function resetSkids() { dummy.position.set(0, -50, 0); dummy.rotation.set(0, 0, 0); dummy.scale.set(0, 0, 0); dummy.updateMatrix(); for (let i = 0; i < SKID; i++) skid.setMatrixAt(i, dummy.matrix); dummy.scale.set(1, 1, 1); skid.instanceMatrix.needsUpdate = true; skI = 0; }
+function addSkid(w, i, y) {
+  if (lastSk[i].distanceToSquared(w) < 0.4) return; lastSk[i].copy(w);
+  dummy.position.set(w.x, y + 0.07, w.z); dummy.rotation.set(0, P.h, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+  skid.setMatrixAt(skI++ % SKID, dummy.matrix); skid.instanceMatrix.needsUpdate = true; dummy.rotation.set(0, 0, 0);
+}
+const STK = 150, spos = new Float32Array(STK * 6), scol = new Float32Array(STK * 6), sa = new Float32Array(STK), sr = new Float32Array(STK), sd = new Float32Array(STK);
+const PAL = [[1, 1, 1], [0.4, 0.9, 1], [1, 0.3, 0.8], [0.65, 0.4, 1], [1, 0.9, 0.5]];
+for (let i = 0; i < STK; i++) {
+  sa[i] = rand(0, 6.283); sr[i] = rand(3.5, 18); sd[i] = rand(6, 170);
+  const c = PAL[(Math.random() * 5) | 0]; for (let j = 0; j < 3; j++) { scol[i * 6 + j] = c[j] * 3.2; scol[i * 6 + 3 + j] = c[j] * 0.5; }
+}
+const stkGeo = new THREE.BufferGeometry();
+stkGeo.setAttribute('position', new THREE.BufferAttribute(spos, 3)); stkGeo.setAttribute('color', new THREE.BufferAttribute(scol, 3));
+const stkMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false });
+const streaks = new THREE.LineSegments(stkGeo, stkMat); streaks.frustumCulled = false; streaks.visible = false; camera.add(streaks);
+function updateStreaks(dt, sp, boosting) {
+  const amt = (cfg.env === 'night' || boosting) ? 1 : 0.5, k = clamp((sp - 42) / 40, 0, 1) * amt;
+  stkMat.opacity = k; streaks.visible = k > 0.01; if (!streaks.visible) return;
+  const len = 2 + sp * 0.09, v = sp * 1.15 + 30;
+  for (let i = 0; i < STK; i++) {
+    sd[i] -= v * dt; if (sd[i] < 4) sd[i] += 170;
+    const x = Math.cos(sa[i]) * sr[i], y = Math.sin(sa[i]) * sr[i] * 0.65 + 0.5, o = i * 6;
+    spos[o] = x; spos[o + 1] = y; spos[o + 2] = -sd[i]; spos[o + 3] = x; spos[o + 4] = y; spos[o + 5] = -(sd[i] + len);
+  }
+  stkGeo.attributes.position.needsUpdate = true;
+}
+
 /* ---------- input / audio ---------- */
 const keys = {};
 addEventListener('keydown', e => {
@@ -331,6 +379,7 @@ addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.code === 'KeyR' && ['race', 'count', 'paused', 'finished'].includes(state) && !(cfg.mode === 'tour' && P.finished)) retry();
   if (e.code === 'Escape' || e.code === 'KeyP') { if (state === 'paused') resume(); else pause(); }
+  if (e.code === 'KeyT') respawn();
   if (e.code === 'KeyM') muted = !muted;
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -379,15 +428,16 @@ const toast = (txt, col = '#7dff8a') => { const e = $('toast'); e.textContent = 
 let state = 'menu', cdT = 3, raceT = 0, shake = 0, camYaw = P.h, lastRank = 6, ovCool = 0, goT = 0, prevState = 'race', menuT = 0, prevCrosses = 0, lapStart = 0, bestLap = Infinity;
 const DIFF = [0.9, 1, 1.07], PTS = [10, 8, 6, 4, 2, 1], LEVELS = ['Easy', 'Normal', 'Hard'];
 const CUPS = [
-  { name: 'CITY DAWN', env: 'dawn', laps: 2, diff: 0 },
-  { name: 'NOON RUSH', env: 'day', laps: 3, diff: 1 },
-  { name: 'SUNSET RUN', env: 'sunset', laps: 3, diff: 1 },
-  { name: 'NIGHT GRAND PRIX', env: 'night', laps: 3, diff: 2 }
+  { name: 'CITY DAWN', type: 'race', env: 'dawn', laps: 2, diff: 0 },
+  { name: 'NOON RUSH', type: 'race', env: 'day', laps: 3, diff: 1 },
+  { name: 'AIRFIELD DRIFT', type: 'arena', env: 'day', dur: 90, diff: 1 },
+  { name: 'SUNSET RUN', type: 'race', env: 'sunset', laps: 3, diff: 1 },
+  { name: 'NIGHT GRAND PRIX', type: 'race', env: 'night', laps: 3, diff: 2 }
 ];
 const COLORS = [0xeef1f5, 0xd42a2a, 0x1d6fe0, 0xf2b705, 0x22a05a, 0x16181d, 0xff6a00, 0x8a3ffc];
 let cfg = { mode: 'menu', laps: 3, diff: 1, ai: 5, env: 'day' };
 let T = store.get('sr.t', null);
-const opt = Object.assign({ laps: 3, diff: 1, env: 'day', q: 'high', snd: 'on' }, store.get('sr.opt', {}));
+const opt = Object.assign({ laps: 3, diff: 1, dur: 90, env: 'day', q: 'high', snd: 'on' }, store.get('sr.opt', {}));
 const show = (id, on) => $(id).classList.toggle('hide', !on);
 const ord = n => n + ['th', 'st', 'nd', 'rd'][n <= 3 ? n : 0];
 
@@ -397,13 +447,19 @@ function setState(s) {
 function followSun() { sun.position.set(car.position.x + sunOff.x, car.position.y + sunOff.y, car.position.z + sunOff.z); sun.target.position.copy(car.position); }
 
 function resetWorld(c) {
-  cfg = c; TOTAL = c.laps; setEnv(c.env); AIs = AI.slice(0, c.ai);
-  const slot = c.ai, g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4);
-  P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N;
+  c = Object.assign({ type: 'race' }, c); cfg = c; TOTAL = c.laps || 1; setEnv(c.env); AIs = AI.slice(0, c.ai);
+  const arenaOn = c.type === 'arena';
+  trackObjs.forEach(o => { o.visible = !arenaOn; }); arena.group.visible = arenaOn; arena.reset();
+  document.body.classList.toggle('arena', arenaOn && c.mode !== 'menu'); $('paintBar').classList.remove('open');
+  let g;
+  if (arenaOn) { g = { p: V3(0, 0, -150) }; P.pos.set(0, 0, -150); P.h = 0; P.idx = 0; }
+  else { const slot = c.ai; g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
   P.vel.set(0, 0, 0); P.spin = 0; P.crosses = 0; P.nitro = 1; P.finished = false; P.rank = c.ai + 1; P.prog = 0;
   AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = (rand(62, 71) - k * 0.4) * DIFF[c.diff]; });
   smoke.forEach(o => { o.life = 0; o.s.visible = false; });
   car.flames.forEach(f => { f.visible = false; });
+  Object.assign(A, { score: 0, comboT: 0, hold: 0, mult: 1, maxMult: 1, cones: 0, dur: c.dur || 90, t: c.dur || 90, hit: 0 });
+  resetSkids();
   raceT = 0; shake = 0; lastRank = c.ai + 1; ovCool = 0; goT = 0; prevCrosses = 0; lapStart = 0; bestLap = Infinity; camYaw = P.h;
   camera.position.set(g.p.x - Math.sin(P.h) * 9, g.p.y + 4, g.p.z - Math.cos(P.h) * 9);
 }
@@ -424,6 +480,11 @@ function pause() {
 }
 function resume() { if (state !== 'paused') return; show('pause', false); setState(prevState); }
 function retry() { startRace(cfg); }
+function respawn() {
+  if (state !== 'race' || P.finished) return;
+  if (cfg.type === 'arena') { P.pos.set(0, 0, -150); P.h = 0; } else { const g = sample(P.idx, 0); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); }
+  P.vel.set(0, 0, 0); P.spin = 0; camYaw = P.h; toast('RESPAWN', '#ffffff');
+}
 
 /* menu wiring */
 const screens = [...document.querySelectorAll('#menu .screen')];
@@ -431,15 +492,17 @@ function showScreen(n) {
   screens.forEach(sc => sc.classList.toggle('on', sc.dataset.s === n));
   if (n === 'tour') renderTour();
   if (n === 'tt') renderBest();
-  if (n === 'quick' || n === 'tt') setEnv(opt.env);
+  if (n === 'arena') renderArBest();
+  if (n === 'quick' || n === 'tt' || n === 'arena') setEnv(opt.env);
 }
 function syncSegs() {
   document.querySelectorAll('.seg').forEach(seg => seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', String(opt[seg.dataset.k]) === b.dataset.v)));
 }
+function renderArBest() { const b = store.get(`sr.best.arena.${opt.dur}`, null); $('arBest').textContent = b ? `BEST  ${b.toLocaleString()}` : 'NO SCORE YET'; }
 function renderBest() { const b = store.get(`sr.best.tt.${opt.laps}`, null); $('ttBest').textContent = b ? `BEST  ${fmt(b)}` : 'NO TIME SET YET'; }
 function renderTour() {
   const r = T ? T.round : 0;
-  let h = CUPS.map((c, i) => `<div class="rr${i === r ? ' me' : ''}"><b>${i + 1}</b><span>${c.name}</span><em>${c.laps} laps · ${LEVELS[c.diff]}</em><i>${i < r ? '✔' : ''}</i></div>`).join('');
+  let h = CUPS.map((c, i) => `<div class="rr${i === r ? ' me' : ''}"><b>${i + 1}</b><span>${c.name}</span><em>${c.type === 'arena' ? c.dur + 's · drift score' : c.laps + ' laps · ' + LEVELS[c.diff]}</em><i>${i < r ? '✔' : ''}</i></div>`).join('');
   if (T) h += '<div class="lbl">STANDINGS</div>' + Object.entries(T.pts).sort((a, b) => b[1] - a[1]).map(([n, p]) => `<div class="rr${n === 'YOU' ? ' me' : ''}"><span>${n}</span><i>${p} pts</i></div>`).join('');
   $('tourList').innerHTML = h;
   $('tourGo').textContent = T ? `CONTINUE · ROUND ${r + 1}` : 'START TOURNAMENT';
@@ -456,9 +519,10 @@ function applyQuality() {
 function act(a) {
   if (a === 'quick') startRace({ mode: 'quick', laps: opt.laps, diff: opt.diff, ai: 5, env: opt.env });
   else if (a === 'tt') startRace({ mode: 'tt', laps: opt.laps, diff: 1, ai: 0, env: opt.env });
+  else if (a === 'arena') startRace({ mode: 'arena', type: 'arena', laps: 1, diff: opt.diff, ai: 0, env: opt.env, dur: opt.dur, title: 'DRIFT ARENA' });
   else if (a === 'tourGo' || a === 'next') {
     if (!T) { T = { round: 0, pts: {} }; store.set('sr.t', T); }
-    const c = CUPS[T.round]; startRace({ mode: 'tour', laps: c.laps, diff: c.diff, ai: 5, env: c.env, title: `ROUND ${T.round + 1}: ${c.name}` });
+    const c = CUPS[T.round]; startRace({ mode: 'tour', type: c.type, laps: c.laps || 1, diff: c.diff, ai: c.type === 'arena' ? 0 : 5, env: c.env, dur: c.dur, title: `ROUND ${T.round + 1}: ${c.name}` });
   }
   else if (a === 'tourReset') { T = null; store.set('sr.t', null); renderTour(); }
   else if (a === 'resume') resume();
@@ -471,8 +535,8 @@ document.addEventListener('click', e => {
   else if (b.dataset.act) act(b.dataset.act);
   else if (b.dataset.c) paintPlayer(+b.dataset.c);
   else if (b.dataset.v !== undefined && b.parentElement.classList.contains('seg')) {
-    const k = b.parentElement.dataset.k; opt[k] = (k === 'laps' || k === 'diff') ? +b.dataset.v : b.dataset.v; store.set('sr.opt', opt); syncSegs();
-    if (k === 'env') setEnv(opt.env); if (k === 'laps') renderBest(); if (k === 'q') applyQuality(); if (k === 'snd') muted = opt.snd === 'off';
+    const k = b.parentElement.dataset.k; opt[k] = (k === 'laps' || k === 'diff' || k === 'dur') ? +b.dataset.v : b.dataset.v; store.set('sr.opt', opt); syncSegs();
+    if (k === 'env') setEnv(opt.env); if (k === 'laps') renderBest(); if (k === 'dur') renderArBest(); if (k === 'q') applyQuality(); if (k === 'snd') muted = opt.snd === 'off';
   }
 });
 $('pauseBtn').onclick = pause;
@@ -502,7 +566,16 @@ function stepPlayer(dt, racing) {
   if (boosting) P.nitro = Math.max(0, P.nitro - 0.26 * dt); else P.nitro = Math.min(1, P.nitro + (0.025 + (k.drift && sp > 30 ? 0.09 : 0)) * dt);
   P.pos.addScaledVector(P.vel, dt);
 
-  /* track relation */
+  let y = 0, pitch = 0;
+  if (cfg.type === 'arena') {
+    const dd = Math.hypot(P.pos.x, P.pos.z), lim = arena.R - 1.8;
+    if (dd > lim) {
+      const nx = P.pos.x / dd, nz = P.pos.z / dd; P.pos.x = nx * lim; P.pos.z = nz * lim;
+      const vo = P.vel.x * nx + P.vel.z * nz;
+      if (vo > 0) { P.vel.x -= nx * vo * 1.3; P.vel.z -= nz * vo * 1.3; P.vel.multiplyScalar(1 - clamp(vo * 0.012, 0.01, 0.3)); shake = Math.max(shake, clamp(vo / 18, 0.1, 1)); }
+    }
+    if (state === 'race' || state === 'finished') arenaTick(dt, slip, sp, can);
+  } else {
   let best = P.idx, bd = 1e18;
   for (let o = -14; o <= 14; o++) { const j = (P.idx + o + N) % N, dx = P.pos.x - pts[j].x, dz = P.pos.z - pts[j].z, d = dx * dx + dz * dz; if (d < bd) { bd = d; best = j; } }
   if (P.idx > N * 0.75 && best < N * 0.25) P.crosses++; else if (P.idx < N * 0.25 && best > N * 0.75) P.crosses--;
@@ -517,20 +590,46 @@ function stepPlayer(dt, racing) {
   } else if (ad > W) shake = Math.max(shake, 0.12);
   P.prog = P.crosses * N + best + clamp((rx * t.x + rz * t.z) / ds, -0.5, 0.5);
   const nx = (best + 1) % N, fr = clamp((rx * t.x + rz * t.z) / ds, 0, 1);
-  const y = pts[best].y + (pts[nx].y - pts[best].y) * fr, hs = Math.hypot(t.x, t.z);
+  y = pts[best].y + (pts[nx].y - pts[best].y) * fr; pitch = -Math.atan2(t.y, Math.hypot(t.x, t.z));
+  }
 
   /* mesh */
   car.position.set(P.pos.x, y + 0.04, P.pos.z);
-  car.rotation.y = P.h; car.rotation.x = -Math.atan2(t.y, hs); car.rotation.z = clamp(-slip * 0.012, -0.12, 0.12);
+  car.rotation.y = P.h; car.rotation.x = pitch; car.rotation.z = clamp(-slip * 0.012, -0.12, 0.12);
   car.flames.forEach(fl => { fl.visible = boosting; if (boosting) { fl.scale.set(1, 0.9 + Math.random() * 0.7, 1); fl.material.opacity = 0.6 + Math.random() * 0.35; } });
   car.updateMatrixWorld();
   if ((Math.abs(slip) > 5 && sp > 22) || (boosting && Math.random() < 0.5)) for (const sx of [-1, 1]) if (Math.random() < 0.8) puff(car.localToWorld(V3(sx * 1.05, 0.3, -1.6)), P.vel, boosting ? 0.8 : 1.2);
+  if (Math.abs(slip) > 5 && sp > 22) [-1, 1].forEach((sx, i) => addSkid(car.localToWorld(V3(sx * 1.05, 0.3, -1.6)), i, car.position.y));
   return { boosting, sp: P.vel.length() };
 }
 
 const pb = { x: 0, z: 0, vx: 0, vz: 0, cos: 1, sin: 0, halfW: 1.05, halfL: 2.2, mass: 1, angularVel: 0 };
 const ab = { x: 0, z: 0, vx: 0, vz: 0, cos: 1, sin: 0, halfW: 1.05, halfL: 2.2, mass: 1.25, angularVel: 0 };
 const ct = {};
+const cb = { x: 0, z: 0, vx: 0, vz: 0, cos: 1, sin: 0, halfW: 1.3, halfL: 3.1, mass: 40, angularVel: 0 };
+function arenaTick(dt, slip, sp, can) {
+  const drifting = can && Math.abs(slip) > 4.5 && sp > 18;
+  if (drifting) { A.hold = 1.1; A.comboT += dt; } else { A.hold -= dt; if (A.hold <= 0) A.comboT = 0; }
+  A.mult = 1 + Math.min(4, Math.floor(A.comboT / 1.8)); A.maxMult = Math.max(A.maxMult, A.mult);
+  if (drifting) A.score += Math.abs(slip) * sp * 0.5 * A.mult * dt;
+  if (!can) return;
+  const sn = Math.sin(P.h), cs = Math.cos(P.h);
+  for (const c of arena.cones) {
+    if (c.k) continue; const dx = c.x - P.pos.x, dz = c.z - P.pos.z; if (dx * dx + dz * dz > 20) continue;
+    if (Math.abs(dx * sn + dz * cs) < 2.5 && Math.abs(dx * cs - dz * sn) < 1.35) { arena.knock(c, P.vel.x * 1.1 + rand(-2, 2), P.vel.z * 1.1 + rand(-2, 2)); A.score += 100; A.cones++; toast('CONE  +100', '#ffb347'); }
+  }
+  A.hit -= dt;
+  for (const k of arena.containers) {
+    pb.x = P.pos.x; pb.z = P.pos.z; pb.vx = P.vel.x; pb.vz = P.vel.z; pb.cos = cs; pb.sin = sn; pb.angularVel = P.spin;
+    cb.x = k.x; cb.z = k.z; cb.cos = k.cos; cb.sin = k.sin; cb.vx = cb.vz = cb.angularVel = 0;
+    if (vehicleContact(pb, cb, ct)) {
+      const cl = resolveVehicleContact(pb, cb, ct) || 0;
+      P.pos.x += ct.nx * ct.depth * 0.9; P.pos.z += ct.nz * ct.depth * 0.9; P.vel.set(pb.vx, 0, pb.vz); P.spin = clamp(pb.angularVel, -2.5, 2.5);
+      shake = Math.max(shake, clamp(cl / 12, 0.2, 1));
+      if (A.hit <= 0) { A.comboT = 0; A.score = Math.max(0, A.score - 50); A.hit = 0.8; toast('CRASH  -50', '#ff6b6b'); }
+    }
+  }
+}
 function stepAI(dt, racing) {
   AIs.forEach((a, n) => {
     if (racing) {
@@ -577,9 +676,10 @@ function updateCamera(dt, boosting, sp) {
 }
 
 function hud(dt, sp, boosting) {
+  if (cfg.type === 'arena') { $('ascore').textContent = Math.floor(A.score).toLocaleString(); $('acombo').textContent = A.comboT > 0 ? `DRIFT  x${A.mult}` : 'DRIFT TO SCORE'; $('atime').textContent = fmt(Math.max(0, A.t)); }
   const all = [{ p: P.prog, me: true }, ...AIs.map(a => ({ p: a.prog }))].sort((a, b) => b.p - a.p);
   const rank = all.findIndex(o => o.me) + 1;
-  if (state === 'race' && !P.finished) {
+  if (state === 'race' && !P.finished && cfg.type !== 'arena') {
     ovCool -= dt;
     if (rank < lastRank && ovCool <= 0) { toast(`OVERTAKE  +${lastRank - rank}`); P.nitro = Math.min(1, P.nitro + 0.12); ovCool = 0.9; }
     lastRank = rank; P.rank = rank;
@@ -600,11 +700,18 @@ function hud(dt, sp, boosting) {
 
 function finishRace() {
   P.finished = true; setState('finished');
-  const rows = [{ name: 'YOU', me: true, prog: P.prog }, ...AIs.map(a => ({ name: a.name, prog: a.prog }))].sort((a, b) => b.prog - a.prog);
+  const arenaOn = cfg.type === 'arena', sc = Math.floor(A.score);
+  let rows;
+  if (arenaOn) {
+    const base = [16000, 12500, 9500, 7000, 4500], kk = [0.8, 1, 1.25][cfg.diff] * A.dur / 90;
+    rows = [{ name: 'YOU', me: true, val: sc }, ...AI.map((a, i) => ({ name: a.name, val: Math.round(base[i] * kk * (0.9 + Math.random() * 0.2)) }))].sort((a, b) => b.val - a.val);
+  } else rows = [{ name: 'YOU', me: true, prog: P.prog }, ...AIs.map(a => ({ name: a.name, prog: a.prog }))].sort((a, b) => b.prog - a.prog);
   const place = rows.findIndex(r => r.me) + 1; P.rank = place;
-  let head = !cfg.ai ? 'FINISHED' : place === 1 ? 'YOU WIN!' : `${ord(place)} PLACE`, sub = `Time ${fmt(raceT)}`;
-  if (bestLap < 1e8) sub += `  ·  Best lap ${fmt(bestLap)}`;
-  let list = rows.map((r, i) => `<div class="rr${r.me ? ' me' : ''}"><b>${i + 1}</b><span>${r.name}</span></div>`).join('');
+  const extra = r => (r.val !== undefined ? `<em>${r.val.toLocaleString()}</em>` : '');
+  let head = arenaOn ? (place === 1 ? 'DRIFT KING!' : `${ord(place)} PLACE`) : (!cfg.ai ? 'FINISHED' : place === 1 ? 'YOU WIN!' : `${ord(place)} PLACE`);
+  let sub = arenaOn ? `Score ${sc.toLocaleString()}  ·  Best combo x${A.maxMult}  ·  Cones ${A.cones}` : `Time ${fmt(raceT)}`;
+  if (!arenaOn && bestLap < 1e8) sub += `  ·  Best lap ${fmt(bestLap)}`;
+  let list = rows.map((r, i) => `<div class="rr${r.me ? ' me' : ''}"><b>${i + 1}</b><span>${r.name}</span>${extra(r)}</div>`).join('');
   let next = false;
   if (cfg.mode === 'tour' && T) {
     rows.forEach((r, i) => { r.pts = PTS[i] || 0; T.pts[r.name] = (T.pts[r.name] || 0) + r.pts; });
@@ -617,8 +724,13 @@ function finishRace() {
       T = null; store.set('sr.t', null);
     } else { store.set('sr.t', T); next = true; $('fNext').textContent = `NEXT: ${CUPS[T.round].name}`; }
   } else if (cfg.mode !== 'tour') {
-    const key = `sr.best.${cfg.mode}.${cfg.laps}`, prev = store.get(key, null);
-    if (prev === null || raceT < prev) { store.set(key, raceT); sub += '  ·  NEW BEST!'; } else sub += `  ·  Best ${fmt(prev)}`;
+    if (arenaOn) {
+      const key = `sr.best.arena.${A.dur}`, prev = store.get(key, null);
+      if (prev === null || sc > prev) { store.set(key, sc); sub += '  ·  NEW BEST!'; } else sub += `  ·  Best ${prev.toLocaleString()}`;
+    } else {
+      const key = `sr.best.${cfg.mode}.${cfg.laps}`, prev = store.get(key, null);
+      if (prev === null || raceT < prev) { store.set(key, raceT); sub += '  ·  NEW BEST!'; } else sub += `  ·  Best ${fmt(prev)}`;
+    }
   }
   $('fh').textContent = head; $('fp').textContent = sub; $('fres').innerHTML = list;
   $('fNext').style.display = next ? '' : 'none'; $('fRetry').style.display = cfg.mode === 'tour' ? 'none' : '';
@@ -644,7 +756,8 @@ function frame(now) {
   if (state === 'race') raceT += dt;
   const out = stepPlayer(dt, racing);
   stepAI(dt, racing);
-  if (state === 'race') {
+  if (state === 'race' && cfg.type === 'arena') { A.t -= dt; if (A.t <= 0 && !P.finished) { A.t = 0; finishRace(); } }
+  if (state === 'race' && cfg.type !== 'arena') {
     if (P.crosses !== prevCrosses) {
       if (P.crosses > prevCrosses) { if (P.crosses >= 2) { const lt = raceT - lapStart; bestLap = Math.min(bestLap, lt); if (P.crosses <= TOTAL) toast(`LAP ${P.crosses - 1}   ${fmt(lt)}`, '#ffffff'); } lapStart = raceT; }
       prevCrosses = P.crosses;
@@ -652,18 +765,21 @@ function frame(now) {
     if (!P.finished && P.crosses >= TOTAL + 1) finishRace();
   }
   smoke.forEach(o => { if (o.life > 0) { o.life -= dt; o.s.position.addScaledVector(o.vel, dt); o.s.scale.addScalar(dt * 3.5); o.s.material.opacity = Math.max(0, o.life / o.max) * 0.4; if (o.life <= 0) o.s.visible = false; } });
+  arena.update(dt);
   if (state === 'menu') {
     menuT += dt * 0.22; const r = 8.5 + Math.sin(menuT * 0.7) * 1.4;
     camera.position.set(car.position.x + Math.sin(menuT) * r, car.position.y + 2.1 + Math.sin(menuT * 0.5) * 0.6, car.position.z + Math.cos(menuT) * r);
     camera.lookAt(car.position.x, car.position.y + 0.8, car.position.z);
     camera.fov += (48 - camera.fov) * 0.1; camera.updateProjectionMatrix(); sky.position.copy(camera.position); followSun();
   } else updateCamera(dt, out.boosting, out.sp);
+  updateStreaks(dt, state === 'menu' ? 0 : out.sp, out.boosting);
   hud(dt, out.sp, out.boosting); audioUpdate(state === 'menu' ? -1 : out.sp, out.boosting);
   composer.render();
 }
 /* boot */
 muted = opt.snd === 'off';
-$('swatches').innerHTML = COLORS.map(c => `<button class="sw" data-c="${c}" style="background:#${c.toString(16).padStart(6, '0')}" aria-label="Paint"></button>`).join('');
+const swHTML = COLORS.map(c => `<button class="sw" data-c="${c}" style="background:#${c.toString(16).padStart(6, '0')}" aria-label="Paint"></button>`).join('');
+$('swatches').innerHTML = swHTML; $('paintBar').innerHTML = swHTML; $('paintBtn').onclick = () => $('paintBar').classList.toggle('open');
 paintPlayer(store.get('sr.color', COLORS[0]));
 syncSegs(); applyQuality(); toMenu();
 requestAnimationFrame(frame);
