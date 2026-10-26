@@ -18,7 +18,8 @@ const TOTAL = 3, W = 13, N = 700, WALL = W + 2.6;
 /* ---------- renderer / scene ---------- */
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
 const mobile = matchMedia('(any-pointer: coarse)').matches;
-renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 2));
+let pr = Math.min(devicePixelRatio, 2);
+renderer.setPixelRatio(pr);
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.toneMapping = THREE.NeutralToneMapping;
@@ -26,14 +27,13 @@ document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = 0.55;
-scene.fog = new THREE.Fog(0xcfe0f0, 140, 1000);
-const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.5, 3000);
+scene.environmentIntensity = 0.4;
+scene.fog = new THREE.Fog(0xcfe0f0, 260, 1500);
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 1, 2800);
 
-const pr = renderer.getPixelRatio();
-const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, { type: THREE.HalfFloatType, samples: mobile ? 2 : 4 }));
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, { type: THREE.HalfFloatType, samples: 4 }));
 composer.addPass(new RenderPass(scene, camera));
-composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.5, 1.25));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.4, 0.35, 2.2));
 composer.addPass(new OutputPass());
 addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
@@ -42,7 +42,7 @@ addEventListener('resize', () => {
 
 const canvasTex = (w, h, draw, srgb = true) => {
   const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
-  const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+  const t = new THREE.CanvasTexture(c); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t;
 };
 
 /* ---------- sky, light ---------- */
@@ -71,9 +71,9 @@ for (let i = 0; i < 46; i++) {
   s.position.set(Math.cos(a) * r, rand(180, 520), Math.sin(a) * r); s.scale.set(rand(380, 700), rand(160, 260), 1);
   scene.add(s);
 }
-scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x607080, 1.7));
-const sun = new THREE.DirectionalLight(0xfff0d8, 3.2);
-sun.castShadow = true; sun.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048); sun.shadow.bias = -0.0004;
+scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x607080, 1.1));
+const sun = new THREE.DirectionalLight(0xfff0d8, 2.5);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
 Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 500 });
 scene.add(sun, sun.target);
 
@@ -104,8 +104,8 @@ function strip(oa, ya, ob, yb, col, shadow = true) {
 const C = s => new THREE.Color(s);
 const asph = [C('#34363c'), C('#3a3c42')], rw = [C('#e8e8ea'), C('#d42a2a')], wallC = [C('#c9ccd2'), C('#b8bcc4')];
 strip(-W, 0, W, 0, i => asph[(i >> 3) & 1]);
-strip(W, 0.04, W + 2.6, 0.04, i => rw[i & 1]);
-strip(-W - 2.6, 0.04, -W, 0.04, i => rw[i & 1]);
+strip(W, 0.08, W + 2.6, 0.08, i => rw[i & 1]);
+strip(-W - 2.6, 0.08, -W, 0.08, i => rw[i & 1]);
 strip(WALL, 0, WALL, 1.5, i => wallC[(i >> 2) & 1]);
 strip(-WALL, 0, -WALL, 1.5, i => wallC[(i >> 2) & 1]);
 strip(WALL, 1.5, WALL + 0.5, 1.5, () => C('#e9ecf1'));
@@ -118,7 +118,7 @@ const dummy = new THREE.Object3D();
 { // lane dashes
   const m = new THREE.InstancedMesh(new THREE.BoxGeometry(0.35, 0.03, ds * 1.3), new THREE.MeshBasicMaterial({ color: 0xdddddd }), N / 4);
   for (let i = 0, n = 0; i < N; i += 4, n++) {
-    dummy.position.copy(pts[i]).y += 0.05; dummy.lookAt(dummy.position.clone().add(tan[i])); dummy.updateMatrix(); m.setMatrixAt(n, dummy.matrix);
+    dummy.position.copy(pts[i]).y += 0.1; dummy.lookAt(dummy.position.clone().add(tan[i])); dummy.updateMatrix(); m.setMatrixAt(n, dummy.matrix);
   }
   scene.add(m);
 }
@@ -131,8 +131,8 @@ const dummy = new THREE.Object3D();
 
 /* city: one merged mesh, window UVs scaled to real building size */
 {
-  const win = canvasTex(256, 256, g => {
-    g.fillStyle = '#aab8c6'; g.fillRect(0, 0, 256, 256);
+  const win = canvasTex(512, 512, g => {
+    g.scale(2, 2); g.fillStyle = '#aab8c6'; g.fillRect(0, 0, 256, 256);
     for (let y = 0; y < 16; y++) for (let x = 0; x < 8; x++) {
       const lit = Math.random() < 0.2; g.fillStyle = lit ? '#ffe9a8' : (Math.random() < 0.5 ? '#2e4256' : '#3d556b'); g.fillRect(x * 32 + 5, y * 16 + 3, 22, 10);
     }
@@ -187,7 +187,7 @@ const dummy = new THREE.Object3D();
   const yaw = Math.atan2(tan[0].x, tan[0].z);
   const chk = canvasTex(128, 32, g => { for (let y = 0; y < 2; y++) for (let x = 0; x < 16; x++) { g.fillStyle = (x + y) % 2 ? '#111' : '#fff'; g.fillRect(x * 8, y * 16, 8, 16); } });
   const line = new THREE.Mesh(new THREE.PlaneGeometry(W * 2, 3), new THREE.MeshBasicMaterial({ map: chk })); line.rotation.x = -Math.PI / 2;
-  const gate = new THREE.Group(); gate.add(line); line.position.y = 0.07;
+  const gate = new THREE.Group(); gate.add(line); line.position.y = 0.14;
   const steel = new THREE.MeshStandardMaterial({ color: 0x20252d, metalness: 0.6, roughness: 0.4 });
   for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(1.4, 13, 1.4), steel); p.position.set(sx * (W + 3.5), 6.5, 0); gate.add(p); }
   const beam = new THREE.Mesh(new THREE.BoxGeometry((W + 3.5) * 2 + 1.4, 3.2, 1.4), steel); beam.position.y = 13; gate.add(beam);
@@ -211,7 +211,11 @@ const dummy = new THREE.Object3D();
 }
 /* grandstands at the start */
 {
-  const crowd = canvasTex(256, 64, (g, w, h) => { g.fillStyle = '#2a2f3a'; g.fillRect(0, 0, w, h); for (let i = 0; i < 1100; i++) { g.fillStyle = `hsl(${rand(0, 360) | 0} ${rand(40, 90) | 0}% ${rand(40, 75) | 0}%)`; g.fillRect(rand(0, w), rand(0, h), 3, 4); } });
+  const crowd = canvasTex(512, 128, (g, w, h) => {
+    g.fillStyle = '#1d2128'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 3200; i++) { g.fillStyle = `hsl(${rand(0, 360) | 0} ${rand(18, 45) | 0}% ${rand(30, 58) | 0}%)`; g.fillRect(rand(0, w), rand(0, h), 3, 4); }
+    g.fillStyle = 'rgba(0,0,0,.45)'; for (let y = 0; y < h; y += 14) g.fillRect(0, y, w, 2);
+  });
   const dark = new THREE.MeshStandardMaterial({ color: 0x23272f, roughness: 0.8 });
   for (const sd of [-1, 1]) {
     const c = sample(10), g = new THREE.Group(), base = c.p.clone().addScaledVector(c.r, sd * (WALL + 11));
@@ -226,7 +230,7 @@ const dummy = new THREE.Object3D();
 /* ---------- cars ---------- */
 const SPORT_GEO = buildCarGeometry(SPORT);
 const PART = { 1: '#0e1a26', 2: '#09090b', 3: '#c9ced6', 4: '#16191e', 6: '#222222', 7: '#101114', 8: '#101114' };
-const carMat = new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.5, roughness: 0.28 });
+const carMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, metalness: 0.45, roughness: 0.3, clearcoat: 0.6, clearcoatRoughness: 0.12 });
 function makeCar(color) {
   const g = new THREE.Group(), geo = SPORT_GEO.clone();
   const pid = geo.attributes.partId.array, pos = geo.attributes.position.array, cl = new Float32Array(pid.length * 3);
@@ -257,7 +261,7 @@ function sample(s, lat = 0) {
 }
 
 /* player */
-const car = makeCar(0xffffff);
+const car = makeCar(0xeef1f5);
 const P = { spin: 0, pos: V3(), vel: V3(), h: 0, idx: 0, crosses: 0, nitro: 1, prog: 0, finished: false, rank: 6 };
 {
   const g = sample(-6 * 2.4, 4);
@@ -470,10 +474,14 @@ function finishRace() {
 }
 
 /* ---------- main loop ---------- */
-let last = performance.now();
+let last = performance.now(), fAcc = 0, fN = 0;
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const raw = (now - last) / 1000, dt = Math.min(0.05, raw); last = now;
+  if (state === 'race') {
+    fAcc += raw; fN++;
+    if (fAcc > 2.5) { if (fAcc / fN > 1 / 42 && pr > 1.25) { pr = Math.max(1.25, pr - 0.25); renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight); } fAcc = 0; fN = 0; }
+  } else { fAcc = 0; fN = 0; }
   if (state === 'count') {
     cdT -= dt; const n = Math.ceil(cdT); $('count').textContent = n > 0 ? n : 'GO';
     if (cdT <= 0) { state = 'race'; goT = 0.9; }
