@@ -26,7 +26,30 @@ canvas{display:block}
 .ov p{opacity:.8;line-height:1.7;max-width:520px;padding:0 16px}
 .ov b{display:inline-block;background:#223;border:1px solid #456;border-radius:5px;padding:0 7px;font-size:.9em}
 .btn{margin-top:8px;padding:12px 34px;font-size:18px;font-weight:800;font-style:italic;color:#fff;background:#18a;border:0;border-radius:6px;cursor:pointer;letter-spacing:.1em}
-#finish{display:none}
+#menu{background:rgba(4,7,13,.5);justify-content:flex-start}
+.ov{overflow:auto}.ov.hide{display:none}
+.mwrap{margin:auto;padding:18px 0;display:flex;flex-direction:column;align-items:center;gap:2px}
+.logo{font:900 italic clamp(36px,10vw,72px)/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.04em;margin-bottom:14px;text-shadow:0 4px 22px rgba(0,0,0,.7)}
+.logo span{display:block;font-size:.5em;letter-spacing:.55em;color:#5cf;margin-top:6px}
+.screen{display:none;flex-direction:column;align-items:center;gap:4px}.screen.on{display:flex}
+.mb{display:block;width:min(86vw,340px);padding:14px 0;margin:5px 0;font:800 italic 19px 'Segoe UI',system-ui,sans-serif;color:#fff;background:rgba(255,255,255,.1);border:0;border-left:5px solid #456;border-radius:4px;letter-spacing:.1em;cursor:pointer}
+.mb:not(.sec){background:linear-gradient(90deg,#0b6d93,#1599bd);border-left-color:#7df}
+.mb.go{background:linear-gradient(90deg,#0a8f5a,#18b97a);border-left-color:#7fe8b8;margin-top:12px}
+.mb:active{filter:brightness(1.25)}
+.lbl{font-size:12px;letter-spacing:.2em;opacity:.75;margin-top:12px;font-weight:700}
+.seg,.row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:340px}
+.seg button{font:800 italic 15px 'Segoe UI',system-ui,sans-serif;color:#fff;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.25);border-radius:6px;padding:9px 15px;cursor:pointer;letter-spacing:.06em}
+.seg button.on{background:#18a;border-color:#7df}
+.sw{width:46px;height:46px;border-radius:50%;padding:0;border:3px solid rgba(255,255,255,.35);cursor:pointer}
+.sw.on{border-color:#fff;box-shadow:0 0 0 3px #3cf}
+.rr{display:flex;align-items:center;gap:10px;padding:6px 12px;margin:2px 0;width:min(86vw,360px);background:rgba(255,255,255,.07);font-style:italic;font-weight:700;text-align:left}
+.rr.me{background:rgba(51,204,255,.25);border-left:4px solid #3cf}
+.rr span{flex:1}.rr em{opacity:.75;font-weight:600;font-size:.85em}.rr i{min-width:46px;text-align:right;font-style:normal;opacity:.9}.rr b{min-width:18px}
+.how{max-width:340px;line-height:1.8;opacity:.9}
+#finish h1,#pause h1{margin-bottom:4px}
+#fres{margin:6px 0 10px}
+#pauseBtn{position:fixed;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(10,14,22,.55);color:#fff;font:900 16px 'Segoe UI',system-ui,sans-serif;letter-spacing:2px;z-index:4;cursor:pointer}
+body.menu #info,body.menu #mm,body.menu #speedo,body.menu #touch,body.menu #pauseBtn,body.menu #fx,body.menu #toast,body.menu #count,body.done #touch,body.done #pauseBtn{display:none!important}
 #touch{position:fixed;inset:0;pointer-events:none;z-index:3}
 #touch[hidden]{display:none}
 #stick{position:absolute;left:max(20px,env(safe-area-inset-left));bottom:max(26px,env(safe-area-inset-bottom));width:150px;height:150px;border-radius:50%;background:rgba(10,14,22,.45);border:2px solid rgba(255,255,255,.35);pointer-events:auto;touch-action:none}
@@ -65,13 +88,62 @@ body.touch #count{width:96px;height:96px;font-size:54px}
 <div id="toast" class="hud">OVERTAKE</div>
 <div id="count" class="hud">3</div>
 
-<div id="start" class="ov">
-  <h1>SUPER RACING</h1>
-  <p class="tk">Touch: drag the left stick to steer. You auto-accelerate.<br>Right side: <b>NITRO</b> boost, <b>DRIFT</b>, <b>BRAKE</b>.</p>
-  <p class="kb"><b>W</b>/<b>↑</b> accelerate &nbsp; <b>S</b>/<b>↓</b> brake &nbsp; <b>A D</b>/<b>← →</b> steer<br><b>Shift</b> nitro boost &nbsp; <b>Space</b> drift &nbsp; <b>M</b> mute &nbsp; <b>R</b> restart<br>3 laps. Start 6th. Pass everyone.</p>
-  <button class="btn" id="go">START RACE</button>
+<button id="pauseBtn" type="button" aria-label="Pause">II</button>
+
+<div id="menu" class="ov">
+  <div class="mwrap">
+    <div class="logo">SUPER<span>RACING</span></div>
+    <div class="screen on" data-s="main">
+      <button class="mb" data-go="quick">QUICK RACE</button>
+      <button class="mb" data-go="tour">TOURNAMENT</button>
+      <button class="mb" data-go="tt">TIME TRIAL</button>
+      <button class="mb sec" data-go="garage">GARAGE</button>
+      <button class="mb sec" data-go="settings">SETTINGS</button>
+      <button class="mb sec" data-go="how">HOW TO PLAY</button>
+    </div>
+    <div class="screen" data-s="quick">
+      <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button></div>
+      <div class="lbl">DIFFICULTY</div><div class="seg" data-k="diff"><button data-v="0">EASY</button><button data-v="1">NORMAL</button><button data-v="2">HARD</button></div>
+      <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day">NOON</button><button data-v="dawn">DAWN</button><button data-v="sunset">SUNSET</button><button data-v="night">NIGHT</button></div>
+      <button class="mb go" data-act="quick">START RACE</button><button class="mb sec" data-go="main">BACK</button>
+    </div>
+    <div class="screen" data-s="tt">
+      <div class="lbl">SOLO RUN · BEAT YOUR BEST TIME</div>
+      <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button></div>
+      <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day">NOON</button><button data-v="dawn">DAWN</button><button data-v="sunset">SUNSET</button><button data-v="night">NIGHT</button></div>
+      <div id="ttBest" class="lbl"></div>
+      <button class="mb go" data-act="tt">START</button><button class="mb sec" data-go="main">BACK</button>
+    </div>
+    <div class="screen" data-s="tour">
+      <div class="lbl">4 RACES · POINTS 10 · 8 · 6 · 4 · 2 · 1</div>
+      <div id="tourList"></div>
+      <button class="mb go" id="tourGo" data-act="tourGo">START TOURNAMENT</button>
+      <button class="mb sec" id="tourReset" data-act="tourReset">RESET PROGRESS</button>
+      <button class="mb sec" data-go="main">BACK</button>
+    </div>
+    <div class="screen" data-s="garage">
+      <div class="lbl">PAINT</div><div class="row" id="swatches"></div>
+      <button class="mb go" data-go="main">DONE</button>
+    </div>
+    <div class="screen" data-s="settings">
+      <div class="lbl">SOUND</div><div class="seg" data-k="snd"><button data-v="on">ON</button><button data-v="off">OFF</button></div>
+      <div class="lbl">GRAPHICS</div><div class="seg" data-k="q"><button data-v="high">HIGH</button><button data-v="med">MEDIUM</button><button data-v="low">LOW</button></div>
+      <button class="mb go" data-go="main">DONE</button>
+    </div>
+    <div class="screen" data-s="how">
+      <p class="how"><span class="kb"><b>W</b>/<b>↑</b> gas · <b>S</b>/<b>↓</b> brake · <b>A D</b>/<b>← →</b> steer<br><b>Shift</b> nitro · <b>Space</b> drift · <b>Esc</b> pause · <b>R</b> restart<br></span><span class="tk">Drag the left stick to steer. You accelerate automatically.<br>NITRO boosts, DRIFT slides, BRAKE slows.<br></span>Overtake rivals to refill nitro. Drift to charge it.</p>
+      <button class="mb go" data-go="main">BACK</button>
+    </div>
+  </div>
 </div>
-<div id="finish" class="ov"><h1 id="fh">FINISH</h1><p id="fp"></p><button class="btn" onclick="location.reload()">RACE AGAIN</button></div>
+
+<div id="pause" class="ov hide"><h1>PAUSED</h1>
+  <button class="mb go" data-act="resume">RESUME</button><button class="mb sec" data-act="retry">RESTART</button><button class="mb sec" data-act="menu">QUIT TO MENU</button>
+</div>
+
+<div id="finish" class="ov hide"><h1 id="fh">FINISH</h1><p id="fp"></p><div id="fres"></div>
+  <button class="mb go" id="fNext" data-act="next">NEXT RACE</button><button class="mb sec" id="fRetry" data-act="retry">RETRY</button><button class="mb sec" data-act="menu">MAIN MENU</button>
+</div>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>
