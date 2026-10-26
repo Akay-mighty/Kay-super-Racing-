@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Super Racing</title>
+<title>Kay Super Racing</title>
 <style>
 *{box-sizing:border-box;margin:0}
 html,body{touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none;height:100%;overflow:hidden;background:#000;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;user-select:none}
@@ -49,7 +49,7 @@ canvas{display:block}
 #finish h1,#pause h1{margin-bottom:4px}
 #fres{margin:6px 0 10px}
 #pauseBtn{position:fixed;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(10,14,22,.55);color:#fff;font:900 16px 'Segoe UI',system-ui,sans-serif;letter-spacing:2px;z-index:4;cursor:pointer}
-body.menu #info,body.menu #mm,body.menu #speedo,body.menu #touch,body.menu #pauseBtn,body.menu #fx,body.menu #toast,body.menu #count,body.done #touch,body.done #pauseBtn{display:none!important}
+body.menu #ainfo,body.menu #paintBtn,body.menu #paintBar,body.done #paintBar,body.done #paintBtn,body.menu #info,body.menu #mm,body.menu #speedo,body.menu #touch,body.menu #pauseBtn,body.menu #fx,body.menu #toast,body.menu #count,body.done #touch,body.done #pauseBtn{display:none!important}
 #touch{position:fixed;inset:0;pointer-events:none;z-index:3}
 #touch[hidden]{display:none}
 #stick{position:absolute;left:max(20px,env(safe-area-inset-left));bottom:max(26px,env(safe-area-inset-bottom));width:150px;height:150px;border-radius:50%;background:rgba(10,14,22,.45);border:2px solid rgba(255,255,255,.35);pointer-events:auto;touch-action:none}
@@ -69,6 +69,15 @@ body.touch #mm{left:auto;bottom:auto;right:12px;top:max(10px,env(safe-area-inset
 body.touch #speedo{transform:scale(.7);transform-origin:top right;right:12px;bottom:auto;top:calc(max(10px,env(safe-area-inset-top)) + 108px)}
 body.touch #toast{font-size:22px;top:22%}
 body.touch #count{width:96px;height:96px;font-size:54px}
+#ainfo{display:none;top:16px;left:16px;background:rgba(10,14,22,.55);border-left:4px solid #ffb347;padding:8px 16px;border-radius:4px;min-width:170px}
+body.arena #ainfo{display:block}body.arena #info,body.arena #mm{display:none}
+#ascore{font-size:38px;line-height:1}#acombo{font-size:14px;letter-spacing:.1em;color:#ffb347;margin:2px 0}#atime{font-size:15px;letter-spacing:.08em}
+#paintBtn{display:none;position:fixed;top:max(10px,env(safe-area-inset-top));left:calc(50% + 28px);width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(10,14,22,.55);font-size:20px;z-index:4;cursor:pointer;align-items:center;justify-content:center}
+body.arena #paintBtn{display:flex}
+#paintBar{display:none;position:fixed;top:calc(max(10px,env(safe-area-inset-top)) + 54px);left:50%;transform:translateX(-50%);flex-wrap:wrap;gap:6px;justify-content:center;width:min(210px,70vw);padding:8px;background:rgba(10,14,22,.65);border-radius:10px;z-index:4}
+#paintBar.open{display:flex}#paintBar .sw{width:30px;height:30px;border-width:2px}
+body.touch #ainfo{transform:scale(.72);transform-origin:top left;top:max(10px,env(safe-area-inset-top));left:12px}
+body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
 </style>
 </head>
 <body>
@@ -88,14 +97,18 @@ body.touch #count{width:96px;height:96px;font-size:54px}
 <div id="toast" class="hud">OVERTAKE</div>
 <div id="count" class="hud">3</div>
 
+<div id="ainfo" class="hud"><div id="ascore">0</div><div id="acombo">DRIFT TO SCORE</div><div id="atime">0:00.00</div></div>
+<button id="paintBtn" type="button" aria-label="Paint">&#127912;</button>
+<div id="paintBar"></div>
 <button id="pauseBtn" type="button" aria-label="Pause">II</button>
 
 <div id="menu" class="ov">
   <div class="mwrap">
-    <div class="logo">SUPER<span>RACING</span></div>
+    <div class="logo">KAY SUPER<span>RACING</span></div>
     <div class="screen on" data-s="main">
       <button class="mb" data-go="quick">QUICK RACE</button>
       <button class="mb" data-go="tour">TOURNAMENT</button>
+      <button class="mb" data-go="arena">DRIFT ARENA</button>
       <button class="mb" data-go="tt">TIME TRIAL</button>
       <button class="mb sec" data-go="garage">GARAGE</button>
       <button class="mb sec" data-go="settings">SETTINGS</button>
@@ -107,6 +120,14 @@ body.touch #count{width:96px;height:96px;font-size:54px}
       <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day">NOON</button><button data-v="dawn">DAWN</button><button data-v="sunset">SUNSET</button><button data-v="night">NIGHT</button></div>
       <button class="mb go" data-act="quick">START RACE</button><button class="mb sec" data-go="main">BACK</button>
     </div>
+    <div class="screen" data-s="arena">
+      <div class="lbl">OPEN LOT · DRIFT, HIT CONES, BEAT THE CLOCK</div>
+      <div class="lbl">TIME</div><div class="seg" data-k="dur"><button data-v="60">60s</button><button data-v="90">90s</button><button data-v="120">120s</button></div>
+      <div class="lbl">RIVAL LEVEL</div><div class="seg" data-k="diff"><button data-v="0">EASY</button><button data-v="1">NORMAL</button><button data-v="2">HARD</button></div>
+      <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day">NOON</button><button data-v="dawn">DAWN</button><button data-v="sunset">SUNSET</button><button data-v="night">NIGHT</button></div>
+      <div id="arBest" class="lbl"></div>
+      <button class="mb go" data-act="arena">START</button><button class="mb sec" data-go="main">BACK</button>
+    </div>
     <div class="screen" data-s="tt">
       <div class="lbl">SOLO RUN · BEAT YOUR BEST TIME</div>
       <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button></div>
@@ -115,7 +136,7 @@ body.touch #count{width:96px;height:96px;font-size:54px}
       <button class="mb go" data-act="tt">START</button><button class="mb sec" data-go="main">BACK</button>
     </div>
     <div class="screen" data-s="tour">
-      <div class="lbl">4 RACES · POINTS 10 · 8 · 6 · 4 · 2 · 1</div>
+      <div class="lbl">5 EVENTS · POINTS 10 · 8 · 6 · 4 · 2 · 1</div>
       <div id="tourList"></div>
       <button class="mb go" id="tourGo" data-act="tourGo">START TOURNAMENT</button>
       <button class="mb sec" id="tourReset" data-act="tourReset">RESET PROGRESS</button>
@@ -131,7 +152,7 @@ body.touch #count{width:96px;height:96px;font-size:54px}
       <button class="mb go" data-go="main">DONE</button>
     </div>
     <div class="screen" data-s="how">
-      <p class="how"><span class="kb"><b>W</b>/<b>↑</b> gas · <b>S</b>/<b>↓</b> brake · <b>A D</b>/<b>← →</b> steer<br><b>Shift</b> nitro · <b>Space</b> drift · <b>Esc</b> pause · <b>R</b> restart<br></span><span class="tk">Drag the left stick to steer. You accelerate automatically.<br>NITRO boosts, DRIFT slides, BRAKE slows.<br></span>Overtake rivals to refill nitro. Drift to charge it.</p>
+      <p class="how"><span class="kb"><b>W</b>/<b>↑</b> gas · <b>S</b>/<b>↓</b> brake · <b>A D</b>/<b>← →</b> steer<br><b>Shift</b> nitro · <b>Space</b> drift · <b>Esc</b> pause · <b>R</b> restart · <b>T</b> respawn<br></span><span class="tk">Drag the left stick to steer. You accelerate automatically.<br>NITRO boosts, DRIFT slides, BRAKE slows.<br></span>Overtake rivals to refill nitro. Drift to charge it.</p>
       <button class="mb go" data-go="main">BACK</button>
     </div>
   </div>
