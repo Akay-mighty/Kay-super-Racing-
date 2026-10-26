@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Velocity Rush</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Super Racing</title>
 <style>
 *{box-sizing:border-box;margin:0}
-html,body{height:100%;overflow:hidden;background:#000;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;user-select:none}
+html,body{touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none;height:100%;overflow:hidden;background:#000;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;user-select:none}
 canvas{display:block}
 .hud{position:fixed;pointer-events:none;font-style:italic;font-weight:800;text-shadow:0 2px 6px rgba(0,0,0,.6)}
 #fx{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at center,transparent 48%,rgba(170,215,255,.4) 100%)}
@@ -27,6 +27,25 @@ canvas{display:block}
 .ov b{display:inline-block;background:#223;border:1px solid #456;border-radius:5px;padding:0 7px;font-size:.9em}
 .btn{margin-top:8px;padding:12px 34px;font-size:18px;font-weight:800;font-style:italic;color:#fff;background:#18a;border:0;border-radius:6px;cursor:pointer;letter-spacing:.1em}
 #finish{display:none}
+#touch{position:fixed;inset:0;pointer-events:none;z-index:3}
+#touch[hidden]{display:none}
+#stick{position:absolute;left:max(20px,env(safe-area-inset-left));bottom:max(26px,env(safe-area-inset-bottom));width:150px;height:150px;border-radius:50%;background:rgba(10,14,22,.45);border:2px solid rgba(255,255,255,.35);pointer-events:auto;touch-action:none}
+#stick::before{content:'';position:absolute;left:14px;right:14px;top:50%;height:2px;background:rgba(255,255,255,.2)}
+#knob{position:absolute;left:50%;top:50%;width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.55);border:2px solid #fff;transform:translate(-50%,-50%)}
+#stick.on #knob{background:#3cf;border-color:#3cf}
+.tb{position:absolute;pointer-events:auto;touch-action:none;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(10,14,22,.5);color:#fff;font:800 italic 14px 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;display:flex;align-items:center;justify-content:center}
+.tb.on{background:#3cf;color:#012;border-color:#3cf}
+#bBoost{right:max(20px,env(safe-area-inset-right));bottom:max(30px,env(safe-area-inset-bottom));width:100px;height:100px;font-size:17px;border-color:#6df}
+#bBrake{right:calc(max(20px,env(safe-area-inset-right)) + 112px);bottom:max(30px,env(safe-area-inset-bottom));width:74px;height:74px}
+#bDrift{right:max(30px,env(safe-area-inset-right));bottom:calc(max(30px,env(safe-area-inset-bottom)) + 112px);width:74px;height:74px}
+.tk{display:none}
+body.touch .kb{display:none}
+body.touch .tk{display:block}
+body.touch #info{transform:scale(.72);transform-origin:top left;top:max(10px,env(safe-area-inset-top));left:12px}
+body.touch #mm{left:auto;bottom:auto;right:12px;top:max(10px,env(safe-area-inset-top));width:100px;height:100px}
+body.touch #speedo{transform:scale(.7);transform-origin:top right;right:12px;bottom:auto;top:calc(max(10px,env(safe-area-inset-top)) + 108px)}
+body.touch #toast{font-size:22px;top:22%}
+body.touch #count{width:96px;height:96px;font-size:54px}
 </style>
 </head>
 <body>
@@ -37,12 +56,19 @@ canvas{display:block}
   <svg viewBox="0 0 156 156"><circle cx="78" cy="78" r="70" fill="rgba(10,14,22,.6)"/><circle cx="78" cy="78" r="62" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="7"/><circle id="ring" cx="78" cy="78" r="62" fill="none" stroke="#3cf" stroke-width="7" stroke-linecap="round" stroke-dasharray="389.6" stroke-dashoffset="389.6" transform="rotate(-90 78 78)"/></svg>
   <div id="spd">0</div><div id="kmh">KM/H</div><div id="nit">NITRO 100%</div>
 </div>
+<section id="touch" hidden aria-label="Touch controls">
+  <div id="stick"><span id="knob"></span></div>
+  <button class="tb" id="bBrake" data-a="down" type="button">BRAKE</button>
+  <button class="tb" id="bDrift" data-a="drift" type="button">DRIFT</button>
+  <button class="tb" id="bBoost" data-a="boost" type="button">NITRO</button>
+</section>
 <div id="toast" class="hud">OVERTAKE</div>
 <div id="count" class="hud">3</div>
 
 <div id="start" class="ov">
-  <h1>VELOCITY RUSH</h1>
-  <p><b>W</b>/<b>↑</b> accelerate &nbsp; <b>S</b>/<b>↓</b> brake &nbsp; <b>A D</b>/<b>← →</b> steer<br><b>Shift</b> nitro boost &nbsp; <b>Space</b> drift &nbsp; <b>M</b> mute &nbsp; <b>R</b> restart<br>3 laps. Start 6th. Pass everyone.</p>
+  <h1>SUPER RACING</h1>
+  <p class="tk">Touch: drag the left stick to steer. You auto-accelerate.<br>Right side: <b>NITRO</b> boost, <b>DRIFT</b>, <b>BRAKE</b>.</p>
+  <p class="kb"><b>W</b>/<b>↑</b> accelerate &nbsp; <b>S</b>/<b>↓</b> brake &nbsp; <b>A D</b>/<b>← →</b> steer<br><b>Shift</b> nitro boost &nbsp; <b>Space</b> drift &nbsp; <b>M</b> mute &nbsp; <b>R</b> restart<br>3 laps. Start 6th. Pass everyone.</p>
   <button class="btn" id="go">START RACE</button>
 </div>
 <div id="finish" class="ov"><h1 id="fh">FINISH</h1><p id="fp"></p><button class="btn" onclick="location.reload()">RACE AGAIN</button></div>
