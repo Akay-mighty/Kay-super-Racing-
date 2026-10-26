@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Velocity Rush</title>
+<style>
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;overflow:hidden;background:#000;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;user-select:none}
+canvas{display:block}
+.hud{position:fixed;pointer-events:none;font-style:italic;font-weight:800;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+#fx{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at center,transparent 48%,rgba(170,215,255,.4) 100%)}
+#info{top:16px;left:16px;background:rgba(10,14,22,.55);border-left:4px solid #3cf;padding:8px 16px;border-radius:4px;min-width:160px}
+#pos{font-size:46px;line-height:1}#pos small{font-size:20px;opacity:.7}
+#lap,#time{font-size:15px;letter-spacing:.08em;opacity:.92}
+#speedo{right:18px;bottom:18px;width:156px;height:156px}
+#speedo svg{position:absolute;inset:0}
+#spd{position:absolute;left:0;right:0;top:46px;text-align:center;font-size:44px;line-height:1}
+#kmh{position:absolute;left:0;right:0;top:92px;text-align:center;font-size:11px;letter-spacing:.2em;opacity:.7}
+#nit{position:absolute;left:0;right:0;top:108px;text-align:center;font-size:14px;color:#6df}
+#mm{left:16px;bottom:16px;width:170px;height:170px;border-radius:10px;background:rgba(10,14,22,.5)}
+#toast{top:15%;left:0;right:0;text-align:center;font-size:30px;color:#7dff8a;opacity:0;transition:opacity .3s}
+#count{top:50%;left:50%;transform:translate(-50%,-70%);width:120px;height:120px;border-radius:50%;background:rgba(0,0,0,.7);border:4px solid #fff;display:none;align-items:center;justify-content:center;font-size:68px}
+.ov{position:fixed;inset:0;background:rgba(5,8,14,.82);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;z-index:5}
+.ov h1{font-size:clamp(36px,8vw,84px);font-style:italic;letter-spacing:.04em;background:linear-gradient(90deg,#fff,#5cf);-webkit-background-clip:text;color:transparent}
+.ov p{opacity:.8;line-height:1.7;max-width:520px;padding:0 16px}
+.ov b{display:inline-block;background:#223;border:1px solid #456;border-radius:5px;padding:0 7px;font-size:.9em}
+.btn{margin-top:8px;padding:12px 34px;font-size:18px;font-weight:800;font-style:italic;color:#fff;background:#18a;border:0;border-radius:6px;cursor:pointer;letter-spacing:.1em}
+#finish{display:none}
+</style>
+</head>
+<body>
+<div id="fx"></div>
+<div id="info" class="hud"><div id="pos">6<small>/6</small></div><div id="lap">LAP 1/3</div><div id="time">0:00.00</div></div>
+<canvas id="mm" class="hud" width="340" height="340"></canvas>
+<div id="speedo" class="hud">
+  <svg viewBox="0 0 156 156"><circle cx="78" cy="78" r="70" fill="rgba(10,14,22,.6)"/><circle cx="78" cy="78" r="62" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="7"/><circle id="ring" cx="78" cy="78" r="62" fill="none" stroke="#3cf" stroke-width="7" stroke-linecap="round" stroke-dasharray="389.6" stroke-dashoffset="389.6" transform="rotate(-90 78 78)"/></svg>
+  <div id="spd">0</div><div id="kmh">KM/H</div><div id="nit">NITRO 100%</div>
+</div>
+<div id="toast" class="hud">OVERTAKE</div>
+<div id="count" class="hud">3</div>
+
+<div id="start" class="ov">
+  <h1>VELOCITY RUSH</h1>
+  <p><b>W</b>/<b>↑</b> accelerate &nbsp; <b>S</b>/<b>↓</b> brake &nbsp; <b>A D</b>/<b>← →</b> steer<br><b>Shift</b> nitro boost &nbsp; <b>Space</b> drift &nbsp; <b>M</b> mute &nbsp; <b>R</b> restart<br>3 laps. Start 6th. Pass everyone.</p>
+  <button class="btn" id="go">START RACE</button>
+</div>
+<div id="finish" class="ov"><h1 id="fh">FINISH</h1><p id="fp"></p><button class="btn" onclick="location.reload()">RACE AGAIN</button></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
