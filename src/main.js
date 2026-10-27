@@ -1043,6 +1043,7 @@ function hud(dt, sp, boosting) {
   if (toastT > 0 && (toastT -= dt) <= 0) $('toast').style.opacity = 0;
   mc.clearRect(0, 0, mm.width, mm.height); mc.drawImage(mmBase, 0, 0);
   AIs.forEach(a => { const [x, y] = mxy(a.mesh.position.x, a.mesh.position.z); mc.fillStyle = a.css; mc.beginPath(); mc.arc(x, y, 8, 0, 7); mc.fill(); mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke(); });
+  if (cfg.mode === 'mp') for (const o of net.remotes()) { const [rx, ry] = mxy(o.x, o.z); mc.fillStyle = '#ffb300'; mc.beginPath(); mc.arc(rx, ry, 8, 0, 7); mc.fill(); mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke(); }
   const [px, py] = mxy(P.pos.x, P.pos.z); mc.fillStyle = '#fff'; mc.beginPath(); mc.arc(px, py, 10, 0, 7); mc.fill(); mc.strokeStyle = '#3cf'; mc.lineWidth = 4; mc.stroke();
   if (ghostCar && ghostCar.active && ghostCar.group.visible) { const [gx, gy] = mxy(ghostCar.group.position.x, ghostCar.group.position.z); mc.strokeStyle = '#8df'; mc.lineWidth = 3; mc.beginPath(); mc.arc(gx, gy, 8, 0, 7); mc.stroke(); }
 }

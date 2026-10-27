@@ -17,7 +17,7 @@ const code5 = () => Array.from({ length: 5 }, () => ALPHA[(Math.random() * ALPHA
 const N = {
   code: null, uid: null, host: false, room: null, players: [], mySlot: 0,
   unsub: null, pushT: 0, started: false, finT: 0, results: [],
-  deps: null, cars: new Map()
+  deps: null, cars: new Map(), clock0: Date.now() - performance.now()
 };
 
 /* ---------- remote car rendering (interpolated ghost cars) ---------- */
@@ -33,30 +33,52 @@ function makeRemoteCar(p) {
   c2.fillText(String(p.name || 'RIVAL').slice(0, 12), 256, 66);
   const tag = new d.THREE.Sprite(new d.THREE.SpriteMaterial({ map: new d.THREE.CanvasTexture(cv), transparent: true, depthWrite: false, toneMapped: false }));
   tag.scale.set(7, 1.31, 1); tag.position.y = 3.4; g.add(tag);
-  g.visible = false; d.scene.add(g);
-  return { g, tag, prev: null, cur: null };
+  g.visible = false; g.traverse(o => { o.frustumCulled = false; }); d.scene.add(g);
+  return { g, tag, buf: [], off: undefined, shown: false, seen: 0 };
 }
 
+const DELAY = 160; /* render remote cars this many ms in the past so there is always a snapshot to glide to */
 function moveRemote(uid, st, now) {
-  const r = N.cars.get(uid); if (!r) return;
-  r.prev = r.cur; r.cur = { ...st, at: now };
-  if (!r.prev) r.prev = r.cur;
-  r.g.visible = true;
+  const r = N.cars.get(uid); if (!r || st.x === undefined) return;
+  const sent = st.ts || 0; /* sender-side sample time (ms) */
+  const last = r.buf[r.buf.length - 1];
+  if (last && sent && last.ts === sent) return; /* same snapshot re-delivered: ignore (this was the stutter) */
+  if (last && !sent && last.x === st.x && last.z === st.z) return;
+  /* map sender clock -> local clock with a running offset (lowest = least network delay) */
+  if (sent) { const off = now - (sent - N.clock0); r.off = r.off === undefined ? off : Math.min(off, r.off + 0.5); }
+  const at = sent ? (sent - N.clock0) + r.off : now;
+  if (last && at <= last.at) return;
+  r.buf.push({ x: st.x, z: st.z, y: st.y || 0, h: st.h, sp: st.sp || 0, at, ts: sent });
+  if (r.buf.length > 30) r.buf.shift();
+  r.seen = now;
 }
 
 function stepRemoteCars(dt) {
-  const d = N.deps;
+  const d = N.deps, now = performance.now(), show = N.started && d.inRace();
   for (const [uid, r] of N.cars) {
-    if (!r.cur) continue;
-    const span = Math.min(0.9, Math.max(0.12, (r.cur.at - r.prev.at) / 1000));
-    const t = clamp01((performance.now() - r.cur.at) / 1000 / span * 0.85);
-    let x = r.prev.x + (r.cur.x - r.prev.x) * t, z = r.prev.z + (r.cur.z - r.prev.z) * t;
-    /* snap on teleport (respawn / join) */
-    if ((x - r.g.position.x) ** 2 + (z - r.g.position.z) ** 2 > 3600) { x = r.cur.x; z = r.cur.z; }
-    r.g.position.set(x, r.cur.y || 0, z);
-    let dh = r.cur.h - r.prev.h; while (dh > Math.PI) dh -= 2 * Math.PI; while (dh < -Math.PI) dh += 2 * Math.PI;
-    r.g.rotation.y = r.prev.h + dh * t;
-    r.g.visible = N.started && d.inRace();
+    const b = r.buf; if (!b.length) { r.g.visible = false; continue; }
+    const rt = now - DELAY;
+    let x, z, y, h;
+    if (rt <= b[0].at) { const f = b[0]; x = f.x; z = f.z; y = f.y; h = f.h; }
+    else if (rt >= b[b.length - 1].at) { /* ran out of data: extrapolate gently along heading, max 350ms */
+      const f = b[b.length - 1], e = Math.min(0.35, (rt - f.at) / 1000), v = f.sp || 0;
+      x = f.x + Math.sin(f.h) * v * e; z = f.z + Math.cos(f.h) * v * e; y = f.y; h = f.h;
+    } else {
+      let i = b.length - 1; while (i > 0 && b[i - 1].at > rt) i--;
+      const p0 = b[i - 1], p1 = b[i], t = (rt - p0.at) / Math.max(1, p1.at - p0.at);
+      x = p0.x + (p1.x - p0.x) * t; z = p0.z + (p1.z - p0.z) * t; y = p0.y + (p1.y - p0.y) * t;
+      let dh = p1.h - p0.h; while (dh > Math.PI) dh -= 2 * Math.PI; while (dh < -Math.PI) dh += 2 * Math.PI;
+      h = p0.h + dh * t;
+    }
+    /* snap on teleport (respawn / join), otherwise ease so tiny corrections are invisible */
+    const dx = x - r.g.position.x, dz = z - r.g.position.z;
+    if (dx * dx + dz * dz > 2500 || !r.shown) r.g.position.set(x, y, z);
+    else r.g.position.set(r.g.position.x + dx * Math.min(1, dt * 18), y, r.g.position.z + dz * Math.min(1, dt * 18));
+    let rh = h - r.g.rotation.y; while (rh > Math.PI) rh -= 2 * Math.PI; while (rh < -Math.PI) rh += 2 * Math.PI;
+    r.g.rotation.y += rh * Math.min(1, dt * 14);
+    r.shown = true;
+    r.g.visible = show;
+    if (r.g.userData.spin) r.g.userData.spin(dt);
   }
 }
 const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
@@ -140,7 +162,9 @@ export const net = {
   /* per-frame live state push (throttled to ~400ms — cheap + smooth) */
   pushNow(state) {
     if (!N.code || !cloud.user) return;
-    cloud.roomPlayerSet(N.code, cloud.user.uid, { ...this.myState(), state });
+    if (N.busy && state && state.ts) return; /* don't pile up writes on a slow connection */
+    N.busy = true;
+    Promise.resolve(cloud.roomPlayerSet(N.code, cloud.user.uid, { ...this.myState(), state })).finally(() => { N.busy = false; });
   },
   push(state) { this.pushNow(state); },
 
@@ -149,8 +173,8 @@ export const net = {
     stepRemoteCars(dt);
     N.pushT -= dt;
     if (N.pushT <= 0 && !finished) {
-      N.pushT = 0.4;
-      this.push({ x: P.pos.x, z: P.pos.z, y: P.pos.y, h: P.h, prog: P.prog, fin: !!P.finished, tms: Math.round(raceT * 1000) });
+      N.pushT = 0.11;
+      this.push({ x: P.pos.x, z: P.pos.z, y: P.pos.y, h: P.h, sp: Math.hypot(P.vel.x, P.vel.z), ts: Date.now(), prog: P.prog, fin: !!P.finished, tms: Math.round(raceT * 1000) });
     }
   },
 
@@ -183,5 +207,6 @@ export const net = {
   },
   myName() { return N.deps.driverName(); },
   myState() { return { name: this.myName(), car: N.deps.carId(), color: N.deps.carColor() }; },
-  uid() { return N.uid; }
+  uid() { return N.uid; },
+  remotes() { const o = []; for (const [uid, r] of N.cars) if (r.shown && r.g.visible) o.push({ uid, x: r.g.position.x, z: r.g.position.z }); return o; }
 };
