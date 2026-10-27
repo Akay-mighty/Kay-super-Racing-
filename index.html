@@ -373,6 +373,78 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
   .tile{min-height:52px}.sq{min-height:48px}.heroRace{min-height:70px}
   #topbar{height:50px}.mLogo{height:28px}
 }
+
+/* ============ V6 MODERN UI · bottom sheets, car-first showroom ============ */
+:root{--r:18px;--glow:0 10px 30px rgba(0,0,0,.45)}
+#topbar{height:64px;padding:0 14px;background:linear-gradient(180deg,rgba(3,5,9,.85),rgba(3,5,9,0))}
+.mLogo{height:44px;filter:drop-shadow(0 0 14px rgba(120,180,255,.45))}
+.pill{height:38px;border-radius:999px;padding:0 14px;background:rgba(10,15,26,.55);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(14px)}
+#moneyBadge{border-color:rgba(60,232,138,.45)}
+#moneyBadge b{font-size:16px}
+/* sub-screens: compact floating sheet at the bottom so the car stays visible on top */
+.screen:not(#navMain){flex:0 1 auto;margin-top:auto;margin-bottom:max(10px,env(safe-area-inset-bottom));max-height:60vh;max-height:60dvh;border-radius:26px;padding:10px 16px 14px;background:linear-gradient(180deg,rgba(14,20,34,.88),rgba(6,9,16,.94));border:1px solid rgba(255,255,255,.10);box-shadow:0 -12px 50px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.07);backdrop-filter:blur(22px) saturate(1.3)}
+.screen:not(#navMain)::before{content:'';display:block;width:42px;height:4px;border-radius:4px;background:rgba(255,255,255,.22);margin:0 auto 10px;flex:none}
+.ph{padding:0 0 12px;border-bottom:1px solid rgba(255,255,255,.08);gap:12px}
+.ph::after{display:none}
+.back{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);font-size:13px}
+.back:hover{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.3)}
+.ph h2{font-size:22px}
+.ph p{font-size:11px;letter-spacing:.12em;color:#9fb0c8;margin-top:4px;font-weight:600}
+.pbody{padding:12px 2px 4px;scrollbar-width:none}
+.pbody::-webkit-scrollbar{display:none}
+.lbl{font:700 12px var(--ft);letter-spacing:.14em;color:#9fb0c8;margin:16px 2px 8px}
+/* option chips: rounded, big tap targets, no old skewed shapes */
+.seg{gap:8px}
+.seg button{flex:1 1 0;min-width:64px;clip-path:none;border-radius:14px;padding:13px 10px;font:800 14px var(--ft);letter-spacing:.08em;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);color:#d6e2f3}
+.seg button.on{background:linear-gradient(135deg,#1aa7e8,#0b6aa8);border-color:rgba(120,220,255,.8);box-shadow:0 6px 22px rgba(30,160,230,.35);color:#fff}
+/* action buttons: rounded, soft glow */
+.act{clip-path:none;border-radius:16px;padding:16px 20px;margin:16px 0 4px;font:800 italic 17px var(--fd);letter-spacing:.08em;box-shadow:0 10px 28px rgba(0,0,0,.4)}
+.act.go{background:linear-gradient(135deg,#17c46f,#6df5b0);box-shadow:0 10px 30px rgba(30,220,130,.35)}
+.act:not(.go):not(.ghost):not(.gold){background:linear-gradient(135deg,#27c4ff,#7aeaff);box-shadow:0 10px 30px rgba(40,190,255,.3)}
+.act.ghost{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);box-shadow:none}
+/* main dashboard */
+#navMain{gap:10px}
+.heroRace{border-radius:20px;min-height:84px;border:1px solid rgba(120,220,255,.55);background:linear-gradient(110deg,rgba(24,130,190,.55),rgba(8,14,26,.88) 70%);box-shadow:0 14px 40px rgba(0,0,0,.5),0 0 30px rgba(40,180,255,.18);backdrop-filter:blur(14px)}
+.tile{border-radius:16px;border:1px solid rgba(255,255,255,.10);backdrop-filter:blur(14px);background:linear-gradient(110deg,rgba(18,26,44,.82),rgba(12,18,30,.6))}
+.tile::before{width:3px;top:12px;bottom:12px;border-radius:3px}
+.sq{border-radius:16px;min-height:62px;gap:5px;background:rgba(14,21,36,.7);border-color:rgba(255,255,255,.10)}
+.sq i{font-size:20px}
+.sq b{font-size:10px;color:#cddaec}
+/* garage: swipeable car carousel */
+[data-s="garage"] .pbody{overflow:hidden;display:flex;flex-direction:column;padding-top:10px}
+#carList{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 12px;margin:0 -16px;padding-left:16px;padding-right:16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+#carList::-webkit-scrollbar{display:none}
+.carCard{flex:0 0 78%;scroll-snap-align:center;margin:0;border-radius:22px;border:1px solid rgba(255,255,255,.12);border-left:1px solid rgba(255,255,255,.12);padding:16px 16px 14px;background:linear-gradient(160deg,rgba(26,38,62,.9),rgba(10,15,26,.9));display:flex;flex-direction:column}
+.carCard:hover{transform:none;background:linear-gradient(160deg,rgba(30,44,72,.92),rgba(10,15,26,.92))}
+.carCard.sel{border-color:rgba(100,230,255,.85);box-shadow:0 0 0 1px rgba(100,230,255,.5),0 10px 34px rgba(40,190,255,.28);background:linear-gradient(160deg,rgba(22,70,104,.85),rgba(10,16,28,.92))}
+.carCard.locked{opacity:.78}
+.carCard .top{font-size:19px;row-gap:6px}
+.carCard .price{margin-left:0;flex-basis:100%;font-size:20px;order:5}
+.carCard .price.own{font-size:12px}
+.carCard .desc{font-size:14px;margin:8px 0 12px;color:#aebdd3;line-height:1.3}
+.carCard .bars{display:flex;gap:10px}
+.carCard::after{content:attr(data-cta);display:block;margin-top:14px;padding:12px;text-align:center;border-radius:14px;font:800 italic 14px var(--fd);letter-spacing:.08em;background:rgba(255,255,255,.08);color:#dbe8f8}
+.carCard.cta-buy::after{background:linear-gradient(135deg,#17c46f,#6df5b0);color:#02180d}
+.carCard.cta-no::after{background:rgba(255,77,94,.16);color:#ff8d99}
+.carCard.sel::after{background:rgba(100,230,255,.18);color:#8fe9ff}
+[data-s="garage"] .lbl{margin:4px 2px 8px}
+.sw{width:38px;height:38px;border-radius:50%}
+/* multiplayer room code + list */
+.mpcode{border-radius:18px;border:1px solid rgba(100,230,255,.5);background:rgba(10,20,38,.7)}
+.rr{border-radius:14px;border:1px solid rgba(255,255,255,.10);border-left:3px solid rgba(140,160,190,.5)}
+#mpCodeIn{border-radius:16px}
+/* inputs: kill the pale autofill look */
+.gateCard input:-webkit-autofill,.gateCard input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 100px #0f1828 inset!important;-webkit-text-fill-color:#fff!important;caret-color:#fff}
+.gateCard input{border-radius:14px;padding:15px 16px;font-size:16px}
+.gateCard{border-radius:26px}
+/* footer hint is meaningless on touch */
+@media (max-width:760px){
+  #botbar .hints,#botbar .ver{display:none}
+  .screen:not(#navMain){max-height:62vh;max-height:62dvh}
+  #topbar{height:60px}
+  .mLogo{height:42px}
+}
+@media (max-height:700px){.screen:not(#navMain){max-height:70vh;max-height:70dvh}}
 </style>
 </head>
 <body>
@@ -529,14 +601,14 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
     </section>
     <!-- MULTIPLAYER -->
     <section class="screen" data-s="multi">
-      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>MULTIPLAYER</h2><p>RACE FRIENDS LIVE · ROOM CODES</p></div></div>
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>MULTIPLAYER</h2><p>RACE FRIENDS LIVE</p></div></div>
       <div class="pbody">
         <div id="mpHome">
           <div id="mpGate" class="mpGate"><div id="mpGateT" class="mpGateT"></div><div id="mpGateS" class="mpGateS"></div><button class="act" id="mpGateBtn" data-act="signin" type="button">SIGN IN</button></div>
-          <div class="lbl">CREATE A ROOM AND SHARE THE CODE — OR JOIN A FRIEND</div>
+          <div class="lbl">RACE YOUR FRIENDS LIVE</div>
           <button class="act go" data-act="mpCreate" type="button">CREATE ROOM</button>
           <button class="act" data-act="mpJoinOpen" type="button">JOIN ROOM</button>
-          <div class="lbl">FRIENDS SEE EACH OTHER LIVE DURING THE RACE — GHOST SYNC, ZERO LAG SPIKES.</div>
+          <div class="lbl" style="text-transform:none;letter-spacing:.04em;font-weight:600">Create a room, share the 5-letter code, and everyone races on the same track.</div>
         </div>
         <div id="mpJoin" class="hide">
           <div class="lbl">JOIN A FRIEND — ASK THEM FOR THE 5-LETTER ROOM CODE</div>
