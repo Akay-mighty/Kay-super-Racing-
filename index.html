@@ -269,6 +269,27 @@ body.arena #paintBtn{display:flex}
 #glFix .gspin{width:46px;height:46px;border-radius:50%;border:4px solid rgba(47,212,255,.18);border-top-color:#2fd4ff;animation:gspin 1s linear infinite}
 #glFix .gsm{font-size:11px;color:#7d8ea6;letter-spacing:.08em}
 @keyframes gspin{to{transform:rotate(360deg)}}
+/* NIGHT CIRCUIT: neon tile + locked state + intro + HUD accent */
+.t-neon{background:linear-gradient(135deg,#0a1230,#210f33 60%,#2a0d24);border:1px solid rgba(45,226,255,.45);box-shadow:0 0 20px rgba(45,226,255,.22),inset 0 0 26px rgba(255,45,216,.12)}
+.t-neon b{background:linear-gradient(90deg,#2de2ff,#ff2dd8 60%,#ff9a2f);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
+.t-neon span{color:#9fd9ef}
+.tile.locked{filter:grayscale(.75) brightness(.55)}
+#ncIntro{position:fixed;inset:0;z-index:7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at center,rgba(6,10,26,.86),rgba(2,3,8,.96));opacity:0;pointer-events:none;transition:opacity .45s}
+#ncIntro.show{opacity:1}
+#ncIntro h1{font:900 italic clamp(40px,10vw,92px)/1 var(--fd);letter-spacing:.05em;background:linear-gradient(90deg,#2de2ff,#ff2dd8 55%,#ff9a2f);-webkit-background-clip:text;background-clip:text;color:transparent;animation:ncFlick 1.7s steps(1) infinite;filter:drop-shadow(0 0 30px rgba(45,226,255,.45))}
+#ncIntro .ncSub{font-weight:800;letter-spacing:.35em;color:#8be5ff;font-size:clamp(10px,2.4vw,14px)}
+#ncIntro .ncRain{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+#ncIntro .ncRain i{position:absolute;top:-18%;width:1px;height:14%;background:linear-gradient(rgba(140,200,255,0),rgba(160,215,255,.55));animation:ncRainDrop .7s linear infinite;left:calc(var(--x) * 1%)}
+#ncIntro .ncRain i:nth-child(odd){animation-duration:.55s;opacity:.7}
+@keyframes ncRainDrop{to{transform:translateY(130vh) translateX(-6vw)}}
+@keyframes ncFlick{0%,18%,22%,25%,53%,57%,100%{opacity:1}20%,24%,55%{opacity:.35}}
+body.nc #ring{stroke:#45f0ff}
+body.nc #spd{color:#5df5ff;text-shadow:0 0 14px rgba(69,240,255,.5)}
+body.nc #nit{color:#7df8ff}
+body.nc #driftPts{color:#5ef2ff}
+body.nc #altbar{background:#45f0ff}
+/* multiplayer lobby */
+.mpcode{display:block;width:100%;padding:14px;margin:6px 0;border:1px dashed rgba(45,226,255,.6);border-radius:8px;background:rgba(10,18,36,.7);color:#5df5ff;font:900 italic clamp(28px,7vw,44px)/1 var(--fd);letter-spacing:.35em;text-align:center;cursor:pointer;text-shadow:0 0 18px rgba(45,226,255,.5)}
 
 /* ============ TOUCH CONTROLS ============ */
 #touch{position:fixed;inset:0;pointer-events:none;z-index:3}
@@ -384,6 +405,7 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
 <div id="driftHud" class="hud"><span id="driftPts">DRIFT 0</span><small id="driftMult">x1</small></div>
 <div id="toast" class="hud">OVERTAKE</div>
 <div id="count" class="hud"><div class="lamps"><i id="l1"></i><i id="l2"></i><i id="l3"></i></div><span id="cd">3</span></div>
+<div id="ncIntro"><h1>NIGHT CIRCUIT</h1><div class="ncSub">RAIN · LOW GRIP · NEON CITY · ×1.8 CASH</div><div class="ncRain"><i style="--x:6"></i><i style="--x:14"></i><i style="--x:23"></i><i style="--x:31"></i><i style="--x:38"></i><i style="--x:47"></i><i style="--x:56"></i><i style="--x:63"></i><i style="--x:72"></i><i style="--x:79"></i><i style="--x:88"></i><i style="--x:95"></i></div></div>
 <div id="glFix" class="ov hide"><div class="ovwrap">
   <h1>FIXING GRAPHICS</h1>
   <div class="gspin"><i></i></div>
@@ -424,6 +446,7 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
       </button>
       <div class="tileGrid">
         <button class="tile t-red" data-go="tour" type="button"><b>TOURNAMENT</b><span>5 EVENTS &middot; TAKE THE CROWN</span></button>
+        <button class="tile t-neon" id="nightTile" data-go="night" data-act="nightTile" type="button"><b>NIGHT CIRCUIT</b><span id="nightSub">HARD · RAIN · NEON · ×1.8 CASH</span></button>
         <button class="tile t-pur" data-go="arena" type="button"><b>DRIFT ARENA</b><span>SLIDE &middot; SMASH &middot; SCORE</span></button>
         <button class="tile t-cy" data-go="tt" type="button"><b>TIME TRIAL</b><span>SOLO &middot; BEAT YOUR GHOST</span></button>
         <button class="tile t-grn gold" id="dailyBtn" data-act="daily" type="button"><b>DAILY BONUS</b><span>FREE CASH EVERY DAY</span></button>
@@ -431,6 +454,7 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
       <div class="tileRow">
         <button class="sq" data-go="garage" type="button"><i>&#9881;&#65039;</i><b>GARAGE</b></button>
         <button class="sq" data-go="missions" type="button"><i>&#127919;</i><b>MISSIONS</b></button>
+        <button class="sq" data-go="multi" type="button"><i>&#127760;</i><b>MULTI</b></button>
         <button class="sq" data-go="online" type="button"><i>&#9741;</i><b>RIVALS</b></button>
         <button class="sq" data-go="settings" type="button"><i>&#9881;</i><b>SETTINGS</b></button>
         <button class="sq" data-go="how" type="button"><i>?</i><b>HELP</b></button>
@@ -474,6 +498,38 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
         <div id="tourList"></div>
         <button class="act go" id="tourGo" data-act="tourGo" type="button">START TOURNAMENT</button>
         <button class="act ghost" id="tourReset" data-act="tourReset" type="button">RESET PROGRESS</button>
+      </div>
+    </section>
+    <!-- NIGHT CIRCUIT -->
+    <section class="screen" data-s="night">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>NIGHT CIRCUIT</h2><p>HARDEST CHAPTER · RAIN · NEON CITY</p></div></div>
+      <div class="pbody">
+        <div id="ntLock" class="lbl" style="color:#ffd166;display:none">&#128274; LOCKED — OWN THE TESLA SPARK OR HOLD $150,000</div>
+        <div id="ntList"></div>
+        <button class="act go" id="ntGo" data-act="ntGo" type="button">ENTER THE NIGHT</button>
+        <button class="act ghost" id="ntReset" data-act="ntReset" type="button">RESET CHAPTER</button>
+      </div>
+    </section>
+    <!-- MULTIPLAYER -->
+    <section class="screen" data-s="multi">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>MULTIPLAYER</h2><p>RACE FRIENDS LIVE · ROOM CODES</p></div></div>
+      <div class="pbody">
+        <div id="mpHome">
+          <div class="lbl">CREATE A ROOM AND SHARE THE CODE — OR JOIN A FRIEND</div>
+          <button class="act go" data-act="mpCreate" type="button">CREATE ROOM</button>
+          <div class="lbl">JOIN WITH CODE</div>
+          <input id="mpCodeIn" maxlength="5" spellcheck="false" autocomplete="off" autocapitalize="characters" placeholder="e.g. K7X2Q" style="text-transform:uppercase;letter-spacing:.3em;text-align:center;font-weight:900">
+          <button class="act" data-act="mpJoin" type="button">JOIN ROOM</button>
+          <div class="lbl">SIGN IN (SETTINGS) AND STAY CONNECTED TO RACE ONLINE. FRIENDS SEE EACH OTHER LIVE DURING THE RACE — GHOST SYNC, ZERO LAG SPIKES.</div>
+        </div>
+        <div id="mpLobby" class="hide">
+          <div class="lbl">ROOM CODE — TAP TO COPY</div>
+          <button class="mpcode" data-act="mpCopy" id="mpCode" type="button">&middot;&middot;&middot;&middot;&middot;</button>
+          <div id="mpStat" class="lbl"></div>
+          <div id="mpList"></div>
+          <button class="act go" id="mpStart" data-act="mpStart" type="button">START RACE</button>
+          <button class="act ghost" data-act="mpLeave" type="button">LEAVE ROOM</button>
+        </div>
       </div>
     </section>
     <!-- GARAGE -->

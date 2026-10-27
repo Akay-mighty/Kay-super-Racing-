@@ -2,15 +2,27 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 1) Firebase console -> Authentication -> Users -> copy the owner's "User UID" and paste it here
-    //    (and into ADMIN_UID in public/admin.html).
+    // ── ADMIN ────────────────────────────────────────────────────────────────
+    // Admin is recognised by the OWNER EMAIL (survives account recreation —
+    // this was the cause of "permission-denied" in the admin panel) or the
+    // pinned owner UID as fallback.
+    //
+    // ⚠️ IMPORTANT — PUBLISH THESE RULES:
+    // Firebase console → Firestore Database → Rules → paste this file → Publish.
+    // The game cannot publish rules from the client; until you publish, the
+    // old (possibly UID-only) rules stay live and the panel keeps failing.
     function isAdmin() {
-      return request.auth != null && request.auth.uid == 'KXVphmcLTng1HaOXwlI0YZmmqll1';
+      return request.auth != null && (
+        request.auth.token.email == 'admin@kayracing.com' ||
+        request.auth.uid == 'KXVphmcLTng1HaOXwlI0YZmmqll1'
+      );
     }
-    // Players are signed in anonymously by the game (Authentication -> Sign-in method -> Anonymous must be ON).
+    // Players are signed in by the game (email / Google / anonymous).
     function signedIn() { return request.auth != null; }
 
     // Cloud profiles, keyed by driver name (A-Z 0-9 _ -, max 12 chars).
+    // Any signed-in player may READ (leaderboards / admin panel need it);
+    // writes are validated or admin-only.
     match /players/{name} {
       allow read: if signedIn();
       allow create, update: if isAdmin() || (
@@ -37,7 +49,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Ghost runs: anyone signed in can add one (size-limited); nobody but the owner can change or delete.
+    // Ghost runs: anyone signed in can add one (size-limited).
     match /ghosts/{id} {
       allow read: if signedIn();
       allow create: if signedIn()
@@ -51,6 +63,24 @@ service cloud.firestore {
     // Admin cash-grant log: owner only.
     match /grants/{id} {
       allow read, write: if isAdmin();
+    }
+
+    // ── MULTIPLAYER ROOMS (live lobby + ghost-sync racing) ───────────────────
+    // rooms/{CODE}        → lobby settings + status (lobby / racing / finished)
+    // rooms/{CODE}/p/uid  → per-player live state (pos, lap, progress, finish)
+    match /rooms/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && code.matches('^[A-Z2-9]{5}$')
+        && request.resource.data.status == 'lobby';
+      allow update: if signedIn();
+      allow delete: if isAdmin() || (signedIn() && resource.data.host == request.auth.uid);
+
+      match /p/{uid} {
+        allow read: if signedIn();
+        allow create, update: if signedIn() && request.auth.uid == uid;
+        allow delete: if signedIn() && (request.auth.uid == uid || isAdmin());
+      }
     }
   }
 }
