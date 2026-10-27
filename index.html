@@ -65,6 +65,15 @@ button{font-family:var(--ft)}
 .gtabs button.on{background:linear-gradient(135deg,var(--cy2),#0a5f8c);color:#fff;border-color:var(--cy)}
 .gateCard input{width:100%;padding:13px 14px;margin:7px 0;border-radius:6px;border:1px solid var(--line2);background:rgba(16,24,40,.85);color:#fff;font:600 15px var(--ft);letter-spacing:.06em;outline:none}
 .gateCard input:focus{border-color:var(--cy);box-shadow:0 0 12px rgba(47,212,255,.22)}
+.gcode{min-height:13px;font:600 10px var(--ft);letter-spacing:.14em;color:var(--dim2);text-align:center;margin:2px 0 4px;word-break:break-all}
+.mpGate{margin:2px 0 12px;padding:12px 14px;border:1px solid var(--line2);border-left:4px solid #7d8aa0;border-radius:8px;background:rgba(10,15,26,.7)}
+.mpGate.on{border-left-color:var(--grn)}.mpGate.wait{border-left-color:var(--gold)}.mpGate.off{border-left-color:var(--red)}
+.mpGateT{font:900 italic 16px var(--fd);letter-spacing:.06em}.mpGate.on .mpGateT{color:var(--grn)}.mpGate.off .mpGateT{color:var(--red)}.mpGate.wait .mpGateT{color:var(--gold)}
+.mpGateS{font:600 12px/1.5 var(--ft);letter-spacing:.14em;color:var(--dim);margin-top:5px}
+.mpGate .act{margin:10px 0 0;padding:11px 16px;font-size:14px}
+.act.locked{opacity:.4;filter:grayscale(.7)}
+.mpGate.shake{animation:mpShake .4s}
+@keyframes mpShake{20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
 .gerr{min-height:17px;font:700 11.5px var(--ft);letter-spacing:.08em;color:var(--red);margin:4px 0 0;text-align:center}
 #gate .act{margin:8px 0 4px}
 .gdiv{display:flex;align-items:center;gap:10px;margin:12px 0 10px;color:var(--dim2);font:700 10px var(--ft);letter-spacing:.3em}
@@ -393,6 +402,7 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
     <input id="gEmail" type="email" placeholder="EMAIL" autocomplete="email" spellcheck="false">
     <input id="gPass" type="password" placeholder="PASSWORD · 6+ CHARACTERS" autocomplete="current-password">
     <div id="gErr" class="gerr"></div>
+    <div id="gCode" class="gcode"></div>
     <button id="gGo" class="act go" type="button">SIGN IN</button>
     <div class="gdiv"><span>OR</span></div>
     <button id="gGoogle" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.3-2.2H12v4.3h6.5c-.1 1.1-.8 2.7-2.4 3.8l3.7 2.9c2.2-2.1 3.7-5.1 3.7-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 7.9-2.9l-3.7-2.9c-1 .7-2.4 1.2-4.2 1.2-3.2 0-6-2.1-6.9-5.1H1.3v3C3.3 21.3 7.3 24 12 24z"/><path fill="#FBBC05" d="M5.1 14.3c-.2-.7-.4-1.5-.4-2.3s.1-1.6.4-2.3v-3H1.3C.5 8.3 0 10.1 0 12s.5 3.7 1.3 5.3l3.8-3z"/><path fill="#EA4335" d="M12 4.7c1.8 0 3 .8 3.7 1.4l3.3-3.2C17 1.1 15.2 0 12 0 7.3 0 3.3 2.7 1.3 6.7l3.8 3c.9-3 3.7-5 6.9-5z"/></svg>CONTINUE WITH GOOGLE</button>
@@ -522,10 +532,11 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
       <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>MULTIPLAYER</h2><p>RACE FRIENDS LIVE · ROOM CODES</p></div></div>
       <div class="pbody">
         <div id="mpHome">
+          <div id="mpGate" class="mpGate"><div id="mpGateT" class="mpGateT"></div><div id="mpGateS" class="mpGateS"></div><button class="act" id="mpGateBtn" data-act="signin" type="button">SIGN IN</button></div>
           <div class="lbl">CREATE A ROOM AND SHARE THE CODE — OR JOIN A FRIEND</div>
           <button class="act go" data-act="mpCreate" type="button">CREATE ROOM</button>
           <button class="act" data-act="mpJoinOpen" type="button">JOIN ROOM</button>
-          <div class="lbl">SIGN IN (SETTINGS) AND STAY CONNECTED TO RACE ONLINE. FRIENDS SEE EACH OTHER LIVE DURING THE RACE — GHOST SYNC, ZERO LAG SPIKES.</div>
+          <div class="lbl">FRIENDS SEE EACH OTHER LIVE DURING THE RACE — GHOST SYNC, ZERO LAG SPIKES.</div>
         </div>
         <div id="mpJoin" class="hide">
           <div class="lbl">JOIN A FRIEND — ASK THEM FOR THE 5-LETTER ROOM CODE</div>
@@ -580,7 +591,8 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
         <div id="acctEmail" class="lbl"></div>
         <div class="lbl">SOUND</div><div class="seg" data-k="snd"><button data-v="on" type="button">ON</button><button data-v="off" type="button">OFF</button></div>
         <div class="lbl">GRAPHICS</div><div class="seg" data-k="q"><button data-v="high" type="button">HIGH</button><button data-v="med" type="button">MEDIUM</button><button data-v="low" type="button">LOW</button></div>
-        <button class="act ghost" data-act="signout" type="button">SIGN OUT</button>
+        <button class="act go" id="btnSignIn" data-act="signin" type="button">SIGN IN / CREATE ACCOUNT</button>
+        <button class="act ghost" id="btnSignOut" data-act="signout" type="button">SIGN OUT</button>
       </div>
     </section>
     <!-- HOW TO PLAY -->
