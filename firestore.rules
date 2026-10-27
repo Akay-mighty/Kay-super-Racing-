@@ -5,7 +5,7 @@ service cloud.firestore {
     // 1) Firebase console -> Authentication -> Users -> copy the owner's "User UID" and paste it here
     //    (and into ADMIN_UID in public/admin.html).
     function isAdmin() {
-      return request.auth != null && request.auth.uid == 'PASTE_OWNER_UID_HERE';
+      return request.auth != null && request.auth.uid == 'KXVphmcLTng1HaOXwlI0YZmmqll1';
     }
     // Players are signed in anonymously by the game (Authentication -> Sign-in method -> Anonymous must be ON).
     function signedIn() { return request.auth != null; }
