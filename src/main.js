@@ -620,7 +620,6 @@ function act(a) {
   else if (a === 'daily') claimDaily();
   else if (a === 'refreshBoard') renderBoard();
   else if (a === 'rival') raceRival();
-  else if (a === 'admin') window.open('admin.html', '_blank');
   else if (a === 'resume') resume();
   else if (a === 'retry') retry();
   else if (a === 'menu') toMenu();
