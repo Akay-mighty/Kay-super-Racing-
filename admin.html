@@ -7,102 +7,252 @@
 <style>
 *{box-sizing:border-box;margin:0}
 body{min-height:100vh;background:#070a10;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}
-.card{width:min(94vw,460px);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:26px}
+.wrap{width:min(94vw,520px);display:flex;flex-direction:column;gap:16px}
+.card{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:24px}
 h1{font:900 italic 26px/1.2 'Segoe UI',system-ui,sans-serif;background:linear-gradient(90deg,#fff,#5cf);-webkit-background-clip:text;color:transparent;margin-bottom:4px}
-.sub{font-size:12px;letter-spacing:.2em;opacity:.6;margin-bottom:18px}
-label{display:block;font-size:11px;letter-spacing:.15em;opacity:.7;margin:14px 0 6px;font-weight:700}
+.sub{font-size:12px;letter-spacing:.2em;opacity:.6;margin-bottom:14px}
+label{display:block;font-size:11px;letter-spacing:.15em;opacity:.7;margin:12px 0 6px;font-weight:700}
 input{width:100%;padding:12px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;font:600 16px 'Segoe UI',system-ui,sans-serif;outline:none}
 input:focus{border-color:#3cf}
-button{width:100%;padding:13px;margin-top:10px;border:0;border-radius:8px;font:800 italic 16px 'Segoe UI',system-ui,sans-serif;letter-spacing:.08em;color:#fff;cursor:pointer;background:linear-gradient(90deg,#0b6d93,#1599bd)}
+button{width:100%;padding:12px;margin-top:8px;border:0;border-radius:8px;font:800 italic 15px 'Segoe UI',system-ui,sans-serif;letter-spacing:.08em;color:#fff;cursor:pointer;background:linear-gradient(90deg,#0b6d93,#1599bd)}
 button.gold{background:linear-gradient(90deg,#b8860b,#e8b800);color:#111}
 button.red{background:linear-gradient(90deg,#8f1d1d,#c0392b)}
 button.ghost{background:rgba(255,255,255,.1)}
+button:disabled{opacity:.4;cursor:default}
 .row{display:flex;gap:8px}
-.row button{margin-top:10px}
-#msg{text-align:center;font-weight:700;margin-top:12px;min-height:20px}
-.money{font:900 italic 34px 'Segoe UI',system-ui,sans-serif;color:#7dff8a;text-align:center;margin:8px 0}
+.row button{margin-top:8px}
+#msg,#msg2{text-align:center;font-weight:700;margin-top:10px;min-height:18px;font-size:14px}
+.money{font:900 italic 32px 'Segoe UI',system-ui,sans-serif;color:#7dff8a;text-align:center;margin:6px 0}
+.meta{font-size:12px;opacity:.75;text-align:center;line-height:1.7}
 .hidden{display:none}
-.back{display:block;text-align:center;margin-top:14px;font-size:13px;opacity:.6;color:#8df;text-decoration:none}
+.back{display:block;text-align:center;margin-top:12px;font-size:13px;opacity:.6;color:#8df;text-decoration:none}
+.pinfo{background:rgba(255,255,255,.05);border-radius:8px;padding:10px;font-size:13px;line-height:1.8;text-align:left}
+.pinfo b{color:#8df}
+.prow{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.06);border-radius:6px;padding:6px 10px;margin:4px 0;font-size:13px;cursor:pointer;font-style:italic;font-weight:700}
+.prow:hover{background:rgba(51,204,255,.18)}
+.prow span{flex:1}
+.prow em{color:#7dff8a;font-style:normal}
+.sec2{font-size:11px;letter-spacing:.2em;opacity:.6;margin:16px 0 4px;font-weight:700}
+.hint{font-size:11px;opacity:.55;line-height:1.7;margin-top:8px;font-style:normal}
+.ok{color:#7dff8a}.bad{color:#ff7b7b}.warn{color:#ffd76a}
 </style>
 </head>
 <body>
-<div class="card">
-  <!-- Change the admin password here: -->
-  <div id="gate">
+<div class="wrap">
+  <!-- LOGIN -->
+  <div class="card" id="gate">
     <h1>ADMIN PANEL</h1>
-    <div class="sub">KAY SUPER RACING · OWNER TOOLS</div>
+    <div class="sub">KAY SUPER RACING · OWNER TOOLS · V3</div>
+    <label>ADMIN EMAIL</label>
+    <input id="email" type="email" value="admin@kayracing.com" spellcheck="false">
     <label>ADMIN PASSWORD</label>
     <input id="pw" type="password" placeholder="Enter password">
-    <button onclick="tryLogin()">UNLOCK</button>
+    <button id="loginBtn" onclick="tryLogin()">SIGN IN</button>
+    <button class="ghost hidden" id="localBtn" onclick="localLogin()">USE LOCAL MODE (OFFLINE)</button>
     <div id="msg"></div>
+    <div class="hint">First sign-in automatically creates the owner account if it doesn't exist yet
+      (Firebase console must have <b>Email/Password</b> enabled). Local mode edits only this browser's save.</div>
   </div>
 
-  <div id="panel" class="hidden">
+  <!-- PANEL -->
+  <div class="card hidden" id="panel">
     <h1>ADMIN PANEL</h1>
-    <div class="sub">KAY SUPER RACING · OWNER TOOLS</div>
-    <label>CURRENT CASH</label>
-    <div class="money" id="cur">$0</div>
-    <label>ADD CASH (AMOUNT)</label>
+    <div class="sub" id="who"></div>
+    <button class="ghost" onclick="signOutNow()">SIGN OUT</button>
+
+    <div class="sec2">☁ CLOUD PLAYER TOOLS</div>
+    <label>PLAYER DRIVER NAME</label>
+    <input id="target" placeholder="e.g. KAY" spellcheck="false" autocapitalize="characters">
+    <button onclick="loadPlayer()">LOAD PLAYER</button>
+    <div id="pinfo" class="pinfo hidden"></div>
+    <div id="pcur" class="money hidden">$0</div>
+    <label>AMOUNT ($)</label>
     <input id="amt" type="number" min="0" step="1000" value="100000">
     <div class="row">
-      <button class="gold" onclick="addCash()">ADD CASH</button>
-      <button class="ghost" onclick="setCash()">SET EXACT</button>
+      <button class="gold" onclick="grant(1)">ADD CASH</button>
+      <button class="ghost" onclick="grant(0)">SET EXACT</button>
     </div>
     <div class="row">
       <button class="ghost" onclick="quick(10000)">+10K</button>
       <button class="ghost" onclick="quick(100000)">+100K</button>
       <button class="ghost" onclick="quick(1000000)">+1M</button>
     </div>
-    <label>OTHER TOOLS</label>
     <button onclick="unlockAll()">UNLOCK ALL CARS</button>
-    <button class="red" onclick="resetAll()">RESET ALL GAME PROGRESS</button>
+    <button class="red" onclick="resetPlayer()">RESET THIS PLAYER</button>
     <div id="msg2"></div>
+
+    <div class="sec2">TOP PLAYERS (BY CASH) — CLICK TO LOAD</div>
+    <div id="toplist"><div class="hint">Loading…</div></div>
+
+    <div class="sec2">🖥 THIS BROWSER (OFFLINE PROFILE)</div>
+    <div class="meta">Cash in <b>this browser's</b> localStorage: <b id="lcur" style="color:#7dff8a"></b></div>
+    <div class="row">
+      <button class="ghost" onclick="localQuick(100000)">+100K LOCAL</button>
+      <button class="ghost" onclick="localQuick(1000000)">+1M LOCAL</button>
+      <button class="red" onclick="localReset()">RESET LOCAL</button>
+    </div>
     <a class="back" href="/">← BACK TO GAME</a>
   </div>
 </div>
 
-<script>
-/* ====== CHANGE YOUR ADMIN PASSWORD HERE ====== */
-const ADMIN_PASSWORD = 'KAY2025';
+<script type="module">
+/* ====== CONFIG ====== */
+const firebaseConfig = {
+  apiKey: "AIzaSyDLtN-f1f5rxruQvyw3ZhxXeKcsxm5AI1w",
+  authDomain: "kay-super-racing.firebaseapp.com",
+  projectId: "kay-super-racing",
+  storageBucket: "kay-super-racing.firebasestorage.app",
+  messagingSenderId: "962214807193",
+  appId: "1:962214807193:web:891498bea6272c22ea1a08",
+  measurementId: "G-3TYSZTMQFS"
+};
+const ADMIN_EMAIL = 'admin@kayracing.com';   /* only this email gets access */
+const LOCAL_PASSWORD = '363438';             /* offline fallback gate */
+const CAR_IDS = ['cruiser', 'cab', 'titan', 'blaze', 'nova', 'tesla', 'phantom', 'ghost'];
 
+const $ = id => document.getElementById(id);
+const say = (t, cls = '') => { const e = $('msg'); e.innerHTML = `<span class="${cls}">${t}</span>`; };
+const say2 = t => { $('msg2').textContent = t; setTimeout(() => { $('msg2').textContent = ''; }, 2600); };
+const safeName = v => String(v || '').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 12);
+
+/* local profile helpers (same keys as the game) */
 const read = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
-const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
-const money = () => read('ksr.money', 5000);
-const say = t => { document.getElementById('msg').textContent = t; document.getElementById('msg2').textContent = t; setTimeout(() => { document.getElementById('msg').textContent = ''; document.getElementById('msg2').textContent = ''; }, 2500); };
+const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } };
+const lmoney = () => read('ksr.money', 5000);
+function refreshLocal() { $('lcur').textContent = '$' + lmoney().toLocaleString(); }
+
+let fb = null, auth = null, db = null, fns = null, curPlayer = null;
+
+import('https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js')
+  .then(async APP => {
+    const AUTH = await import('https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js');
+    const FS = await import('https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js');
+    const app = APP.initializeApp(firebaseConfig);
+    auth = AUTH.getAuth(app); db = FS.getFirestore(app);
+    fns = { ...AUTH, ...FS };
+    AUTH.onAuthStateChanged(auth, user => {
+      if (user && user.email === ADMIN_EMAIL) showPanel(user.email);
+      else if (user && user.email) { say('NOT AN ADMIN ACCOUNT', 'bad'); AUTH.signOut(auth); }
+    });
+  })
+  .catch(() => { say('FIREBASE UNREACHABLE — LOCAL MODE AVAILABLE', 'warn'); $('localBtn').classList.remove('hidden'); });
 
 function tryLogin() {
-  const v = document.getElementById('pw').value;
-  if (v === ADMIN_PASSWORD) {
-    document.getElementById('gate').classList.add('hidden');
-    document.getElementById('panel').classList.remove('hidden');
-    refresh();
-  } else say('WRONG PASSWORD');
+  const email = $('email').value.trim(), pw = $('pw').value;
+  if (!email || !pw) return say('ENTER EMAIL AND PASSWORD', 'warn');
+  if (!auth) return say('FIREBASE NOT READY — TRY LOCAL MODE', 'warn');
+  $('loginBtn').disabled = true; say('SIGNING IN…', 'warn');
+  fns.signInWithEmailAndPassword(auth, email, pw)
+    .then(cred => {
+      if (cred.user.email !== ADMIN_EMAIL) { fns.signOut(auth); say('NOT AN ADMIN ACCOUNT', 'bad'); }
+      /* showPanel called by onAuthStateChanged */
+    })
+    .catch(err => {
+      $('loginBtn').disabled = false;
+      const code = err && err.code || '';
+      if (code === 'auth/user-not-found' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
+        /* first run: auto-provision the owner account */
+        fns.createUserWithEmailAndPassword(auth, email, pw)
+          .then(cred => { if (cred.user.email !== ADMIN_EMAIL) fns.signOut(auth); })
+          .catch(e2 => say((e2 && e2.code) === 'auth/email-already-in-use' ? 'WRONG PASSWORD' : (e2 && e2.code || 'SIGN-UP FAILED'), 'bad'));
+      } else if (code === 'auth/wrong-password') say('WRONG PASSWORD', 'bad');
+      else if (code.includes('network')) { say('NETWORK ERROR — LOCAL MODE AVAILABLE', 'warn'); $('localBtn').classList.remove('hidden'); }
+      else if (code === 'auth/operation-not-allowed') { say('ENABLE EMAIL/PASSWORD IN FIREBASE CONSOLE — OR USE LOCAL MODE', 'warn'); $('localBtn').classList.remove('hidden'); }
+      else { say(code.toUpperCase() || 'SIGN-IN FAILED', 'bad'); $('localBtn').classList.remove('hidden'); }
+    });
 }
-document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
+function localLogin() {
+  const v = prompt('LOCAL ADMIN PASSWORD:');
+  if (v === LOCAL_PASSWORD) showPanel('LOCAL MODE (this browser only)');
+  else say('WRONG PASSWORD', 'bad');
+}
+$('pw').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
 
-function refresh() { document.getElementById('cur').textContent = '$' + money().toLocaleString(); }
-function addCash() {
-  const a = Math.max(0, parseInt(document.getElementById('amt').value || '0', 10));
-  write('ksr.money', money() + a);
-  const s = read('ksr.stats', { earned: 0, races: 0, wins: 0 }); s.earned += a; write('ksr.stats', s);
-  refresh(); say('ADDED $' + a.toLocaleString());
+function showPanel(who) {
+  $('gate').classList.add('hidden');
+  $('panel').classList.remove('hidden');
+  $('who').textContent = 'SIGNED IN: ' + who.toUpperCase();
+  refreshLocal(); refreshTop();
 }
-function setCash() {
-  const a = Math.max(0, parseInt(document.getElementById('amt').value || '0', 10));
-  write('ksr.money', a); refresh(); say('SET TO $' + a.toLocaleString());
+window.signOutNow = () => { if (auth && fns) fns.signOut(auth); location.reload(); };
+
+/* ---------- cloud tools ---------- */
+const pRef = name => fns.doc(db, 'players', safeName(name));
+async function loadPlayer() {
+  const name = safeName($('target').value);
+  if (!name) return say2('ENTER A DRIVER NAME');
+  say2('LOADING ' + name + '…');
+  try {
+    const snap = await fns.getDoc(pRef(name));
+    const d = snap.exists() ? snap.data() : null;
+    curPlayer = name;
+    $('pinfo').classList.remove('hidden'); $('pcur').classList.remove('hidden');
+    $('pcur').textContent = '$' + ((d && d.money) || 0).toLocaleString();
+    $('pinfo').innerHTML = d
+      ? `<b>${name}</b> · ${((d.owned) || []).length}/8 cars · races ${((d.stats) || {}).races || 0} · wins ${((d.stats) || {}).wins || 0} · earned $${(((d.stats) || {}).earned || 0).toLocaleString()}${d.updatedAt ? '<br>last sync: ' + new Date(d.updatedAt.toMillis ? d.updatedAt.toMillis() : d.updatedAt).toLocaleString() : ''}`
+      : `<b>${name}</b> — no cloud profile yet. Any grant will CREATE it (the game merges on next launch).`;
+    say2('LOADED ' + name);
+  } catch (e) { say2('LOAD FAILED: ' + (e && e.code || e)); }
 }
-function quick(a) { write('ksr.money', money() + a); refresh(); say('ADDED $' + a.toLocaleString()); }
-function unlockAll() {
-  const ids = ['cruiser', 'cab', 'titan', 'blaze', 'nova', 'tesla', 'phantom', 'ghost'];
-  const owned = [...new Set([...(read('ksr.owned', ['cruiser']) || []), ...ids])];
-  write('ksr.owned', owned); say('ALL CARS UNLOCKED');
+async function grant(mode) { /* mode 1 = add, 0 = set exact */
+  const name = curPlayer || safeName($('target').value);
+  if (!name) return say2('ENTER A DRIVER NAME FIRST');
+  const amt = Math.max(0, parseInt($('amt').value || '0', 10));
+  try {
+    let total;
+    if (mode) {
+      total = await fns.runTransaction(db, async tx => {
+        const snap = await tx.get(pRef(name));
+        const cur = snap.exists() ? (snap.data().money || 0) : 0;
+        const next = Math.max(0, cur + amt);
+        tx.set(pRef(name), { name, money: next, updatedAt: fns.serverTimestamp() }, { merge: true });
+        return next;
+      });
+      try { await fns.addDoc(fns.collection(db, 'grants'), { target: name, amount: amt, by: ADMIN_EMAIL, at: fns.serverTimestamp() }); } catch (e) { }
+    } else {
+      await fns.setDoc(pRef(name), { name, money: amt, updatedAt: fns.serverTimestamp() }, { merge: true });
+      total = amt;
+    }
+    $('pcur').textContent = '$' + total.toLocaleString();
+    say2((mode ? 'ADDED' : 'SET') + ' — ' + name + ' NOW HAS $' + total.toLocaleString());
+    refreshTop();
+  } catch (e) { say2('GRANT FAILED: ' + (e && e.code || e)); }
 }
-function resetAll() {
-  if (!confirm('Wipe ALL progress (cash, cars, missions)?')) return;
-  ['ksr.money', 'ksr.owned', 'ksr.sel', 'ksr.missions', 'ksr.daily', 'ksr.stats'].forEach(k => localStorage.removeItem(k));
-  refresh(); say('PROGRESS RESET');
+function quick(a) { $('amt').value = a; grant(1); }
+async function unlockAll() {
+  const name = curPlayer || safeName($('target').value);
+  if (!name) return say2('ENTER A DRIVER NAME FIRST');
+  try {
+    await fns.setDoc(pRef(name), { name, owned: CAR_IDS, updatedAt: fns.serverTimestamp() }, { merge: true });
+    say2('ALL CARS UNLOCKED FOR ' + name); loadPlayer();
+  } catch (e) { say2('FAILED: ' + (e && e.code || e)); }
 }
-refresh();
+async function resetPlayer() {
+  const name = curPlayer || safeName($('target').value);
+  if (!name) return say2('ENTER A DRIVER NAME FIRST');
+  if (!confirm('Reset ' + name + ' to $5,000 + starter car?')) return;
+  try {
+    await fns.setDoc(pRef(name), { name, money: 5000, owned: ['cruiser'], sel: 'cruiser', stats: { earned: 0, races: 0, wins: 0 }, missions: {}, daily: null, updatedAt: fns.serverTimestamp() }, { merge: true });
+    say2(name + ' RESET'); loadPlayer(); refreshTop();
+  } catch (e) { say2('FAILED: ' + (e && e.code || e)); }
+}
+async function refreshTop() {
+  try {
+    const snap = await fns.getDocs(fns.query(fns.collection(db, 'players'), fns.orderBy('money', 'desc'), fns.limit(10)));
+    $('toplist').innerHTML = snap.empty ? '<div class="hint">No cloud players yet — they appear after someone plays with cloud connected.</div>'
+      : snap.docs.map(d => {
+        const p = d.data();
+        return `<div class="prow" onclick="document.getElementById('target').value='${p.name}';loadPlayer()"><span>${p.name}</span><em>$${(p.money || 0).toLocaleString()}</em><small style="opacity:.6">${((p.owned) || []).length} cars</small></div>`;
+      }).join('');
+  } catch (e) { $('toplist').innerHTML = `<div class="hint">Could not load: ${e && e.code || e}</div>`; }
+}
+
+/* ---------- local tools ---------- */
+window.localQuick = a => { write('ksr.money', lmoney() + a); refreshLocal(); say2('LOCAL +$' + a.toLocaleString()); };
+window.localReset = () => { if (!confirm('Wipe THIS BROWSER progress?')) return; ['ksr.money', 'ksr.owned', 'ksr.sel', 'ksr.missions', 'ksr.daily', 'ksr.stats'].forEach(k => localStorage.removeItem(k)); refreshLocal(); say2('LOCAL PROGRESS RESET'); };
+window.tryLogin = tryLogin; window.localLogin = localLogin; window.loadPlayer = loadPlayer;
+window.grant = grant; window.quick = quick; window.unlockAll = unlockAll; window.resetPlayer = resetPlayer;
+refreshLocal();
 </script>
 </body>
 </html>

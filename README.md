@@ -1,10 +1,10 @@
-# KAY SUPER RACING 🏁✈️
+# KAY SUPER RACING 🏁✈️☁
 
 A three.js arcade racing game built with Vite — city circuit, drift arena, tournament,
 a full **economy** (earn cash → buy 8 increasingly expensive cars), **missions**,
-**daily bonuses**, and **flying Tesla** supercars.
-
-Play: **kay-super-racing.vercel.app**
+**daily bonuses**, **flying Tesla supercars**, and now a **Firebase backend**:
+cloud saves, a **global leaderboard**, **ghost-rival races**, and a **Firebase-secured
+admin panel**.
 
 ## Features
 
@@ -12,9 +12,23 @@ Play: **kay-super-racing.vercel.app**
 - **Quick Race** — 1/3/5 laps vs 5 AI rivals (Easy/Normal/Hard), 4 times of day
 - **Tournament** — 5-round championship with points
 - **Drift Arena** — open lot, combo multipliers, cones, containers, beat the clock
-- **Time Trial** — beat your best lap
+- **Time Trial** — beat your best time (your best run replays as a **ghost car**)
 
-### Economy & progression (new)
+### ☁ Online (new in V3 — powered by Firebase)
+- **Cloud profile** — set a **Driver Name** in Settings and your cash, cars, missions
+  and daily streak sync to Firestore. Play on another device, enter the same name,
+  and your progress merges automatically (best of both devices — you can never lose cash).
+- **Global leaderboards** — every new best time / arena score is submitted to a world
+  board (RACE 3L · TT 3L · TT 1L · ARENA 90S). Top 20 kept per board.
+- **Ghost rivals** — your best runs are uploaded as ghosts. Open **ONLINE RIVALS**,
+  hit *RACE THE #1 GHOST*, and the #1 player's run downloads and races you as a
+  translucent hologram car with their name tag. Beat it to take the crown.
+- **Graceful offline mode** — if Firebase is unreachable the game plays 100% from
+  localStorage and the badge shows CLOUD OFFLINE. Nothing ever breaks.
+- **Admin grants** — the owner can add cash to any player's cloud profile from the
+  admin panel; players receive it on next launch (or by clicking the cash badge to sync).
+
+### Economy & progression
 - **Cash** earned from race positions, drift scores, new best times and flight time
 - **Car shop with 8 cars** — from the free Kay Cruiser to the $1,000,000 Ghost X Proto:
 
@@ -31,7 +45,6 @@ Play: **kay-super-racing.vercel.app**
 
 - **9 missions** with cash rewards (podiums, drift scores, boost pads, flight time…)
 - **Daily bonus** with streaks ($1,000 → $5,000/day)
-- Progress saved in your browser (localStorage)
 
 ### Flying cars (Tesla Spark / Ghost X)
 - Press **F** (or **Y** on gamepad / **FLY** touch button) above ~95 km/h to take off
@@ -42,7 +55,7 @@ Play: **kay-super-racing.vercel.app**
 ### Extras
 - Nitro (charged by drifting, overtaking, drafting behind rivals, and glowing **boost pads**)
 - Drift scoring with combo multiplier in every race
-- Minimap, skid marks, smoke, speed streaks, F1-style countdown lights, confetti
+- Minimap (with ghost dot), skid marks, smoke, speed streaks, F1-style countdown lights, confetti
 - WebAudio engine/skid/nitro/coin sounds (no assets needed)
 - Gamepad support + full touch controls with FLY button on mobile
 
@@ -57,13 +70,50 @@ npm run dev      # http://localhost:5173
 npm run build    # production build in dist/
 ```
 
+## ☁ Firebase setup (one time, ~3 minutes)
+The Firebase project **kay-super-racing** is already configured in `src/cloud.js`
+and `admin.html`. To make the online features live:
+
+1. **Authentication** → *Get started* → enable **Email/Password** (used by the admin
+   panel; the owner account is auto-created on first admin login) and optionally
+   **Anonymous** (used as a light auth for players).
+2. **Firestore Database** → *Create database* → start in **test mode**.
+3. Deploy / open the game. The HUD badge shows **CLOUD ONLINE** when connected.
+
+Suggested rules once you want to lock things down (Firestore → Rules):
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /players/{name}  { allow read, write: if true; }  // tighten later: request.auth != null
+    match /boards/{cat}    { allow read, write: if true; }
+    match /ghosts/{id}     { allow read, write: if true; }
+    match /grants/{id}     { allow read: if true; write: if true; }
+  }
+}
+```
+> Note: this is a client-side game, so Firestore rules are the real security boundary.
+> Test-mode rules are fine to launch; before marketing the game, tighten them and
+> change the admin password in the Firebase console (Authentication → Users → reset).
+
 ## Admin panel
-Open **`/admin.html`** (e.g. `https://your-site.vercel.app/admin.html`) — default
-password **`KAY2025`**. You can add/set cash, unlock all cars, or reset progress.
-Change the password in the `ADMIN_PASSWORD` constant at the top of `admin.html`.
-(This is a client-side game, so the panel is for your own convenience — don't ship
-the password publicly if you care about leaderboards.)
+Open **`/admin.html`** (e.g. `https://your-site.vercel.app/admin.html`).
+
+- **Cloud mode** — sign in with the owner account (**admin@kayracing.com** /
+  your admin password). The account is created automatically the first time if it
+  doesn't exist. Then: load any player by Driver Name → add/set cash (+10K/+100K/+1M
+  quick buttons), unlock all cars, or reset that player. Includes a **Top Players**
+  list (by cash) — click a row to load that player. Every grant is logged to the
+  `grants` collection.
+- **Local mode** — if Firebase is unreachable, a fallback password gate lets you edit
+  the current browser's offline save only.
+
+Players receive granted cash the next time they launch the game with cloud connected
+(or instantly via clicking their cash badge → sync).
 
 ## Tech
 - three.js 0.170 (procedural lofted car bodies, city, track, arena — zero model assets)
+- Firebase 11 (Auth + Firestore, lazy-loaded code-split chunk)
 - Vite 5 · deploys to Vercel as a static site (admin.html included automatically)
+- Data model: `players/{NAME}` profiles · `boards/{cat}` top-20 entries ·
+  `ghosts/{id}` replay samples · `grants/{id}` admin audit log
