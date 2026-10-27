@@ -4,85 +4,208 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Kay Super Racing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
+/* ============ KAY SUPER RACING · V4 SHOWROOM UI ============ */
+:root{
+  --bg:#05070c; --panel:rgba(9,13,22,.86); --panel2:rgba(13,19,32,.94); --glass:rgba(10,15,26,.62);
+  --line:rgba(130,190,255,.14); --line2:rgba(130,190,255,.28);
+  --txt:#eef4ff; --dim:#8ea1bd; --dim2:#5f7089;
+  --cy:#2fd4ff; --cy2:#0f8fd0; --gold:#ffc23d; --grn:#3ce88a; --red:#ff4d5e; --pur:#9a6cff;
+  --fd:'Orbitron','Segoe UI',system-ui,sans-serif; --ft:'Rajdhani','Segoe UI',system-ui,sans-serif;
+}
 *{box-sizing:border-box;margin:0}
-html,body{touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none;height:100%;overflow:hidden;background:#000;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;user-select:none}
+html,body{touch-action:none;overscroll-behavior:none;-webkit-touch-callout:none;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);font-family:var(--ft);user-select:none}
 canvas{display:block}
-.hud{position:fixed;pointer-events:none;font-style:italic;font-weight:800;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+button{font-family:var(--ft)}
+.hud{position:fixed;pointer-events:none;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,.65)}
 #fx{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(ellipse at center,transparent 60%,rgba(0,10,25,.38) 100%),repeating-conic-gradient(from 0deg,rgba(255,255,255,.07) 0 .7deg,transparent .7deg 8deg);-webkit-mask-image:radial-gradient(ellipse at center,transparent 52%,#000 100%);mask-image:radial-gradient(ellipse at center,transparent 52%,#000 100%)}
-#info{top:16px;left:16px;background:rgba(10,14,22,.55);border-left:4px solid #3cf;padding:8px 16px;border-radius:4px;min-width:160px}
-#pos{font-size:46px;line-height:1}#pos small{font-size:20px;opacity:.7}
-#lap,#time{font-size:15px;letter-spacing:.08em;opacity:.92}
+
+/* ============ MENU SHELL ============ */
+#menu{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;pointer-events:none}
+#menu.hide{display:none!important}
+
+/* ============ TOP CHROME BAR (Forza-style) ============ */
+#topbar{position:relative;height:66px;display:flex;align-items:center;gap:14px;padding:0 18px;background:linear-gradient(180deg,rgba(4,7,12,.94),rgba(4,7,12,.78) 70%,rgba(4,7,12,0));z-index:2;pointer-events:auto}
+#botbar{pointer-events:auto}
+.brand{display:flex;flex-direction:column;line-height:1;padding-left:14px;position:relative}
+.brand::before{content:'';position:absolute;left:0;top:4px;bottom:4px;width:4px;background:linear-gradient(180deg,var(--cy),#0a5f8c);transform:skewX(-12deg)}
+.btitle{font:900 italic 24px/1 var(--fd);letter-spacing:.03em;text-shadow:0 2px 12px rgba(0,0,0,.8)}
+.btitle span{color:var(--cy);-webkit-text-stroke:0}
+.bslogan{font:600 10px var(--ft);letter-spacing:.42em;color:var(--dim);margin-top:4px}
+.tstats{margin-left:auto;display:flex;align-items:center;gap:8px}
+.pill{display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;background:var(--glass);border:1px solid var(--line);border-radius:6px;font:700 15px var(--ft);letter-spacing:.08em;color:var(--txt);backdrop-filter:blur(8px)}
+.pill i{width:9px;height:9px;border-radius:50%;background:#7d8aa0;flex:none;transition:background .3s}
+.pill.on i{background:#37e06f;box-shadow:0 0 10px #37e06f}
+.pill.wait i{background:#e8b800;box-shadow:0 0 8px #e8b800}
+#cloudTxt{font-size:11px;letter-spacing:.18em;color:var(--dim)}
+#driverChip{gap:10px}
+#dAv{width:26px;height:26px;border-radius:4px;background:linear-gradient(135deg,var(--cy),#0a5f8c);display:flex;align-items:center;justify-content:center;font:800 13px var(--fd);font-style:normal;color:#02141f;padding:0}
+#driverNameTxt{font-size:13px;letter-spacing:.14em;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#moneyBadge{cursor:pointer;border-color:rgba(60,232,138,.35);background:linear-gradient(135deg,rgba(19,42,30,.85),rgba(10,15,26,.85))}
+#moneyBadge b{font:800 italic 17px var(--fd);color:var(--grn);letter-spacing:.02em}
+#moneyBadge:hover{border-color:var(--grn)}
+
+/* ============ LEFT DOCK · MAIN NAV + PANELS ============ */
+#dock{position:relative;flex:1;width:min(430px,94vw);display:flex;flex-direction:column;min-height:0;padding:14px 0 10px 18px;z-index:1;background:linear-gradient(90deg,rgba(4,7,12,.60),rgba(4,7,12,.25) 72%,transparent)}
+#dock::before{content:'';position:absolute;right:0;top:6%;bottom:6%;width:1px;background:linear-gradient(180deg,transparent,var(--line2),transparent)}
+.screen{display:none;flex-direction:column;min-height:0;flex:1;pointer-events:auto}
+.screen.on{display:flex}
+#navMain{overflow-y:auto;padding:2px 20px 10px 0;scrollbar-width:thin;scrollbar-color:rgba(47,212,255,.4) transparent}
+#navMain::-webkit-scrollbar{width:5px}
+#navMain::-webkit-scrollbar-thumb{background:rgba(47,212,255,.35);border-radius:3px}
+.ngroup{font:700 11px var(--ft);letter-spacing:.34em;color:var(--dim2);margin:14px 6px 6px}
+.ngroup:first-child{margin-top:2px}
+/* main nav items — Horizon Chase style list */
+.mi{position:relative;display:flex;align-items:center;gap:12px;width:100%;padding:14px 18px;margin:5px 0;background:linear-gradient(90deg,rgba(18,29,48,.88),rgba(18,29,48,.30));border:1px solid var(--line);border-left:3px solid rgba(47,212,255,.30);color:var(--txt);font:700 17px var(--ft);letter-spacing:.16em;text-align:left;cursor:pointer;clip-path:polygon(0 0,100% 0,calc(100% - 16px) 100%,0 100%);transition:transform .14s,background .14s,border-color .14s}
+.mi::before{content:'▸';color:var(--cy);font-size:14px;opacity:0;transform:translateX(-6px);transition:all .14s}
+.mi:hover,.mi.kfocus{background:linear-gradient(90deg,rgba(47,212,255,.30),rgba(47,212,255,.05));border-left-color:var(--cy);transform:translateX(7px)}
+.mi:hover::before,.mi.kfocus::before{opacity:1;transform:translateX(0)}
+.mi:active{filter:brightness(1.3)}
+.mi.gold{background:linear-gradient(90deg,rgba(64,46,8,.92),rgba(64,46,8,.35));border-left-color:var(--gold);color:#ffe9b3}
+.mi.gold:hover,.mi.gold.kfocus{background:linear-gradient(90deg,rgba(255,194,61,.32),rgba(255,194,61,.06));border-left-color:var(--gold)}
+.mi.gold:disabled{opacity:.55;cursor:default;transform:none}
+.mi.gold.pulse{animation:goldPulse 1.3s ease-in-out infinite}
+@keyframes goldPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.35)}}
+.mi.dim{background:linear-gradient(90deg,rgba(30,38,54,.80),rgba(30,38,54,.25));border-left-color:rgba(140,160,190,.35);color:#c4d2e6;font-size:15px}
+
+/* panel header */
+.ph{display:flex;align-items:center;gap:14px;padding:2px 22px 12px 4px;border-bottom:1px solid var(--line);position:relative}
+.ph::after{content:'';position:absolute;left:4px;bottom:-1px;width:120px;height:3px;background:repeating-linear-gradient(-45deg,var(--cy) 0 8px,transparent 8px 16px);opacity:.9}
+.back{width:42px;height:42px;flex:none;border-radius:5px;border:1px solid var(--line2);background:var(--glass);color:var(--txt);font:800 15px var(--ft);cursor:pointer;letter-spacing:.05em}
+.back:hover{border-color:var(--cy);color:var(--cy)}
+.ph h2{font:800 italic 24px/1 var(--fd);letter-spacing:.03em}
+.ph p{font:600 11px var(--ft);letter-spacing:.28em;color:var(--dim);margin-top:5px}
+.pbody{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:14px 24px 18px 4px;scrollbar-width:thin;scrollbar-color:rgba(47,212,255,.4) transparent}
+.pbody::-webkit-scrollbar{width:5px}
+.pbody::-webkit-scrollbar-thumb{background:rgba(47,212,255,.35);border-radius:3px}
+
+/* form labels + segmented options */
+.lbl{font:700 11px var(--ft);letter-spacing:.24em;color:var(--dim);margin:14px 2px 7px}
+.lbl:first-child{margin-top:2px}
+.seg{display:flex;gap:7px;flex-wrap:wrap}
+.seg button{font:700 14px var(--ft);letter-spacing:.1em;color:#c9d7ea;background:rgba(20,30,48,.7);border:1px solid var(--line);padding:10px 16px;cursor:pointer;clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%);transition:all .12s}
+.seg button:hover{border-color:var(--line2);color:#fff}
+.seg button.on{background:linear-gradient(135deg,var(--cy2),#0a5f8c);border-color:var(--cy);color:#fff;box-shadow:0 0 14px rgba(47,212,255,.35)}
+
+/* action buttons */
+.act{position:relative;display:block;width:100%;margin:16px 0 4px;padding:15px 20px;font:800 italic 18px var(--fd);letter-spacing:.1em;color:#03141f;background:linear-gradient(90deg,var(--cy),#6ee7ff);border:0;cursor:pointer;clip-path:polygon(0 0,calc(100% - 16px) 0,100% 100%,16px 100%);transition:filter .12s,transform .12s;text-align:center}
+.act:hover{filter:brightness(1.15);transform:translateY(-1px)}
+.act:active{filter:brightness(1.35)}
+.act.go{background:linear-gradient(90deg,#12b76a,#5ff0a8)}
+.act.gold{background:linear-gradient(90deg,#d89a1e,#ffd97a);color:#241500}
+.act.ghost{background:rgba(20,30,48,.7);border:1px solid var(--line2);color:#cfe0f5;font-family:var(--ft);font-style:normal;font-weight:700;font-size:15px}
+.act.ghost:hover{border-color:var(--cy);color:#fff}
+.act:disabled{opacity:.5;cursor:default;filter:none;transform:none}
+
+/* result / standings rows */
+.rr{display:flex;align-items:center;gap:12px;padding:11px 14px;margin:5px 0;width:100%;background:rgba(16,24,40,.78);border:1px solid var(--line);border-left:3px solid rgba(140,160,190,.4);font:600 15px var(--ft);letter-spacing:.05em;text-align:left}
+.rr b{font:800 16px var(--fd);color:var(--dim);min-width:30px}
+.rr.me{background:linear-gradient(90deg,rgba(47,212,255,.22),rgba(47,212,255,.05));border-left-color:var(--cy)}
+.rr.me b{color:var(--cy)}
+.rr span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rr em{font-style:normal;font-size:12px;color:var(--dim);letter-spacing:.1em}
+.rr i{min-width:52px;text-align:right;font-style:normal;font-weight:700;color:#fff}
+.bestchip{display:inline-block;margin:10px 0 0;padding:8px 14px;background:rgba(255,194,61,.12);border:1px solid rgba(255,194,61,.4);color:var(--gold);font:700 13px var(--ft);letter-spacing:.18em;clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+
+/* how-to-play */
+.how{line-height:2;color:#c9d7ea;font-size:15px;font-weight:600}
+.how b{display:inline-block;background:rgba(47,212,255,.15);border:1px solid var(--line2);border-radius:4px;padding:0 8px;font-size:.9em;color:#fff;margin:0 2px}
+
+/* ============ GARAGE CARDS ============ */
+.carCard{position:relative;width:100%;background:linear-gradient(90deg,rgba(16,24,40,.9),rgba(16,24,40,.55));border:1px solid var(--line);border-left:4px solid #3a4a66;border-radius:0 6px 6px 0;margin:8px 0;padding:13px 16px;text-align:left;cursor:pointer;transition:transform .12s,border-color .12s,background .12s}
+.carCard:hover{transform:translateX(5px);border-color:var(--line2);background:rgba(24,36,58,.9)}
+.carCard.sel{border-left-color:var(--cy);background:linear-gradient(90deg,rgba(47,212,255,.20),rgba(47,212,255,.04))}
+.carCard.locked{border-left-color:var(--red)}
+.carCard .top{display:flex;align-items:center;gap:8px;font:800 italic 15px var(--fd);flex-wrap:wrap;row-gap:4px}
+.carCard .tag{font:700 9px var(--ft);letter-spacing:.16em;background:#2a3a56;color:#a8c4e6;border-radius:3px;padding:3px 7px}
+.carCard .tag.fly{background:linear-gradient(135deg,var(--pur),#5b2fd4);color:#fff}
+.carCard .tag.own{background:linear-gradient(135deg,#0f8f52,#17c96e);color:#02180d}
+.carCard .tag.sel{background:var(--cy);color:#02141f}
+.carCard .price{margin-left:auto;font:800 italic 15px var(--fd);color:var(--grn)}
+.carCard .price.no{color:var(--red)}
+.carCard .price.own{color:#9fb6d4;font-size:12px;letter-spacing:.2em}
+.carCard .desc{font-size:13px;font-weight:600;color:var(--dim);margin:4px 0 9px;letter-spacing:.04em}
+.bars{display:flex;gap:12px}
+.bar{flex:1}
+.bar span{font:700 9px var(--ft);letter-spacing:.2em;color:var(--dim2);display:block;margin-bottom:3px}
+.bar i{display:block;height:5px;border-radius:3px;background:rgba(255,255,255,.10);position:relative;overflow:hidden}
+.bar i::after{content:'';position:absolute;left:0;top:0;bottom:0;width:var(--w);border-radius:3px;background:linear-gradient(90deg,var(--cy2),var(--cy))}
+
+/* ============ MISSION ROWS ============ */
+.mr{width:100%;display:flex;align-items:center;gap:13px;background:rgba(16,24,40,.78);border:1px solid var(--line);border-radius:0 6px 6px 0;padding:11px 14px;margin:6px 0;text-align:left;border-left:4px solid #3a4a66}
+.mr.done{border-left-color:var(--grn)}
+.mr .ic{width:38px;height:38px;border-radius:5px;background:linear-gradient(135deg,var(--cy2),#0a5f8c);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:16px;flex:none}
+.mr.done .ic{background:linear-gradient(135deg,#0f8f52,#17c96e)}
+.mr .tt{flex:1;min-width:0}
+.mr .tt b{font:700 15px var(--ft);letter-spacing:.1em;display:block}
+.mr .tt small{font-size:12px;font-weight:600;color:var(--dim);letter-spacing:.04em}
+.mr .rw{text-align:right;font:700 14px var(--ft);color:var(--grn);flex:none;letter-spacing:.05em}
+.mr .rw small{display:block;color:var(--dim);font-size:10px;letter-spacing:.14em}
+.mr .rw.done{color:var(--gold)}
+
+/* ============ BOT HINTS BAR (console-style) ============ */
+#botbar{position:relative;height:44px;display:flex;align-items:center;padding:0 18px;background:linear-gradient(0deg,rgba(4,7,12,.94),rgba(4,7,12,.75) 70%,rgba(4,7,12,0));z-index:2}
+.hints{font:700 12px var(--ft);letter-spacing:.22em;color:var(--dim)}
+.hints b{display:inline-block;min-width:22px;text-align:center;background:rgba(255,255,255,.10);border:1px solid var(--line2);border-radius:4px;padding:1px 6px;margin:0 4px 0 8px;color:#fff;font-size:11px}
+.ver{margin-left:auto;font:700 10px var(--ft);letter-spacing:.3em;color:var(--dim2)}
+
+/* ============ RACE HUD ============ */
+#info{top:16px;left:16px;background:var(--glass);border-left:4px solid var(--cy);padding:9px 18px 9px 14px;border-radius:0 6px 6px 0;min-width:170px;backdrop-filter:blur(8px)}
+#pos{font:900 italic 44px/1 var(--fd)}#pos small{font-size:19px;opacity:.6}
+#lap,#time{font-size:14px;letter-spacing:.14em;opacity:.92;font-weight:700}
 #speedo{right:18px;bottom:18px;width:156px;height:156px}
 #speedo svg{position:absolute;inset:0}
-#spd{position:absolute;left:0;right:0;top:46px;text-align:center;font-size:44px;line-height:1}
-#kmh{position:absolute;left:0;right:0;top:92px;text-align:center;font-size:11px;letter-spacing:.2em;opacity:.7}
-#nit{position:absolute;left:0;right:0;top:108px;text-align:center;font-size:14px;color:#6df}
-#mm{left:16px;bottom:16px;width:170px;height:170px;border-radius:10px;background:rgba(10,14,22,.5)}
-#toast{top:15%;left:0;right:0;text-align:center;font-size:30px;color:#7dff8a;opacity:0;transition:opacity .3s}
-#count{top:50%;left:50%;transform:translate(-50%,-70%);border-radius:16px;background:rgba(0,0,0,.72);border:4px solid #fff;padding:16px 26px 12px;display:none;flex-direction:column;align-items:center;gap:8px}
-#count .lamps{display:flex;gap:12px}
-#count .lamps i{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.25)}
-#count .lamps i.r{background:#e33;border-color:#f88}
-#count .lamps i.g{background:#2e6;border-color:#8f8}
-#cd{font-size:56px;line-height:1}
-#altwrap{right:18px;bottom:190px;width:14px;height:170px;border-radius:8px;background:rgba(10,14,22,.55);border:2px solid rgba(255,255,255,.3);display:none;overflow:hidden}
-#altbar{position:absolute;left:0;right:0;bottom:0;height:0%;background:linear-gradient(0deg,#3cf,#aef);border-radius:6px}
-#altlab{position:absolute;left:0;right:0;top:-24px;text-align:center;font-size:12px;color:#8df;letter-spacing:.1em}
+#spd{position:absolute;left:0;right:0;top:44px;text-align:center;font:900 italic 42px var(--fd)}
+#kmh{position:absolute;left:0;right:0;top:90px;text-align:center;font:700 10px var(--ft);letter-spacing:.3em;opacity:.65}
+#nit{position:absolute;left:0;right:0;top:106px;text-align:center;font:700 13px var(--ft);letter-spacing:.12em;color:var(--cy)}
+#mm{left:16px;bottom:16px;width:170px;height:170px;border-radius:8px;background:rgba(10,15,26,.55);border:1px solid var(--line)}
+#toast{top:14%;left:0;right:0;text-align:center;font:800 italic 30px var(--fd);color:var(--grn);opacity:0;transition:opacity .3s;letter-spacing:.08em}
+#count{top:50%;left:50%;transform:translate(-50%,-70%);border-radius:12px;background:rgba(3,6,11,.8);border:1px solid var(--line2);padding:20px 34px 16px;display:none;flex-direction:column;align-items:center;gap:10px;backdrop-filter:blur(10px)}
+#count .lamps{display:flex;gap:14px}
+#count .lamps i{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.10);border:2px solid rgba(255,255,255,.22)}
+#count .lamps i.r{background:#e63946;border-color:#ff8a94;box-shadow:0 0 14px #e63946}
+#count .lamps i.g{background:#17c96e;border-color:#7ff0b4;box-shadow:0 0 14px #17c96e}
+#cd{font:900 italic 58px/1 var(--fd)}
+#altwrap{right:18px;bottom:190px;width:14px;height:170px;border-radius:8px;background:var(--glass);border:1px solid var(--line2);display:none;overflow:hidden}
+#altbar{position:absolute;left:0;right:0;bottom:0;height:0%;background:linear-gradient(0deg,var(--cy),#aef);border-radius:6px}
+#altlab{position:absolute;left:0;right:0;top:-24px;text-align:center;font:700 11px var(--ft);color:#8df;letter-spacing:.2em}
 body.flying #altwrap{display:block}
-#driftHud{top:24%;left:0;right:0;text-align:center;font-size:26px;color:#ffb347;opacity:0;transition:opacity .2s}
-#driftHud small{display:block;font-size:14px;color:#fff;opacity:.85}
-#moneyBadge{position:fixed;top:14px;right:14px;z-index:6;display:none;align-items:center;gap:8px;background:rgba(10,14,22,.65);border:1px solid rgba(127,223,138,.4);border-radius:8px;padding:8px 14px;font:800 italic 18px 'Segoe UI',system-ui,sans-serif;color:#7dff8a;cursor:pointer}
-body.menu #moneyBadge{display:flex}
-#cloudBadge{position:fixed;top:58px;right:14px;z-index:6;display:none;align-items:center;gap:6px;background:rgba(10,14,22,.65);border-radius:8px;padding:5px 10px;font:800 italic 11px 'Segoe UI',system-ui,sans-serif;letter-spacing:.12em;color:#9ab}
-#cloudBadge i{width:9px;height:9px;border-radius:50%;background:#888;flex:none}
-#cloudBadge.on i{background:#37e06f;box-shadow:0 0 8px #37e06f}
-#cloudBadge.wait i{background:#e8b800}
-body.menu #cloudBadge{display:flex}
-#dname{width:min(86vw,340px);padding:11px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;font:800 italic 16px 'Segoe UI',system-ui,sans-serif;text-transform:uppercase;outline:none;text-align:center;letter-spacing:.15em}
-#dname:focus{border-color:#3cf}
-.ver{font-size:11px;letter-spacing:.35em;color:#8df;opacity:.85;margin-bottom:10px;font-weight:700}
-.ov{position:fixed;inset:0;background:rgba(5,8,14,.82);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;z-index:5}
-.ov h1{font-size:clamp(36px,8vw,84px);font-style:italic;letter-spacing:.04em;background:linear-gradient(90deg,#fff,#5cf);-webkit-background-clip:text;color:transparent}
-.ov p{opacity:.8;line-height:1.7;max-width:520px;padding:0 16px}
-.ov b{display:inline-block;background:#223;border:1px solid #456;border-radius:5px;padding:0 7px;font-size:.9em}
-.btn{margin-top:8px;padding:12px 34px;font-size:18px;font-weight:800;font-style:italic;color:#fff;background:#18a;border:0;border-radius:6px;cursor:pointer;letter-spacing:.1em}
-#menu{background:rgba(4,7,13,.5);justify-content:flex-start}
-.ov{overflow:auto}.ov.hide{display:none}
-.mwrap{margin:auto;padding:18px 0;display:flex;flex-direction:column;align-items:center;gap:2px}
-.logo{font:900 italic clamp(36px,10vw,72px)/1 'Segoe UI',system-ui,sans-serif;letter-spacing:.04em;margin-bottom:14px;text-shadow:0 4px 22px rgba(0,0,0,.7)}
-.logo span{display:block;font-size:.5em;letter-spacing:.55em;color:#5cf;margin-top:6px}
-.screen{display:none;flex-direction:column;align-items:center;gap:4px}.screen.on{display:flex}
-.mb{display:block;width:min(86vw,340px);padding:14px 0;margin:5px 0;font:800 italic 19px 'Segoe UI',system-ui,sans-serif;color:#fff;background:rgba(255,255,255,.1);border:0;border-left:5px solid #456;border-radius:4px;letter-spacing:.1em;cursor:pointer}
-.mb:not(.sec){background:linear-gradient(90deg,#0b6d93,#1599bd);border-left-color:#7df}
-.mb.go{background:linear-gradient(90deg,#0a8f5a,#18b97a);border-left-color:#7fe8b8;margin-top:12px}
-.mb.gold{background:linear-gradient(90deg,#b8860b,#e8b800);border-left-color:#ffe28a;position:relative}
-.mb.gold.pulse{animation:goldPulse 1.2s ease-in-out infinite}
-@keyframes goldPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.35)}}
-.mb:disabled{opacity:.45;cursor:default}
-.mb:active{filter:brightness(1.25)}
-.lbl{font-size:12px;letter-spacing:.2em;opacity:.75;margin-top:12px;font-weight:700}
-.seg,.row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:340px}
-.seg button{font:800 italic 15px 'Segoe UI',system-ui,sans-serif;color:#fff;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.25);border-radius:6px;padding:9px 15px;cursor:pointer;letter-spacing:.06em}
-.seg button.on{background:#18a;border-color:#7df}
-.sw{width:46px;height:46px;border-radius:50%;padding:0;border:3px solid rgba(255,255,255,.35);cursor:pointer}
-.sw.on{border-color:#fff;box-shadow:0 0 0 3px #3cf}
-.rr{display:flex;align-items:center;gap:10px;padding:6px 12px;margin:2px 0;width:min(86vw,360px);background:rgba(255,255,255,.07);font-style:italic;font-weight:700;text-align:left}
-.rr.me{background:rgba(51,204,255,.25);border-left:4px solid #3cf}
-.rr span{flex:1}.rr em{opacity:.75;font-weight:600;font-size:.85em}.rr i{min-width:46px;text-align:right;font-style:normal;opacity:.9}.rr b{min-width:18px}
-.how{max-width:340px;line-height:1.8;opacity:.9}
-#finish h1,#pause h1{margin-bottom:4px}
-#fres{margin:6px 0 10px}
-#pauseBtn{position:fixed;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(10,14,22,.55);color:#fff;font:900 16px 'Segoe UI',system-ui,sans-serif;letter-spacing:2px;z-index:4;cursor:pointer}
-body.menu #ainfo,body.menu #paintBtn,body.menu #paintBar,body.done #paintBar,body.done #paintBtn,body.menu #info,body.menu #mm,body.menu #speedo,body.menu #touch,body.menu #pauseBtn,body.menu #fx,body.menu #toast,body.menu #count,body.menu #driftHud,body.done #touch,body.done #pauseBtn{display:none!important}
+#driftHud{top:24%;left:0;right:0;text-align:center;font:800 italic 27px var(--fd);color:#ffb347;opacity:0;transition:opacity .2s;letter-spacing:.06em}
+#driftHud small{display:block;font:700 13px var(--ft);letter-spacing:.3em;color:#fff;opacity:.85}
+#ainfo{display:none;top:16px;left:16px;background:var(--glass);border-left:4px solid var(--gold);padding:9px 18px 9px 14px;border-radius:0 6px 6px 0;min-width:180px;backdrop-filter:blur(8px)}
+body.arena #ainfo{display:block}body.arena #info,body.arena #mm{display:none}
+#ascore{font:900 italic 38px/1 var(--fd)}#acombo{font:700 13px var(--ft);letter-spacing:.16em;color:var(--gold);margin:3px 0}#atime{font:700 14px var(--ft);letter-spacing:.12em}
+#pauseBtn{position:fixed;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:44px;height:44px;border-radius:6px;border:1px solid var(--line2);background:var(--glass);color:#fff;font:800 15px var(--ft);letter-spacing:2px;z-index:4;cursor:pointer;backdrop-filter:blur(8px)}
+#paintBtn{display:none;position:fixed;top:max(10px,env(safe-area-inset-top));left:calc(50% + 28px);width:44px;height:44px;border-radius:6px;border:1px solid var(--line2);background:var(--glass);font-size:19px;z-index:4;cursor:pointer;align-items:center;justify-content:center}
+body.arena #paintBtn{display:flex}
+#paintBar{display:none;position:fixed;top:calc(max(10px,env(safe-area-inset-top)) + 54px);left:50%;transform:translateX(-50%);flex-wrap:wrap;gap:6px;justify-content:center;width:min(210px,70vw);padding:9px;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;z-index:4}
+#paintBar.open{display:flex}
+.sw{width:34px;height:34px;border-radius:5px;padding:0;border:2px solid rgba(255,255,255,.35);cursor:pointer}
+.sw.on{border-color:#fff;box-shadow:0 0 0 3px var(--cy)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 8px}
+
+/* ============ OVERLAYS (pause / finish) ============ */
+.ov{position:fixed;inset:0;background:radial-gradient(ellipse at center,rgba(4,7,12,.72) 0%,rgba(3,5,9,.92) 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;z-index:6;overflow:auto;padding:20px;backdrop-filter:blur(6px)}
+.ov.hide{display:none}
+.ov h1{font:900 italic clamp(34px,7vw,64px)/1 var(--fd);letter-spacing:.04em;background:linear-gradient(180deg,#fff,#8be5ff);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 4px 18px rgba(47,212,255,.25))}
+.ov p{color:#c9d7ea;line-height:1.8;max-width:560px;font-weight:600;letter-spacing:.04em}
+.ovwrap{width:min(560px,94vw);background:var(--panel2);border:1px solid var(--line2);border-top:3px solid var(--cy);border-radius:8px;padding:26px 30px 22px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.ovwrap .act,.ovwrap .rr{width:100%}
+#fres,#fearn,#fmis{width:100%}
+#fglobal{margin-top:2px}
+
+/* ============ TOUCH CONTROLS ============ */
 #touch{position:fixed;inset:0;pointer-events:none;z-index:3}
 #touch[hidden]{display:none}
-#stick{position:absolute;left:max(20px,env(safe-area-inset-left));bottom:max(26px,env(safe-area-inset-bottom));width:150px;height:150px;border-radius:50%;background:rgba(10,14,22,.45);border:2px solid rgba(255,255,255,.35);pointer-events:auto;touch-action:none}
+#stick{position:absolute;left:max(20px,env(safe-area-inset-left));bottom:max(26px,env(safe-area-inset-bottom));width:150px;height:150px;border-radius:50%;background:rgba(10,15,26,.45);border:2px solid rgba(255,255,255,.35);pointer-events:auto;touch-action:none}
 #stick::before{content:'';position:absolute;left:14px;right:14px;top:50%;height:2px;background:rgba(255,255,255,.2)}
 #knob{position:absolute;left:50%;top:50%;width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.55);border:2px solid #fff;transform:translate(-50%,-50%)}
-#stick.on #knob{background:#3cf;border-color:#3cf}
-.tb{position:absolute;pointer-events:auto;touch-action:none;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(10,14,22,.5);color:#fff;font:800 italic 14px 'Segoe UI',system-ui,sans-serif;letter-spacing:.06em;display:flex;align-items:center;justify-content:center}
-.tb.on{background:#3cf;color:#012;border-color:#3cf}
+#stick.on #knob{background:var(--cy);border-color:var(--cy)}
+.tb{position:absolute;pointer-events:auto;touch-action:none;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(10,15,26,.5);color:#fff;font:700 italic 14px var(--ft);letter-spacing:.06em;display:flex;align-items:center;justify-content:center}
+.tb.on{background:var(--cy);color:#012;border-color:var(--cy)}
 #bBoost{right:max(20px,env(safe-area-inset-right));bottom:max(30px,env(safe-area-inset-bottom));width:100px;height:100px;font-size:17px;border-color:#6df}
 #bBrake{right:calc(max(20px,env(safe-area-inset-right)) + 112px);bottom:max(30px,env(safe-area-inset-bottom));width:74px;height:74px}
 #bDrift{right:max(30px,env(safe-area-inset-right));bottom:calc(max(30px,env(safe-area-inset-bottom)) + 112px);width:74px;height:74px}
@@ -91,55 +214,46 @@ body.canfly #bFly{display:flex}
 .tk{display:none}
 body.touch .kb{display:none}
 body.touch .tk{display:block}
+
+/* ============ CONFETTI ============ */
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:9;overflow:hidden}
+.cf{position:absolute;top:-20px;width:10px;height:16px;opacity:.95;animation:cfFall linear forwards}
+@keyframes cfFall{to{transform:translateY(115vh) rotate(720deg);opacity:.7}}
+
+/* ============ STATE VISIBILITY ============ */
+body.menu #info,body.menu #mm,body.menu #speedo,body.menu #altwrap,body.menu #touch,body.menu #pauseBtn,body.menu #fx,body.menu #toast,body.menu #count,body.menu #driftHud,body.menu #ainfo,body.menu #paintBtn,body.menu #paintBar{display:none!important}
+body.done #touch,body.done #pauseBtn,body.done #paintBar,body.done #paintBtn{display:none!important}
 body.touch #info{transform:scale(.72);transform-origin:top left;top:max(10px,env(safe-area-inset-top));left:12px}
 body.touch #mm{left:auto;bottom:auto;right:12px;top:max(10px,env(safe-area-inset-top));width:100px;height:100px}
 body.touch #speedo{transform:scale(.7);transform-origin:top right;right:12px;bottom:auto;top:calc(max(10px,env(safe-area-inset-top)) + 108px)}
 body.touch #altwrap{transform:scale(.7);transform-origin:top right;right:calc(max(10px,env(safe-area-inset-right)) + 78px);bottom:auto;top:calc(max(10px,env(safe-area-inset-top)) + 108px)}
 body.touch #toast{font-size:22px;top:22%}
 body.touch #count{transform:translate(-50%,-70%) scale(.85)}
-#ainfo{display:none;top:16px;left:16px;background:rgba(10,14,22,.55);border-left:4px solid #ffb347;padding:8px 16px;border-radius:4px;min-width:170px}
-body.arena #ainfo{display:block}body.arena #info,body.arena #mm{display:none}
-#ascore{font-size:38px;line-height:1}#acombo{font-size:14px;letter-spacing:.1em;color:#ffb347;margin:2px 0}#atime{font-size:15px;letter-spacing:.08em}
-#paintBtn{display:none;position:fixed;top:max(10px,env(safe-area-inset-top));left:calc(50% + 28px);width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(10,14,22,.55);font-size:20px;z-index:4;cursor:pointer;align-items:center;justify-content:center}
-body.arena #paintBtn{display:flex}
-#paintBar{display:none;position:fixed;top:calc(max(10px,env(safe-area-inset-top)) + 54px);left:50%;transform:translateX(-50%);flex-wrap:wrap;gap:6px;justify-content:center;width:min(210px,70vw);padding:8px;background:rgba(10,14,22,.65);border-radius:10px;z-index:4}
-#paintBar.open{display:flex}#paintBar .sw{width:30px;height:30px;border-width:2px}
 body.touch #ainfo{transform:scale(.72);transform-origin:top left;top:max(10px,env(safe-area-inset-top));left:12px}
 body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
-/* garage / shop */
-#moneyBadge b{font-style:italic}
-.carCard{width:min(86vw,380px);background:rgba(255,255,255,.06);border-left:5px solid #456;border-radius:6px;margin:4px 0;padding:10px 14px;text-align:left;cursor:pointer}
-.carCard:hover{background:rgba(255,255,255,.11)}
-.carCard.sel{border-left-color:#3cf;background:rgba(51,204,255,.16)}
-.carCard.locked{border-left-color:#e33}
-.carCard .top{display:flex;align-items:center;gap:8px;font:800 italic 17px 'Segoe UI',system-ui,sans-serif}
-.carCard .tag{font-size:10px;letter-spacing:.12em;background:#18a;border-radius:4px;padding:2px 6px}
-.carCard .tag.fly{background:#7a3cff}
-.carCard .tag.own{background:#0a8f5a}
-.carCard .tag.sel{background:#e8b800;color:#012}
-.carCard .price{margin-left:auto;color:#7dff8a}
-.carCard .price.no{color:#ff7b7b}
-.carCard .price.own{color:#8fd}
-.carCard .desc{font-size:12px;opacity:.75;margin:3px 0 6px;font-style:normal}
-.bars{display:flex;gap:10px}
-.bar{flex:1}
-.bar span{font-size:9px;letter-spacing:.15em;opacity:.7;display:block}
-.bar i{display:block;height:6px;border-radius:3px;background:rgba(255,255,255,.14);position:relative;overflow:hidden}
-.bar i::after{content:'';position:absolute;left:0;top:0;bottom:0;width:var(--w);border-radius:3px;background:linear-gradient(90deg,#3cf,#8df)}
-/* mission rows */
-.mr{width:min(86vw,380px);display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.07);border-radius:6px;padding:8px 12px;margin:3px 0;text-align:left}
-.mr .ic{width:34px;height:34px;border-radius:50%;background:#18a;display:flex;align-items:center;justify-content:center;font-style:normal;font-size:16px;flex:none}
-.mr.done .ic{background:#0a8f5a}
-.mr .tt{flex:1}
-.mr .tt b{font:800 italic 15px 'Segoe UI',system-ui,sans-serif;display:block}
-.mr .tt small{font-size:11px;opacity:.75;font-style:normal}
-.mr .rw{text-align:right;font:800 italic 14px 'Segoe UI',system-ui,sans-serif;color:#7dff8a;flex:none}
-.mr .rw small{display:block;color:#8fd;font-size:10px;letter-spacing:.1em}
-.mr .rw.done{color:#e8b800}
-/* confetti */
-#confetti{position:fixed;inset:0;pointer-events:none;z-index:9;overflow:hidden}
-.cf{position:absolute;top:-20px;width:10px;height:16px;opacity:.95;animation:cfFall linear forwards}
-@keyframes cfFall{to{transform:translateY(115vh) rotate(720deg);opacity:.7}}
+
+/* ============ SETTINGS INPUT ============ */
+#dname{width:100%;padding:13px 16px;border-radius:6px;border:1px solid var(--line2);background:rgba(20,30,48,.7);color:#fff;font:700 17px var(--ft);text-transform:uppercase;outline:none;text-align:center;letter-spacing:.2em}
+#dname:focus{border-color:var(--cy);box-shadow:0 0 14px rgba(47,212,255,.25)}
+
+/* ============ MOBILE ============ */
+@media (max-width:760px){
+  #topbar{height:58px;padding:0 12px}
+  .brand{padding-left:10px}
+  .btitle{font-size:19px}
+  .bslogan{display:none}
+  .pill{height:34px;padding:0 10px}
+  #driverChip{display:none}
+  #dock{width:min(94vw,430px);padding:10px 0 8px 12px}
+  .mi{padding:13px 14px;font-size:15px;letter-spacing:.12em}
+  .ph{padding-right:12px}
+  .ph h2{font-size:20px}
+  .pbody{padding:12px 14px 16px 2px}
+  .hints{font-size:10px;letter-spacing:.12em}
+  .ver{display:none}
+}
+@media (max-width:430px){#cloudTxt{display:none}}
+@media (max-height:900px){.mi{padding:10px 16px;font-size:15px;margin:4px 0}.ngroup{margin:9px 6px 4px;font-size:10px}}
 </style>
 </head>
 <body>
@@ -147,13 +261,18 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
 <div id="info" class="hud"><div id="pos">6<small>/6</small></div><div id="lap">LAP 1/3</div><div id="time">0:00.00</div></div>
 <canvas id="mm" class="hud" width="340" height="340"></canvas>
 <div id="speedo" class="hud">
-  <svg viewBox="0 0 156 156"><circle cx="78" cy="78" r="70" fill="rgba(10,14,22,.6)"/><circle cx="78" cy="78" r="62" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="7"/><circle id="ring" cx="78" cy="78" r="62" fill="none" stroke="#3cf" stroke-width="7" stroke-linecap="round" stroke-dasharray="389.6" stroke-dashoffset="389.6" transform="rotate(-90 78 78)"/></svg>
+  <svg viewBox="0 0 156 156"><circle cx="78" cy="78" r="70" fill="rgba(10,15,26,.6)"/><circle cx="78" cy="78" r="62" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="7"/><circle id="ring" cx="78" cy="78" r="62" fill="none" stroke="#2fd4ff" stroke-width="7" stroke-linecap="round" stroke-dasharray="389.6" stroke-dashoffset="389.6" transform="rotate(-90 78 78)"/></svg>
   <div id="spd">0</div><div id="kmh">KM/H</div><div id="nit">NITRO 100%</div>
 </div>
 <div id="altwrap" class="hud"><div id="altlab">ALT</div><div id="altbar"></div></div>
 <div id="driftHud" class="hud"><span id="driftPts">DRIFT 0</span><small id="driftMult">x1</small></div>
-<div id="moneyBadge" class="hud" title="Click to sync cloud progress"><b id="moneyVal">0</b></div>
-<div id="cloudBadge" class="hud"><i></i><span id="cloudTxt">CLOUD…</span></div>
+<div id="toast" class="hud">OVERTAKE</div>
+<div id="count" class="hud"><div class="lamps"><i id="l1"></i><i id="l2"></i><i id="l3"></i></div><span id="cd">3</span></div>
+<div id="confetti"></div>
+<div id="ainfo" class="hud"><div id="ascore">0</div><div id="acombo">DRIFT TO SCORE</div><div id="atime">0:00.00</div></div>
+<button id="paintBtn" type="button" aria-label="Paint">&#127912;</button>
+<div id="paintBar"></div>
+<button id="pauseBtn" type="button" aria-label="Pause">II</button>
 <section id="touch" hidden aria-label="Touch controls">
   <div id="stick"><span id="knob"></span></div>
   <button class="tb" id="bBrake" data-a="down" type="button">BRAKE</button>
@@ -161,102 +280,129 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
   <button class="tb" id="bBoost" data-a="boost" type="button">NITRO</button>
   <button class="tb" id="bFly" data-a="fly" type="button">FLY</button>
 </section>
-<div id="toast" class="hud">OVERTAKE</div>
-<div id="count" class="hud"><div class="lamps"><i id="l1"></i><i id="l2"></i><i id="l3"></i></div><span id="cd">3</span></div>
-<div id="confetti"></div>
 
-<div id="ainfo" class="hud"><div id="ascore">0</div><div id="acombo">DRIFT TO SCORE</div><div id="atime">0:00.00</div></div>
-<button id="paintBtn" type="button" aria-label="Paint">&#127912;</button>
-<div id="paintBar"></div>
-<button id="pauseBtn" type="button" aria-label="Pause">II</button>
-
-<div id="menu" class="ov">
-  <div class="mwrap">
-    <div class="logo">KAY SUPER<span>RACING</span></div>
-    <div class="ver">V3 · CONNECTED ☁</div>
-    <div class="screen on" data-s="main">
-      <button class="mb" data-go="quick">QUICK RACE</button>
-      <button class="mb" data-go="tour">TOURNAMENT</button>
-      <button class="mb" data-go="arena">DRIFT ARENA</button>
-      <button class="mb" data-go="tt">TIME TRIAL</button>
-      <button class="mb" data-go="garage">GARAGE &amp; CAR SHOP</button>
-      <button class="mb" data-go="missions">MISSIONS &amp; REWARDS</button>
-      <button class="mb" data-go="online">ONLINE RIVALS ☁</button>
-      <button class="mb gold" id="dailyBtn" data-act="daily">DAILY BONUS</button>
-      <button class="mb sec" data-go="settings">SETTINGS</button>
-      <button class="mb sec" data-go="how">HOW TO PLAY</button>
+<div id="menu">
+  <header id="topbar">
+    <div class="brand"><div class="btitle">KAY SUPER <span>RACING</span></div><div class="bslogan">RACE &middot; DRIFT &middot; FLY</div></div>
+    <div class="tstats">
+      <div id="cloudBadge" class="pill" title="Cloud connection"><i></i><span id="cloudTxt">CLOUD</span></div>
+      <div id="driverChip" class="pill"><i id="dAv">K</i><span id="driverNameTxt">KAY</span></div>
+      <div id="moneyBadge" class="pill" title="Click to sync cloud progress"><b id="moneyVal">$0</b></div>
     </div>
-    <div class="screen" data-s="quick">
-      <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button></div>
-      <div class="lbl">DIFFICULTY</div><div class="seg" data-k="diff"><button data-v="0">EASY</button><button data-v="1">NORMAL</button><button data-v="2">HARD</button></div>
-      <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day">NOON</button><button data-v="dawn">DAWN</button><button data-v="sunset">SUNSET</button><button data-v="night">NIGHT</button></div>
-      <button class="mb go" data-act="quick">START RACE</button><button class="mb sec" data-go="main">BACK</button>
+  </header>
+  <div id="dock">
+    <!-- MAIN NAV -->
+    <div class="screen on" data-s="main" id="navMain">
+      <div class="ngroup">RACE</div>
+      <button class="mi" data-go="quick" type="button">QUICK RACE</button>
+      <button class="mi" data-go="tour" type="button">TOURNAMENT</button>
+      <button class="mi" data-go="arena" type="button">DRIFT ARENA</button>
+      <button class="mi" data-go="tt" type="button">TIME TRIAL</button>
+      <div class="ngroup">PROGRESS</div>
+      <button class="mi" data-go="garage" type="button">GARAGE &amp; PAINT</button>
+      <button class="mi" data-go="missions" type="button">MISSIONS &amp; REWARDS</button>
+      <button class="mi" data-go="online" type="button">ONLINE RIVALS &#9741;</button>
+      <div class="ngroup">SYSTEM</div>
+      <button class="mi gold" id="dailyBtn" data-act="daily" type="button">DAILY BONUS</button>
+      <button class="mi dim" data-go="settings" type="button">SETTINGS</button>
+      <button class="mi dim" data-go="how" type="button">HOW TO PLAY</button>
     </div>
-    <div class="screen" data-s="arena">
-      <div class="lbl">OPEN LOT · DRIFT, HIT CONES, BEAT THE CLOCK</div>
-      <div class="lbl">TIME</div><div class="seg" data-k="dur"><button data-v="60">60s</button><button data-v="90">90s</button><button data-v="120">120s</button></div>
-      <div class="lbl">RIVAL LEVEL</div><div class="seg" data-k="diff"><button data-v="0">EASY</button><button data-v="1">NORMAL</button><button data-v="2">HARD</button></div>
-      <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day">NOON</button><button data-v="dawn">DAWN</button><button data-v="sunset">SUNSET</button><button data-v="night">NIGHT</button></div>
-      <div id="arBest" class="lbl"></div>
-      <button class="mb go" data-act="arena">START</button><button class="mb sec" data-go="main">BACK</button>
-    </div>
-    <div class="screen" data-s="tt">
-      <div class="lbl">SOLO RUN · BEAT YOUR BEST TIME</div>
-      <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button></div>
-      <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day">NOON</button><button data-v="dawn">DAWN</button><button data-v="sunset">SUNSET</button><button data-v="night">NIGHT</button></div>
-      <div id="ttBest" class="lbl"></div>
-      <button class="mb go" data-act="tt">START</button><button class="mb sec" data-go="main">BACK</button>
-    </div>
-    <div class="screen" data-s="tour">
-      <div class="lbl">5 EVENTS · POINTS 10 · 8 · 6 · 4 · 2 · 1</div>
-      <div id="tourList"></div>
-      <button class="mb go" id="tourGo" data-act="tourGo">START TOURNAMENT</button>
-      <button class="mb sec" id="tourReset" data-act="tourReset">RESET PROGRESS</button>
-      <button class="mb sec" data-go="main">BACK</button>
-    </div>
-    <div class="screen" data-s="garage">
-      <div class="lbl">CAR SHOP · EARN CASH IN RACES &amp; MISSIONS</div>
-      <div id="carList"></div>
-      <div class="lbl">PAINT</div><div class="row" id="swatches"></div>
-      <button class="mb go" data-go="main">DONE</button>
-    </div>
-    <div class="screen" data-s="missions">
-      <div class="lbl">COMPLETE MISSIONS · EARN CASH</div>
-      <div id="misList"></div>
-      <div id="misStat" class="lbl"></div>
-      <button class="mb go" data-go="main">BACK</button>
-    </div>
-    <div class="screen" data-s="online">
-      <div class="lbl">GLOBAL LEADERBOARD · RACE REAL PLAYERS' GHOSTS</div>
-      <div class="seg" data-k="board"><button data-v="race3">RACE 3L</button><button data-v="tt3">TT 3L</button><button data-v="tt1">TT 1L</button><button data-v="arena90">ARENA 90S</button></div>
-      <div id="boardList"></div>
-      <div id="cloudStat" class="lbl"></div>
-      <button class="mb go" id="rivalGo" data-act="rival">RACE THE #1 GHOST 👻</button>
-      <button class="mb sec" data-act="refreshBoard">REFRESH BOARD</button>
-      <button class="mb sec" data-go="main">BACK</button>
-    </div>
-    <div class="screen" data-s="settings">
-      <div class="lbl">DRIVER NAME · YOUR CLOUD PROFILE (A-Z 0-9)</div>
-      <input id="dname" maxlength="12" spellcheck="false" autocomplete="off" placeholder="KAY">
-      <div class="lbl">SOUND</div><div class="seg" data-k="snd"><button data-v="on">ON</button><button data-v="off">OFF</button></div>
-      <div class="lbl">GRAPHICS</div><div class="seg" data-k="q"><button data-v="high">HIGH</button><button data-v="med">MEDIUM</button><button data-v="low">LOW</button></div>
-      <button class="mb sec" data-act="admin">ADMIN PANEL</button>
-      <button class="mb go" data-go="main">DONE</button>
-    </div>
-    <div class="screen" data-s="how">
-      <p class="how"><span class="kb"><b>W</b>/<b>↑</b> gas · <b>S</b>/<b>↓</b> brake · <b>A D</b>/<b>← →</b> steer<br><b>Shift</b> nitro · <b>Space</b> drift · <b>F</b> take off / land · <b>C</b> camera<br><b>Esc</b> pause · <b>R</b> restart · <b>T</b> respawn<br></span><span class="tk">Drag the left stick to steer. You accelerate automatically.<br>NITRO boosts, DRIFT slides, BRAKE slows, FLY takes off.<br></span>Overtake rivals to refill nitro. Drift to charge it. Flying cars drain nitro while airborne. Hit glowing pads for instant nitro. Gamepad supported.<br><br>Set your <b>DRIVER NAME</b> in Settings to save progress to the cloud and appear on the global leaderboard. In <b>ONLINE RIVALS</b> you can download the #1 player's ghost and race it head-to-head.</p>
-      <button class="mb go" data-go="main">BACK</button>
-    </div>
+    <!-- QUICK RACE -->
+    <section class="screen" data-s="quick">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>QUICK RACE</h2><p>SET THE RULES &middot; HIT THE GRID</p></div></div>
+      <div class="pbody">
+        <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1" type="button">1</button><button data-v="3" type="button">3</button><button data-v="5" type="button">5</button></div>
+        <div class="lbl">DIFFICULTY</div><div class="seg" data-k="diff"><button data-v="0" type="button">EASY</button><button data-v="1" type="button">NORMAL</button><button data-v="2" type="button">HARD</button></div>
+        <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day" type="button">NOON</button><button data-v="dawn" type="button">DAWN</button><button data-v="sunset" type="button">SUNSET</button><button data-v="night" type="button">NIGHT</button></div>
+        <button class="act go" data-act="quick" type="button">START RACE</button>
+      </div>
+    </section>
+    <!-- DRIFT ARENA -->
+    <section class="screen" data-s="arena">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>DRIFT ARENA</h2><p>DRIFT &middot; SMASH CONES &middot; BEAT THE CLOCK</p></div></div>
+      <div class="pbody">
+        <div class="lbl">TIME</div><div class="seg" data-k="dur"><button data-v="60" type="button">60s</button><button data-v="90" type="button">90s</button><button data-v="120" type="button">120s</button></div>
+        <div class="lbl">RIVAL LEVEL</div><div class="seg" data-k="diff"><button data-v="0" type="button">EASY</button><button data-v="1" type="button">NORMAL</button><button data-v="2" type="button">HARD</button></div>
+        <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day" type="button">NOON</button><button data-v="dawn" type="button">DAWN</button><button data-v="sunset" type="button">SUNSET</button><button data-v="night" type="button">NIGHT</button></div>
+        <div id="arBest" class="bestchip" style="display:none"></div>
+        <button class="act go" data-act="arena" type="button">ENTER THE LOT</button>
+      </div>
+    </section>
+    <!-- TIME TRIAL -->
+    <section class="screen" data-s="tt">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>TIME TRIAL</h2><p>SOLO RUN &middot; BEAT YOUR BEST</p></div></div>
+      <div class="pbody">
+        <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1" type="button">1</button><button data-v="3" type="button">3</button><button data-v="5" type="button">5</button></div>
+        <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day" type="button">NOON</button><button data-v="dawn" type="button">DAWN</button><button data-v="sunset" type="button">SUNSET</button><button data-v="night" type="button">NIGHT</button></div>
+        <div id="ttBest" class="bestchip" style="display:none"></div>
+        <button class="act go" data-act="tt" type="button">START HOTLAP</button>
+      </div>
+    </section>
+    <!-- TOURNAMENT -->
+    <section class="screen" data-s="tour">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>TOURNAMENT</h2><p>5 EVENTS &middot; POINTS 10&middot;8&middot;6&middot;4&middot;2&middot;1</p></div></div>
+      <div class="pbody">
+        <div id="tourList"></div>
+        <button class="act go" id="tourGo" data-act="tourGo" type="button">START TOURNAMENT</button>
+        <button class="act ghost" id="tourReset" data-act="tourReset" type="button">RESET PROGRESS</button>
+      </div>
+    </section>
+    <!-- GARAGE -->
+    <section class="screen" data-s="garage">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>GARAGE</h2><p>BUY &middot; SELECT &middot; PAINT YOUR RIDE</p></div></div>
+      <div class="pbody">
+        <div id="carList"></div>
+        <div class="lbl">PAINT</div><div class="row" id="swatches"></div>
+      </div>
+    </section>
+    <!-- MISSIONS -->
+    <section class="screen" data-s="missions">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>MISSIONS</h2><p>COMPLETE CHALLENGES &middot; EARN CASH</p></div></div>
+      <div class="pbody">
+        <div id="misList"></div>
+        <div id="misStat" class="lbl"></div>
+      </div>
+    </section>
+    <!-- ONLINE RIVALS -->
+    <section class="screen" data-s="online">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>ONLINE RIVALS</h2><p>GLOBAL BOARDS &middot; RACE REAL PLAYERS' GHOSTS</p></div></div>
+      <div class="pbody">
+        <div class="seg" data-k="board"><button data-v="race3" type="button">RACE 3L</button><button data-v="tt3" type="button">TT 3L</button><button data-v="tt1" type="button">TT 1L</button><button data-v="arena90" type="button">ARENA 90S</button></div>
+        <div id="boardList" style="margin-top:8px"></div>
+        <div id="cloudStat" class="lbl"></div>
+        <button class="act go" id="rivalGo" data-act="rival" type="button">RACE THE #1 GHOST</button>
+        <button class="act ghost" data-act="refreshBoard" type="button">REFRESH BOARD</button>
+      </div>
+    </section>
+    <!-- SETTINGS -->
+    <section class="screen" data-s="settings">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>SETTINGS</h2><p>DRIVER PROFILE &middot; SOUND &middot; GRAPHICS</p></div></div>
+      <div class="pbody">
+        <div class="lbl">DRIVER NAME &middot; YOUR CLOUD IDENTITY (A-Z 0-9)</div>
+        <input id="dname" maxlength="12" spellcheck="false" autocomplete="off" placeholder="KAY">
+        <div class="lbl">SOUND</div><div class="seg" data-k="snd"><button data-v="on" type="button">ON</button><button data-v="off" type="button">OFF</button></div>
+        <div class="lbl">GRAPHICS</div><div class="seg" data-k="q"><button data-v="high" type="button">HIGH</button><button data-v="med" type="button">MEDIUM</button><button data-v="low" type="button">LOW</button></div>
+        <button class="act ghost" data-act="admin" type="button">ADMIN PANEL</button>
+      </div>
+    </section>
+    <!-- HOW TO PLAY -->
+    <section class="screen" data-s="how">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>HOW TO PLAY</h2><p>CONTROLS &amp; TIPS</p></div></div>
+      <div class="pbody">
+        <p class="how"><span class="kb"><b>W</b>/<b>&#8593;</b> gas &middot; <b>S</b>/<b>&#8595;</b> brake &middot; <b>A D</b>/<b>&#8592; &#8594;</b> steer<br><b>Shift</b> nitro &middot; <b>Space</b> drift &middot; <b>F</b> take off / land &middot; <b>C</b> camera<br><b>Esc</b> pause &middot; <b>R</b> restart &middot; <b>T</b> respawn<br></span><span class="tk">Drag the left stick to steer. You accelerate automatically.<br>NITRO boosts, DRIFT slides, BRAKE slows, FLY takes off.<br></span>Overtake rivals to refill nitro. Drift to charge it. Flying cars drain nitro while airborne. Hit glowing pads for instant nitro. Gamepad supported.<br><br>Set your <b>DRIVER NAME</b> in Settings to save progress to the cloud and appear on the global leaderboard. In <b>ONLINE RIVALS</b> you can download the #1 player's ghost and race it head-to-head.</p>
+      </div>
+    </section>
   </div>
+  <footer id="botbar"><div id="hintL" class="hints">&#8593;&#8595; NAVIGATE &middot; ENTER SELECT</div><div class="ver">KAY SUPER RACING &middot; V4 SHOWROOM</div></footer>
 </div>
 
-<div id="pause" class="ov hide"><h1>PAUSED</h1>
-  <button class="mb go" data-act="resume">RESUME</button><button class="mb sec" data-act="retry">RESTART</button><button class="mb sec" data-act="menu">QUIT TO MENU</button>
-</div>
+<div id="pause" class="ov hide"><div class="ovwrap"><h1>PAUSED</h1>
+  <button class="act go" data-act="resume" type="button">RESUME</button><button class="act ghost" data-act="retry" type="button">RESTART</button><button class="act ghost" data-act="menu" type="button">QUIT TO MENU</button>
+</div></div>
 
-<div id="finish" class="ov hide"><h1 id="fh">FINISH</h1><p id="fp"></p><div id="fres"></div><div id="fearn"></div><div id="fmis"></div><div id="fglobal" class="lbl"></div>
-  <button class="mb go" id="fNext" data-act="next">NEXT RACE</button><button class="mb sec" id="fRetry" data-act="retry">RETRY</button><button class="mb sec" data-act="menu">MAIN MENU</button>
-</div>
+<div id="finish" class="ov hide"><div class="ovwrap"><h1 id="fh">FINISH</h1><p id="fp"></p><div id="fres"></div><div id="fearn"></div><div id="fmis"></div><div id="fglobal" class="lbl"></div>
+  <button class="act go" id="fNext" data-act="next" type="button">NEXT RACE</button><button class="act ghost" id="fRetry" data-act="retry" type="button">RETRY</button><button class="act ghost" data-act="menu" type="button">MAIN MENU</button>
+</div></div>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>
