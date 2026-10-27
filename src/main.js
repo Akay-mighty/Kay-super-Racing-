@@ -406,6 +406,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Escape' || e.code === 'KeyP') { if (state === 'paused') resume(); else pause(); }
   if (e.code === 'KeyT') respawn();
   if (e.code === 'KeyM') muted = !muted;
+  if (state === 'menu' && !e.repeat && document.activeElement !== $('dname')) menuKeys(e);
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
@@ -547,8 +548,18 @@ function respawn() {
 /* menu wiring */
 const screens = [...document.querySelectorAll('#menu .screen')];
 let lastScreen = 'main';
+const HINTS = {
+  main: '\u2191\u2193 NAVIGATE \u00b7 ENTER SELECT',
+  quick: 'SET OPTIONS \u00b7 START TO RACE', tour: '5 ROUNDS \u00b7 CHAMPION TAKES THE CROWN',
+  arena: 'DRIFT \u00b7 SMASH CONES \u00b7 BEAT THE CLOCK', tt: 'CLEAN LINES SET RECORDS',
+  garage: 'CLICK A CAR TO BUY OR SELECT', missions: 'REWARDS PAID INSTANTLY',
+  online: 'SET YOUR DRIVER NAME TO APPEAR HERE', settings: 'PROGRESS SAVES AUTOMATICALLY',
+  how: 'GOOD LUCK OUT THERE'
+};
 function showScreen(n) {
   screens.forEach(sc => sc.classList.toggle('on', sc.dataset.s === n));
+  const hl = $('hintL'); if (hl) hl.textContent = HINTS[n] || '';
+  const pb = document.querySelector('#menu .screen.on .pbody'); if (pb) pb.scrollTop = 0;
   if (lastScreen === 'garage' && n !== 'garage') rebuildCar(economy.selected());
   lastScreen = n;
   if (n === 'tour') renderTour();
@@ -560,11 +571,27 @@ function showScreen(n) {
   if (n === 'main') renderDaily();
   if (n === 'quick' || n === 'tt' || n === 'arena') setEnv(opt.env);
 }
+/* console-style keyboard navigation: arrows move the highlight, enter selects, esc backs out */
+let kbIdx = -1;
+function menuKeys(e) {
+  if (e.code === 'Escape' || e.code === 'Backspace') { if (lastScreen !== 'main') { kbIdx = -1; showScreen('main'); } return; }
+  const scr = document.querySelector('#menu .screen.on'); if (!scr) return;
+  const items = [...scr.querySelectorAll('button')].filter(b => b.offsetParent !== null && !b.disabled && !b.classList.contains('sw') && !b.classList.contains('back') && !(b.parentElement && b.parentElement.classList.contains('seg')));
+  if (!items.length) return;
+  if (e.code === 'ArrowDown' || e.code === 'ArrowUp') {
+    e.preventDefault();
+    kbIdx = (kbIdx + (e.code === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    items.forEach((b, i) => b.classList.toggle('kfocus', i === kbIdx));
+    items[kbIdx].scrollIntoView({ block: 'nearest' }); beep(700, 0.03, 'square', 0.035);
+  } else if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+    if (kbIdx >= 0 && items[kbIdx]) { const b = items[kbIdx]; kbIdx = -1; b.classList.remove('kfocus'); b.click(); }
+  }
+}
 function syncSegs() {
   document.querySelectorAll('.seg').forEach(seg => seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', String(opt[seg.dataset.k]) === b.dataset.v)));
 }
-function renderArBest() { const b = store.get(`sr.best.arena.${opt.dur}`, null); $('arBest').textContent = b ? `BEST  ${b.toLocaleString()}` : 'NO SCORE YET'; }
-function renderBest() { const b = store.get(`sr.best.tt.${opt.laps}`, null); $('ttBest').textContent = b ? `BEST  ${fmt(b)}` : 'NO TIME SET YET'; }
+function renderArBest() { const b = store.get(`sr.best.arena.${opt.dur}`, null), el = $('arBest'); if (!el) return; el.style.display = b ? '' : 'none'; el.textContent = `BEST SCORE  ${b.toLocaleString()}`; }
+function renderBest() { const b = store.get(`sr.best.tt.${opt.laps}`, null), el = $('ttBest'); if (!el) return; el.style.display = b ? '' : 'none'; el.textContent = `BEST TIME  ${fmt(b)}`; }
 function renderTour() {
   const r = T ? T.round : 0;
   let h = CUPS.map((c, i) => `<div class="rr${i === r ? ' me' : ''}"><b>${i + 1}</b><span>${c.name}</span><em>${c.type === 'arena' ? c.dur + 's · drift score' : c.laps + ' laps · ' + LEVELS[c.diff]}</em><i>${i < r ? '✔' : ''}</i></div>`).join('');
@@ -599,6 +626,7 @@ function act(a) {
   else if (a === 'menu') toMenu();
 }
 document.addEventListener('click', e => {
+  kbIdx = -1; document.querySelectorAll('.kfocus').forEach(b => b.classList.remove('kfocus'));
   const card = e.target.closest('.carCard'); if (card && card.dataset.car) { garageClick(card.dataset.car); return; }
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.go) showScreen(b.dataset.go);
@@ -923,7 +951,7 @@ function renderGarage() {
   const list = $('carList'); if (!list) return;
   list.innerHTML = CARS.map(c => {
     const owned = economy.has(c.id), sel = economy.selected() === c.id, afford = economy.money >= c.price;
-    const tags = [c.stats.fly ? '<span class="tag fly">FLYING</span>' : '', owned ? '<span class="tag own">OWNED</span>' : `<span class="tag">${c.tag || ''}</span>`, sel ? '<span class="tag sel">SELECTED</span>' : ''].join(' ');
+    const tags = [c.stats.fly ? '<span class="tag fly">FLYING \u2708</span>' : '', owned ? '<span class="tag own">OWNED</span>' : (c.tag && !(c.stats.fly && /FLYING/i.test(c.tag)) ? `<span class="tag">${c.tag}</span>` : ''), sel ? '<span class="tag sel">SELECTED</span>' : ''].join(' ');
     const price = owned ? (sel ? 'SELECTED' : 'OWNED') : '$' + c.price.toLocaleString();
     return `<div class="carCard${sel ? ' sel' : ''}${!owned && !afford ? ' locked' : ''}" data-car="${c.id}">
       <div class="top"><span>${c.name}</span> ${tags}<span class="price ${owned ? 'own' : afford ? '' : 'no'}">${price}</span></div>
@@ -986,7 +1014,9 @@ const driverName = () => cloud.name(store.get('sr.name', 'KAY'));
 let boardCache = {};
 function updateCloudUI() {
   const st = cloud.status, b = $('cloudBadge');
-  if (b) { b.className = 'hud ' + (st === 'online' ? 'on' : st === 'connecting' ? 'wait' : 'off'); $('cloudTxt').textContent = 'CLOUD ' + (st === 'online' ? 'ONLINE' : st === 'connecting' ? '\u2026' : 'OFFLINE'); }
+  if (b) { b.className = 'pill ' + (st === 'online' ? 'on' : st === 'connecting' ? 'wait' : 'off'); $('cloudTxt').textContent = 'CLOUD ' + (st === 'online' ? 'ONLINE' : st === 'connecting' ? '\u2026' : 'OFFLINE'); }
+  const dchip = $('driverNameTxt'); if (dchip) dchip.textContent = driverName();
+  const dav = $('dAv'); if (dav) dav.textContent = (driverName()[0] || 'K').toUpperCase();
   const os = $('cloudStat'); if (os) os.textContent = st === 'online' ? '\u2601 CONNECTED AS ' + driverName() : st === 'connecting' ? 'CLOUD: CONNECTING\u2026' : 'CLOUD OFFLINE \u00b7 LOCAL PROGRESS ONLY';
   const dn = $('dname');
   if (dn && document.activeElement !== dn) dn.value = driverName();
@@ -1107,10 +1137,14 @@ function frame(now) {
   pads.forEach(p => { const u = p.userData; if (u.cd > 0) u.cd -= dt; if (u.flash > 0) u.flash -= dt * 1.5; p.material.opacity = 0.55 + Math.sin(performance.now() * 0.004 + u.k) * 0.15 + Math.max(0, u.flash) * 0.4; });
   arena.update(dt);
   if (state === 'menu') {
-    menuT += dt * 0.22; const r = 8.5 + Math.sin(menuT * 0.7) * 1.4;
-    camera.position.set(car.position.x + Math.sin(menuT) * r, car.position.y + 2.1 + Math.sin(menuT * 0.5) * 0.6, car.position.z + Math.cos(menuT) * r);
-    camera.lookAt(car.position.x, car.position.y + 0.8, car.position.z);
-    camera.fov += (48 - camera.fov) * 0.1; camera.updateProjectionMatrix(); sky.position.copy(camera.position); followSun();
+    /* showroom camera: slow cinematic orbit with the car framed on the right side of the screen */
+    menuT += dt * 0.15;
+    const r = 9.2 + Math.sin(menuT * 0.6) * 1.2, a = menuT;
+    camera.position.set(car.position.x + Math.sin(a) * r, car.position.y + 2.0 + Math.sin(menuT * 0.45) * 0.5, car.position.z + Math.cos(a) * r);
+    const look = V3(car.position.x, car.position.y + 0.8, car.position.z);
+    look.addScaledVector(V3(Math.cos(a), 0, -Math.sin(a)), -(camera.aspect < 1 ? 0.9 : 2.3));
+    camera.lookAt(look);
+    camera.fov += (45 - camera.fov) * 0.08; camera.updateProjectionMatrix(); sky.position.copy(camera.position); followSun();
   } else updateCamera(dt, out.boosting, out.sp);
   updateStreaks(dt, state === 'menu' ? 0 : out.sp, out.boosting);
   hud(dt, out.sp, out.boosting); audioUpdate(state === 'menu' ? -1 : out.sp, out.boosting, FL.on);
