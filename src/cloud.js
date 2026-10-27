@@ -14,7 +14,7 @@ const CFG = {
   measurementId: "G-3TYSZTMQFS"
 };
 
-const S = { on: false, status: 'boot', listeners: [], db: null, lastErr: '' };
+const S = { on: false, status: 'boot', listeners: [], db: null, lastErr: '', app: null, auth: null, user: null };
 const setStatus = s => { S.status = s; S.listeners.forEach(cb => { try { cb(s); } catch (e) { } }); };
 const emitErr = e => { S.lastErr = (e && e.code) || String(e); setStatus('offline'); };
 
@@ -32,23 +32,66 @@ export const cloud = {
   get lastErr() { return S.lastErr; },
   onStatus(cb) { S.listeners.push(cb); if (S.status !== 'boot') cb(S.status); },
 
-  /* lazy-load the SDK (code-split chunk), init app + try anonymous auth */
+  /* ---------- accounts (email/password + Google) ----------
+     preload() warms the SDK and restores any saved session; init() connects
+     Firestore for the signed-in account. No account -> local mode. */
+  get user() { return S.user; },
+  get email() { return S.user && !S.user.isAnonymous ? (S.user.email || '') : ''; },
+
+  async preload() {
+    if (S.app) return S.status;
+    try {
+      const [{ initializeApp, getApps }, { getAuth, onAuthStateChanged }] =
+        await Promise.all([import('firebase/app'), import('firebase/auth')]);
+      const app = getApps().length ? getApps()[0] : initializeApp(CFG);
+      S.app = app; S.auth = getAuth(app);
+      /* restore any saved session — but never hang here: race a timeout and show the gate anyway */
+      await Promise.race([
+        new Promise(res => { try { onAuthStateChanged(S.auth, u => { S.user = u; res(); }); } catch (e) { res(); } }),
+        new Promise(res => setTimeout(res, 6000))
+      ]);
+    } catch (e) { S.lastErr = (e && e.code) || String(e); }
+    return S.status;
+  },
+
+  async signUp(email, pw) {
+    if (!S.auth) await this.preload();
+    const { createUserWithEmailAndPassword } = await import('firebase/auth');
+    return withTimeout(createUserWithEmailAndPassword(S.auth, String(email).trim(), pw), 14000);
+  },
+
+  async signIn(email, pw) {
+    if (!S.auth) await this.preload();
+    const { signInWithEmailAndPassword } = await import('firebase/auth');
+    return withTimeout(signInWithEmailAndPassword(S.auth, String(email).trim(), pw), 14000);
+  },
+
+  async google() {
+    if (!S.auth) await this.preload();
+    const { signInWithPopup, GoogleAuthProvider } = await import('firebase/auth');
+    return withTimeout(signInWithPopup(S.auth, new GoogleAuthProvider()), 60000);
+  },
+
+  async signOutAuth() {
+    try { if (S.auth) { const { signOut } = await import('firebase/auth'); await signOut(S.auth); } } catch (e) { }
+    S.user = null;
+  },
+
+  /* lazy-load Firestore for the signed-in account and probe reachability */
   async init() {
     if (S.status === 'online' || S.status === 'connecting') return S.status;
+    if (!S.app) await this.preload();
+    if (!S.user) { setStatus('offline'); return S.status; }
     setStatus('connecting');
     try {
-      const [{ initializeApp, getApps }, { getFirestore, doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, runTransaction, addDoc, serverTimestamp },
-        { getAuth, signInAnonymously }] =
-        await Promise.all([import('firebase/app'), import('firebase/firestore'), import('firebase/auth')]);
-      const app = getApps().length ? getApps()[0] : initializeApp(CFG);
-      S.db = getFirestore(app);
+      const [{ getFirestore, doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, runTransaction, addDoc, serverTimestamp }] =
+        await Promise.all([import('firebase/firestore')]);
+      S.db = getFirestore(S.app);
       S._fns = { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, runTransaction, addDoc, serverTimestamp };
-      let authed = false;
-      try { await withTimeout(signInAnonymously(getAuth(app)), 9000); authed = true; } catch (e) { S.lastErr = (e && e.code) || 'anon-auth'; }
       /* probe firestore reachability with a tiny read (bypasses guard(): S.on is still false here) */
       let probe = null;
       try { probe = await withTimeout(getDoc(doc(S.db, 'boards', 'probe')), 8000); } catch (e) { S.lastErr = (e && e.code) || String(e); }
-      if (probe !== null || authed) { S.on = true; setStatus('online'); }
+      if (probe !== null) { S.on = true; setStatus('online'); }
       else { setStatus('offline'); }
     } catch (e) { emitErr(e); }
     return S.status;

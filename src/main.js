@@ -533,6 +533,36 @@ function toMenu() {
   resetWorld({ mode: 'menu', laps: 3, diff: 1, ai: 5, env: ['day', 'dawn', 'sunset', 'night'][(Math.random() * 4) | 0] });
   setState('menu'); showScreen('main'); audioUpdate(-1, false);
 }
+/* showroom state while the splash / account gate play on top (menu DOM stays hidden) */
+function showroomOnly() {
+  show('menu', false); show('pause', false); show('finish', false); $('count').style.display = 'none';
+  resetWorld({ mode: 'menu', laps: 3, diff: 1, ai: 5, env: ['day', 'dawn', 'sunset', 'night'][(Math.random() * 4) | 0] });
+  setState('menu'); audioUpdate(-1, false);
+}
+/* V5 boot: splash -> account gate -> menu */
+function gateBoot() {
+  showroomOnly();
+  import('./boot.js').then(({ bootFlow }) => bootFlow({
+    rev() {
+      if (muted) return;
+      if (!actx) initAudio();
+      if (actx && actx.state === 'suspended') actx.resume();
+      try {
+        const t = actx.currentTime, o = actx.createOscillator(), g = actx.createGain(), f = actx.createBiquadFilter();
+        f.type = 'lowpass'; f.frequency.value = 1500;
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(65, t);
+        o.frequency.exponentialRampToValueAtTime(500, t + 0.5);
+        o.frequency.exponentialRampToValueAtTime(215, t + 1.05);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.17, t + 0.14);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 1.15);
+        o.connect(f).connect(g).connect(actx.destination); o.start(t); o.stop(t + 1.2);
+      } catch (e) { }
+    },
+    enter: toMenu
+  })).catch(() => toMenu());
+}
 function pause() {
   if (state !== 'race' && state !== 'count') return;
   prevState = state; setState('paused'); show('pause', true); audioUpdate(-1, false);
@@ -549,7 +579,7 @@ function respawn() {
 const screens = [...document.querySelectorAll('#menu .screen')];
 let lastScreen = 'main';
 const HINTS = {
-  main: '\u2191\u2193 NAVIGATE \u00b7 ENTER SELECT',
+  main: 'TAP START ENGINE · PICK YOUR MODE',
   quick: 'SET OPTIONS \u00b7 START TO RACE', tour: '5 ROUNDS \u00b7 CHAMPION TAKES THE CROWN',
   arena: 'DRIFT \u00b7 SMASH CONES \u00b7 BEAT THE CLOCK', tt: 'CLEAN LINES SET RECORDS',
   garage: 'CLICK A CAR TO BUY OR SELECT', missions: 'REWARDS PAID INSTANTLY',
@@ -620,6 +650,7 @@ function act(a) {
   else if (a === 'daily') claimDaily();
   else if (a === 'refreshBoard') renderBoard();
   else if (a === 'rival') raceRival();
+  else if (a === 'signout') { cloud.signOutAuth().then(() => location.reload()); }
   else if (a === 'resume') resume();
   else if (a === 'retry') retry();
   else if (a === 'menu') toMenu();
@@ -1017,6 +1048,7 @@ function updateCloudUI() {
   const dchip = $('driverNameTxt'); if (dchip) dchip.textContent = driverName();
   const dav = $('dAv'); if (dav) dav.textContent = (driverName()[0] || 'K').toUpperCase();
   const os = $('cloudStat'); if (os) os.textContent = st === 'online' ? '\u2601 CONNECTED AS ' + driverName() : st === 'connecting' ? 'CLOUD: CONNECTING\u2026' : 'CLOUD OFFLINE \u00b7 LOCAL PROGRESS ONLY';
+  const ae = $('acctEmail'); if (ae) ae.textContent = cloud.email ? 'ACCOUNT \u00b7 ' + cloud.email : (st === 'online' ? 'CLOUD \u00b7 ' + driverName() : 'OFFLINE MODE \u00b7 PROGRESS SAVES ON THIS DEVICE');
   const dn = $('dname');
   if (dn && document.activeElement !== dn) dn.value = driverName();
 }
@@ -1053,7 +1085,8 @@ async function cloudSyncIn() {
 function bootCloud() {
   cloud.onStatus(updateCloudUI);
   updateCloudUI();
-  cloud.init().then(() => { updateCloudUI(); cloudSyncIn(); });
+  /* fired by boot.js after a successful sign-in (or session restore) */
+  addEventListener('ksr-auth', () => { updateCloudUI(); cloudSyncIn(); });
   window.addEventListener('ksr-money', cloudPush);
   const dn = $('dname');
   if (dn) dn.addEventListener('change', () => { store.set('sr.name', cloud.name(dn.value || 'KAY')); updateCloudUI(); toast('DRIVER: ' + driverName(), '#8df'); cloudSyncIn(); });
@@ -1159,6 +1192,6 @@ paintPlayer(store.get('sr.color', COLORS[0]));
 rebuildCar(economy.selected());
 window.addEventListener('ksr-money', updateMoneyUI);
 updateMoneyUI();
-syncSegs(); applyQuality(); toMenu();
+syncSegs(); applyQuality(); gateBoot();
 if (TURBO) window.__DBG = { P, FL, keys, pts, tan, N, get CS() { return CS; } }; /* dev test hook */
 requestAnimationFrame(frame);
