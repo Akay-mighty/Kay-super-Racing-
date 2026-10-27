@@ -10,11 +10,14 @@ export const MISSIONS = [
   { id: 'pads8',   name: 'BOOST JUNKIE',      desc: 'Hit 8 boost pads in one race',       event: 'pads',   target: 8,      reward: 7000 },
   { id: 'fly60',   name: 'WINGS UP',          desc: 'Fly for 60 seconds (total)',         event: 'fly',    target: 60,     reward: 15000 },
   { id: 'garage4', name: 'GARAGE KING',       desc: 'Own 4 cars',                         event: 'own',    target: 4,      reward: 10000 },
-  { id: 'rich',    name: 'TYCOON',            desc: 'Earn $250,000 in total',             event: 'earn',   target: 250000, reward: 25000 }
+  { id: 'rich',    name: 'TYCOON',            desc: 'Earn $250,000 in total',             event: 'earn',   target: 250000, reward: 25000 },
+  { id: 'nightwin',   name: 'NEON CHAMPION',  desc: 'Win a Night Circuit race',                event: 'nightwin',   target: 1,     reward: 30000 },
+  { id: 'nightdrift', name: 'RAIN DANCER',    desc: 'Score 20,000 drift pts in one Night race', event: 'nightdrift', target: 20000, reward: 22000 },
+  { id: 'nightfly',   name: 'STORM PILOT',    desc: 'Fly for 30s total in Night Circuit',      event: 'nightfly',   target: 30,    reward: 18000 }
 ];
 
 let prog = {}; // id -> { p, done }
-const ACC = { fly: true, earn: true }; // event types that accumulate, others keep the max
+const ACC = { fly: true, earn: true, nightfly: true }; // event types that accumulate, others keep the max
 
 export function missionsInit() {
   const saved = economy.getMissions() || {};

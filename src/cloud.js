@@ -84,10 +84,10 @@ export const cloud = {
     if (!S.user) { setStatus('offline'); return S.status; }
     setStatus('connecting');
     try {
-      const [{ getFirestore, doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, runTransaction, addDoc, serverTimestamp }] =
+      const [{ getFirestore, doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, runTransaction, addDoc, serverTimestamp, onSnapshot, deleteDoc }] =
         await Promise.all([import('firebase/firestore')]);
       S.db = getFirestore(S.app);
-      S._fns = { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, runTransaction, addDoc, serverTimestamp };
+      S._fns = { doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs, runTransaction, addDoc, serverTimestamp, onSnapshot, deleteDoc };
       /* probe firestore reachability with a tiny read (bypasses guard(): S.on is still false here) */
       let probe = null;
       try { probe = await withTimeout(getDoc(doc(S.db, 'boards', 'probe')), 8000); } catch (e) { S.lastErr = (e && e.code) || String(e); }
@@ -185,5 +185,49 @@ export const cloud = {
       const snap = await withTimeout(getDoc(doc(S.db, 'ghosts', id)), 9000);
       return snap.exists() ? snap.data() : null;
     }, null);
+  },
+
+  /* ---------- multiplayer rooms (live ghost lobbies) ---------- */
+  async roomCreate(code, data) {
+    return guard(async () => {
+      const { doc, setDoc, serverTimestamp } = S._fns;
+      await withTimeout(setDoc(doc(S.db, 'rooms', code), { ...data, updated: serverTimestamp() }), 9000);
+      return true;
+    }, false);
+  },
+
+  async roomTouch(code, fields) {
+    return guard(async () => {
+      const { doc, setDoc, serverTimestamp } = S._fns;
+      await withTimeout(setDoc(doc(S.db, 'rooms', code), { ...fields, updated: serverTimestamp() }, { merge: true }), 8000);
+      return true;
+    }, false);
+  },
+
+  async roomPlayerSet(code, uid, data) {
+    return guard(async () => {
+      const { doc, setDoc, serverTimestamp } = S._fns;
+      await withTimeout(setDoc(doc(S.db, 'rooms', code, 'p', uid), { ...data, at: serverTimestamp() }, { merge: true }), 8000);
+      return true;
+    }, false);
+  },
+
+  async roomPlayerDel(code, uid) {
+    return guard(async () => {
+      const { doc, deleteDoc } = S._fns;
+      await withTimeout(deleteDoc(doc(S.db, 'rooms', code, 'p', uid)), 8000);
+      return true;
+    }, false);
+  },
+
+  /* live listeners — returns an unsubscribe function (no-op when offline) */
+  roomListen(code, onRoom, onPlayers) {
+    if (!S.on || !S._fns) return () => { };
+    const { doc, collection, onSnapshot } = S._fns;
+    const u1 = onSnapshot(doc(S.db, 'rooms', code), s => { try { onRoom(s.exists() ? s.data() : null); } catch (e) { } }, () => { });
+    const u2 = onSnapshot(collection(S.db, 'rooms', code, 'p'), s => {
+      try { onPlayers(s.docs.map(d => ({ uid: d.id, ...d.data() }))); } catch (e) { }
+    }, () => { });
+    return () => { try { u1(); u2(); } catch (e) { } };
   }
 };

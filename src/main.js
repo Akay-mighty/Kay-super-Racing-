@@ -13,6 +13,7 @@ import { CARS, getCar, carGeo, tintPart } from './cars-data.js';
 import { economy } from './economy.js';
 import { missionsInit, missionEvent, missionState, missionsCompleted, MISSIONS } from './missions.js';
 import { cloud } from './cloud.js';
+import { net } from './net.js';
 import { GhostRec, makeGhostCar } from './ghost.js';
 import { colorize } from './carcolor.js';
 
@@ -153,7 +154,7 @@ function strip(oa, ya, ob, yb, col, shadow = true) {
 }
 const C = s => new THREE.Color(s);
 const asph = [C('#34363c'), C('#3a3c42')], rw = [C('#e8e8ea'), C('#d42a2a')], wallC = [C('#c9ccd2'), C('#b8bcc4')];
-strip(-W, 0, W, 0, i => asph[(i >> 3) & 1]);
+const roadStrip = strip(-W, 0, W, 0, i => asph[(i >> 3) & 1]);
 strip(W, 0.08, W + 2.6, 0.08, i => rw[i & 1]);
 strip(-W - 2.6, 0.08, -W, 0.08, i => rw[i & 1]);
 strip(WALL, 0, WALL, 1.5, i => wallC[(i >> 2) & 1]);
@@ -295,8 +296,80 @@ const pads = padIdx.map((k, n) => {
   m.userData = { cd: 0, flash: 0, k };
   padGroup.add(m); return m;
 });
+/* Night Circuit: extra pads — closer to the walls, smaller, more rewarding */
+const padNightIdx = []; for (let i = 13; i < N - 10; i += Math.floor(N / 22)) padNightIdx.push(i);
+const padsNight = padNightIdx.map((k, n) => {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 5.4).rotateX(-Math.PI / 2), padBaseMat.clone());
+  m.position.copy(pts[k]).addScaledVector(right[k], (n % 2 ? -1 : 1) * rand(6.2, 8.6)); m.position.y += 0.16;
+  m.rotation.y = Math.atan2(tan[k].x, tan[k].z);
+  m.userData = { cd: 0, flash: 0, k };
+  m.visible = false; padGroup.add(m); return m;
+});
+const allPads = () => cfg.env === 'nightRain' ? pads.concat(padsNight) : pads;
 
 const trackObjs = scene.children.slice(trackStart);
+
+/* ---------- NIGHT CIRCUIT: neon signage (visible only in nightRain) ----------
+   Cheap emissive planes + glow sprites facing the road; bloom does the rest. */
+const neonGroup = new THREE.Group(); neonGroup.visible = false; scene.add(neonGroup);
+/* NOTE: neonGroup is intentionally NOT in trackObjs — setEnv/resetWorld drive its visibility */
+{
+  const NC = [0x2de2ff, 0xff2dd8, 0xff9a2f, 0x9dff2f, 0x2d6bff];
+  const glowTexN = canvasTex(64, 64, (g, w, h) => { const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,.95)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
+  for (let n = 0; n < 46; n++) {
+    const k = (n * 17 + 7) % N, side = n % 2 ? 1 : -1, col = NC[n % NC.length];
+    const base = pts[k].clone().addScaledVector(right[k], side * (WALL + rand(2.5, 16)));
+    const hgt = rand(5, 42), w = rand(5, 13), h2 = rand(0.7, 2.6);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(w, h2), new THREE.MeshBasicMaterial({ color: col, toneMapped: false, side: THREE.DoubleSide }));
+    sign.position.set(base.x, base.y + hgt, base.z);
+    sign.lookAt(pts[k].x, sign.position.y, pts[k].z);
+    neonGroup.add(sign);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexN, color: col, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    halo.scale.set(w * 3.2, w * 3.2, 1); halo.position.copy(sign.position);
+    neonGroup.add(halo);
+    /* wet-road reflection blob under each sign */
+    const refl = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.1, 7).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: glowTexN, color: col, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    const rp = pts[k].clone().addScaledVector(right[k], side * rand(3, W - 2)); rp.y = pts[k].y + 0.06;
+    refl.position.copy(rp); refl.rotation.y = Math.atan2(tan[k].x, tan[k].z);
+    neonGroup.add(refl);
+  }
+}
+
+/* ---------- NIGHT CIRCUIT: rain + neon point lights (not track objects) ---------- */
+const RAIN_N = mobile ? 420 : 760;
+const rainGeo = new THREE.BufferGeometry();
+const rainPos = new Float32Array(RAIN_N * 6);
+rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+const rainMat = new THREE.LineBasicMaterial({ color: 0xa8cdec, transparent: true, opacity: 0.32, fog: false, toneMapped: false });
+const rain = new THREE.LineSegments(rainGeo, rainMat); rain.frustumCulled = false; rain.visible = false; scene.add(rain);
+const rainDrops = Array.from({ length: RAIN_N }, () => ({ x: rand(-60, 60), y: rand(0, 55), z: rand(-60, 60), v: rand(34, 52) }));
+function updateRain(dt) {
+  if (!rain.visible) return;
+  rain.position.copy(camera.position);
+  const R = 60;
+  for (let i = 0; i < RAIN_N; i++) {
+    const d = rainDrops[i];
+    d.y -= d.v * dt; d.x += 9 * dt;
+    if (d.y < -2) { d.y += 57; d.x = rand(-R, R); d.z = rand(-R, R); }
+    if (d.x > R) d.x -= 2 * R;
+    const o = i * 6, dx = d.x - 9 * 0.045, dy = d.y + d.v * 0.045;
+    rainPos[o] = d.x; rainPos[o + 1] = d.y; rainPos[o + 2] = d.z;
+    rainPos[o + 3] = dx; rainPos[o + 4] = dy; rainPos[o + 5] = d.z;
+  }
+  rainGeo.attributes.position.needsUpdate = true;
+}
+/* a handful of colored point lights along the circuit — desktop 6, mobile 4 */
+const neonLights = [];
+{
+  const cols = [0x2de2ff, 0xff2dd8, 0xff9a2f];
+  const cnt = mobile ? 4 : 6;
+  for (let i = 0; i < cnt; i++) {
+    const L = new THREE.PointLight(cols[i % 3], 0, 130, 1.7);
+    const k = Math.round((i + 0.5) * (N / cnt)) % N;
+    L.position.copy(pts[k]).add(V3(rand(-8, 8), 14, rand(-8, 8)));
+    scene.add(L); neonLights.push(L);
+  }
+}
 const arena = createArena(canvasTex);
 scene.add(arena.group, camera);
 /* ---------- cars ---------- */
@@ -339,15 +412,18 @@ function rebuildCar(id) {
 function applyPlayerCar(id) { economy.select(id); rebuildCar(id); updateMoneyUI(); }
 car.headlight = new THREE.SpotLight(0xfff0d0, 0, 170, 0.5, 0.7, 2);
 { const tg = new THREE.Object3D(); tg.position.set(0, 0.4, 30); car.headlight.position.set(0, 0.8, 2); car.add(car.headlight, tg); car.headlight.target = tg; }
-const SUNSPR = { day: [1, 0xfff3d6], dawn: [1, 0xffb070], sunset: [1, 0xff8844], night: [0.45, 0xaec4ff] };
+const SUNSPR = { day: [1, 0xfff3d6], dawn: [1, 0xffb070], sunset: [1, 0xff8844], night: [0.45, 0xaec4ff], nightRain: [0.12, 0x5a6aa8] };
 const ENVS = {
   day:    { sky: [[0, '#2d86ee'], [0.38, '#6db4f2'], [0.5, '#cfe4f6'], [1, '#cfe0f0']], fog: 0xcfe0f0, fn: 260, ff: 1500, hemi: [0xcfe6ff, 0x607080, 1.1], sun: [0xfff0d8, 2.5], pos: [120, 200, 80], env: 0.4, cloud: 0.9, bloom: 0.4, glow: 0, stars: 0, head: 0 },
   dawn:   { sky: [[0, '#34559e'], [0.38, '#b98aa6'], [0.5, '#ffcf9f'], [1, '#f5d2b0']], fog: 0xf0c8a4, fn: 200, ff: 1300, hemi: [0xffd9bd, 0x4a4458, 0.95], sun: [0xffb27a, 2.1], pos: [230, 70, 100], env: 0.3, cloud: 0.75, bloom: 0.45, glow: 0, stars: 0, head: 0 },
   sunset: { sky: [[0, '#262b66'], [0.38, '#c25a6a'], [0.5, '#ff9a52'], [1, '#f0a060']], fog: 0xe3a070, fn: 200, ff: 1300, hemi: [0xffc29a, 0x3f3550, 0.85], sun: [0xff8c4a, 1.9], pos: [-230, 60, 120], env: 0.28, cloud: 0.7, bloom: 0.5, glow: 0.35, stars: 0, head: 0 },
-  night:  { sky: [[0, '#03050d'], [0.38, '#0c1631'], [0.5, '#1a2a50'], [1, '#16233f']], fog: 0x0d1628, fn: 90, ff: 850, hemi: [0x7f9fe0, 0x101826, 0.5], sun: [0x9db8ff, 0.5], pos: [100, 200, 60], env: 0.1, cloud: 0.1, bloom: 0.7, glow: 1, stars: 1, head: 1 }
+  night:  { sky: [[0, '#03050d'], [0.38, '#0c1631'], [0.5, '#1a2a50'], [1, '#16233f']], fog: 0x0d1628, fn: 90, ff: 850, hemi: [0x7f9fe0, 0x101826, 0.5], sun: [0x9db8ff, 0.5], pos: [100, 200, 60], env: 0.1, cloud: 0.1, bloom: 0.7, glow: 1, stars: 1, head: 1 },
+  /* NIGHT CIRCUIT: dark rainy neon city — hardest, most stylish chapter */
+  nightRain: { sky: [[0, '#010208'], [0.35, '#070b1c'], [0.52, '#101638'], [0.7, '#1c1140'], [1, '#0a0616']], fog: 0x05070e, fn: 55, ff: 560, hemi: [0x30406e, 0x04050a, 0.34], sun: [0x5a6fd8, 0.2], pos: [90, 190, 40], env: 0.09, cloud: 0.05, bloom: 1.1, glow: 2.4, stars: 0, head: 1.5, rain: 1 }
 };
+let neonOn = 0;
 function setEnv(k) {
-  const e = ENVS[k] || ENVS.day;
+  const e = ENVS[k] || ENVS.day, wet = k === 'nightRain';
   drawSky(e.sky); scene.fog.color.set(e.fog); scene.fog.near = e.fn; scene.fog.far = e.ff;
   hemi.color.set(e.hemi[0]); hemi.groundColor.set(e.hemi[1]); hemi.intensity = e.hemi[2];
   sun.color.set(e.sun[0]); sun.intensity = e.sun[1]; sunOff.set(...e.pos);
@@ -355,6 +431,14 @@ function setEnv(k) {
   bloomPass.strength = e.bloom; if (cityMat) cityMat.emissiveIntensity = e.glow * 1.4;
   starMat.opacity = e.stars; car.headlight.intensity = e.head * 2000;
   const ss = SUNSPR[k] || SUNSPR.day; sunSpr.position.set(...e.pos).normalize().multiplyScalar(2300); sunSpr.material.opacity = ss[0]; sunSpr.material.color.setHex(ss[1]);
+  /* Night Circuit: rain streaks + neon city + wet reflective asphalt */
+  neonOn = !!e.rain;
+  rain.visible = !!e.rain; neonGroup.visible = !!e.rain;
+  neonLights.forEach(L => { L.intensity = e.rain ? 5200 : 0; });
+  if (roadStrip) { roadStrip.material.roughness = wet ? 0.24 : 0.85; roadStrip.material.metalness = wet ? 0.55 : 0; roadStrip.material.needsUpdate = false; }
+  ground.material.color.setHex(wet ? 0x11151c : 0x4d5864); ground.material.roughness = wet ? 0.35 : 1;
+  if (cityMat) { cityMat.roughness = wet ? 0.22 : 0.45; cityMat.metalness = wet ? 0.5 : 0.2; }
+  document.body.classList.toggle('nc', wet);
 }
 const P = { spin: 0, pos: V3(), vel: V3(), h: 0, idx: 0, crosses: 0, nitro: 1, prog: 0, finished: false, rank: 6 };
 {
@@ -515,6 +599,34 @@ const CUPS = [
   { name: 'SUNSET RUN', type: 'race', env: 'sunset', laps: 3, diff: 1 },
   { name: 'NIGHT GRAND PRIX', type: 'race', env: 'night', laps: 3, diff: 2 }
 ];
+/* NIGHT CIRCUIT — special hard chapter: rain, neon, low grip, ×1.8 cash */
+const NCUPS = [
+  { name: 'NEON GAUNTLET', type: 'race', env: 'nightRain', laps: 2, diff: 2 },
+  { name: 'MONSOON DRIFT', type: 'arena', env: 'nightRain', dur: 90, diff: 2 },
+  { name: 'CYBER SPRINT', type: 'race', env: 'nightRain', laps: 3, diff: 2 },
+  { name: 'STORM CHASER', type: 'race', env: 'nightRain', laps: 3, diff: 2 },
+  { name: 'RAIN KING GP', type: 'race', env: 'nightRain', laps: 5, diff: 2 }
+];
+let NT = store.get('sr.nt', null);
+const nightUnlocked = () => economy.has('tesla') || economy.has('ghost') || economy.money >= 150000;
+function updateNightUI() {
+  const t = $('nightTile'), sub = $('nightSub'), lock = $('ntLock'), go = $('ntGo');
+  const ok = nightUnlocked();
+  if (t) t.classList.toggle('locked', !ok);
+  if (sub) sub.textContent = ok ? 'HARD · RAIN · NEON · ×1.8 CASH' : 'LOCKED · OWN TESLA SPARK OR $150,000';
+  if (lock) lock.style.display = ok ? 'none' : '';
+  if (go) go.style.display = ok ? '' : 'none';
+  if (ok) renderNight();
+}
+function renderNight() {
+  const list = $('ntList'); if (!list) return;
+  const r = NT ? NT.round : 0;
+  let h = NCUPS.map((c, i) => `<div class="rr${i === r ? ' me' : ''}"><b>${i + 1}</b><span>${c.name}</span><em>${c.type === 'arena' ? c.dur + 's · drift score' : c.laps + ' laps · HARD'}</em><i>${i < r ? '✔' : ''}</i></div>`).join('');
+  if (NT) h += '<div class="lbl">STANDINGS</div>' + Object.entries(NT.pts).sort((a, b) => b[1] - a[1]).map(([n, p]) => `<div class="rr${n === 'YOU' ? ' me' : ''}"><span>${n}</span><i>${p} pts</i></div>`).join('');
+  list.innerHTML = h;
+  $('ntGo').textContent = NT ? `CONTINUE · ROUND ${r + 1}` : 'ENTER THE NIGHT';
+  $('ntReset').style.display = NT ? '' : 'none';
+}
 const COLORS = [0xeef1f5, 0xd42a2a, 0x1d6fe0, 0xf2b705, 0x22a05a, 0x16181d, 0xff6a00, 0x8a3ffc];
 let cfg = { mode: 'menu', laps: 3, diff: 1, ai: 5, env: 'day' };
 let T = store.get('sr.t', null);
@@ -531,11 +643,13 @@ function resetWorld(c) {
   c = Object.assign({ type: 'race' }, c); cfg = c; TOTAL = c.laps || 1; setEnv(c.env); AIs = AI.slice(0, c.ai);
   const arenaOn = c.type === 'arena';
   trackObjs.forEach(o => { o.visible = !arenaOn; }); arena.group.visible = arenaOn; arena.reset();
+  const nightOn = !arenaOn && c.env === 'nightRain';
+  neonGroup.visible = nightOn; padsNight.forEach(p => { p.visible = nightOn; });
   document.body.classList.toggle('arena', arenaOn && c.mode !== 'menu'); $('paintBar').classList.remove('open');
   let g;
   if (arenaOn) { g = { p: V3(0, 0, -150) }; P.pos.set(0, 0, -150); P.h = 0; P.idx = 0; }
-  else { const slot = c.ai; g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
-  P.vel.set(0, 0, 0); P.spin = 0; P.crosses = 0; P.nitro = 1; P.finished = false; P.rank = c.ai + 1; P.prog = 0;
+  else { const slot = c.ai + (c.netSlot || 0); g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
+  P.vel.set(0, 0, 0); P.spin = 0; P.crosses = 0; P.nitro = 1; P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0;
   AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = (rand(62, 71) - k * 0.4) * DIFF[c.diff] * (0.74 + CS.top / 132 * 0.28); });
   smoke.forEach(o => { o.life = 0; o.s.visible = false; });
   car.flames.forEach(f => { f.visible = false; });
@@ -548,9 +662,12 @@ function resetWorld(c) {
   raceT = 0; shake = 0; lastRank = c.ai + 1; ovCool = 0; goT = 0; prevCrosses = 0; lapStart = 0; bestLap = Infinity; camYaw = P.h;
   camera.position.set(g.p.x - Math.sin(P.h) * 9, g.p.y + 4, g.p.z - Math.cos(P.h) * 9);
 }
+let ncIntroT = 0;
 function startRace(c) {
   show('menu', false); show('pause', false); show('finish', false); if ($('fglobal')) $('fglobal').textContent = '';
+  if (c.mode === 'mp' && c.netSlot === undefined) c.netSlot = net.mySlot;
   resetWorld(c); setupGhost(); setState('count'); cdT = 3; $('cd').textContent = '3'; ['l1', 'l2', 'l3'].forEach(l => $(l).className = ''); $('count').style.display = 'flex';
+  if (c.env === 'nightRain') { const iv = $('ncIntro'); iv.classList.add('show'); clearTimeout(ncIntroT); ncIntroT = setTimeout(() => iv.classList.remove('show'), 2400); }
   if (!actx) initAudio(); if (actx && actx.state === 'suspended') actx.resume();
   if (c.title) toast(c.title, '#7df');
 }
@@ -594,7 +711,7 @@ function pause() {
   prevState = state; setState('paused'); show('pause', true); audioUpdate(-1, false);
 }
 function resume() { if (state !== 'paused') return; show('pause', false); setState(prevState); }
-function retry() { startRace(cfg); }
+function retry() { if (cfg.mode === 'mp') { toast('NO RESTARTS IN ONLINE RACES', '#ffd166'); return; } startRace(cfg); }
 function respawn() {
   if (state !== 'race' || P.finished) return;
   if (cfg.type === 'arena') { P.pos.set(0, 0, -150); P.h = 0; } else { const g = sample(P.idx, 0); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); }
@@ -607,6 +724,7 @@ let lastScreen = 'main';
 const HINTS = {
   main: 'TAP START ENGINE · PICK YOUR MODE',
   quick: 'SET OPTIONS \u00b7 START TO RACE', tour: '5 ROUNDS \u00b7 CHAMPION TAKES THE CROWN',
+  night: 'NIGHT CIRCUIT · RAIN · NEON · ×1.8 CASH', multi: 'CREATE A ROOM · SHARE THE CODE · RACE LIVE',
   arena: 'DRIFT \u00b7 SMASH CONES \u00b7 BEAT THE CLOCK', tt: 'CLEAN LINES SET RECORDS',
   garage: 'CLICK A CAR TO BUY OR SELECT', missions: 'REWARDS PAID INSTANTLY',
   online: 'SET YOUR DRIVER NAME TO APPEAR HERE', settings: 'PROGRESS SAVES AUTOMATICALLY',
@@ -619,6 +737,8 @@ function showScreen(n) {
   if (lastScreen === 'garage' && n !== 'garage') rebuildCar(economy.selected());
   lastScreen = n;
   if (n === 'tour') renderTour();
+  if (n === 'night') { updateNightUI(); }
+  if (n === 'multi') renderMp();
   if (n === 'tt') renderBest();
   if (n === 'arena') renderArBest();
   if (n === 'garage') { renderGarage(); rebuildCar(economy.selected()); }
@@ -672,6 +792,21 @@ function act(a) {
     if (!T) { T = { round: 0, pts: {} }; store.set('sr.t', T); }
     const c = CUPS[T.round]; startRace({ mode: 'tour', type: c.type, laps: c.laps || 1, diff: c.diff, ai: c.type === 'arena' ? 0 : 5, env: c.env, dur: c.dur, title: `ROUND ${T.round + 1}: ${c.name}` });
   }
+  else if (a === 'ntGo' || a === 'ntNext') {
+    if (!nightUnlocked()) { toast('LOCKED · OWN TESLA SPARK OR $150,000', '#ff7b7b'); sfxThud(); return; }
+    if (!NT) { NT = { round: 0, pts: {} }; store.set('sr.nt', NT); }
+    const c = NCUPS[NT.round]; startRace({ mode: 'tour', chapter: 'night', type: c.type, laps: c.laps || 1, diff: c.diff, ai: c.type === 'arena' ? 0 : 5, env: c.env, dur: c.dur, title: `ROUND ${NT.round + 1}: ${c.name}` });
+  }
+  else if (a === 'ntReset') { NT = null; store.set('sr.nt', null); renderNight(); }
+  else if (a === 'nightTile') { if (!nightUnlocked()) { toast('LOCKED · OWN TESLA SPARK OR $150,000', '#ff7b7b'); sfxThud(); } }
+  else if (a === 'mpCreate') { net.create(); }
+  else if (a === 'mpJoin') { net.join($('mpCodeIn').value); }
+  else if (a === 'mpStart') { net.start(); }
+  else if (a === 'mpLeave') { net.leave(); }
+  else if (a === 'mpCopy') {
+    const t = $('mpCode') && $('mpCode').textContent;
+    if (t && navigator.clipboard) navigator.clipboard.writeText(t).then(() => toast('CODE COPIED · SEND IT!', '#8df')).catch(() => { });
+  }
   else if (a === 'tourReset') { T = null; store.set('sr.t', null); renderTour(); }
   else if (a === 'daily') claimDaily();
   else if (a === 'refreshBoard') renderBoard();
@@ -713,11 +848,18 @@ function stepPlayer(dt, racing) {
       else if (FL.on && !FL.land) { FL.land = true; toast('LANDING', '#8df'); }
     }
     if (FL.on && !FL.land && k.down) FL.tgt = Math.max(3, FL.tgt - 22 * dt); /* hold brake to descend */
+    /* Night Circuit: storm gusts make flying dangerous (but ×1.8 flight pay) */
+    if (FL.on && cfg.env === 'nightRain') {
+      const g = performance.now() * 0.001;
+      P.vel.addScaledVector(rt, Math.sin(g * 1.3 + P.pos.x * 0.02) * 7.5 * dt);
+      P.h += Math.sin(g * 0.9 + P.pos.z * 0.013) * 0.1 * dt;
+      FL.tgt = clamp(FL.tgt + Math.sin(g * 0.7) * 2.4 * dt, 3, 42);
+    }
   }
   if (FL.on) {
     if (FL.land) FL.tgt = 0; else FL.tgt = clamp(FL.tgt, 3, 42);
     FL.alt += clamp(FL.tgt - FL.alt, -17 * dt, 11 * dt);
-    P.nitro = Math.max(0, P.nitro - 0.075 * dt); /* thrusters burn nitro */
+    P.nitro = Math.max(0, P.nitro - (cfg.env === 'nightRain' ? 0.095 : 0.075) * dt); /* thrusters burn nitro */
     FL.time += dt;
     if (FL.alt <= 0.35 || P.nitro <= 0.001) { FL.on = false; FL.land = false; FL.alt = 0; document.body.classList.remove('flying'); sfxThud(); shake = Math.max(shake, 0.18); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 1.6); }
   }
@@ -733,7 +875,7 @@ function stepPlayer(dt, racing) {
   }
   P.h += P.spin * dt; P.spin *= Math.exp(-3.5 * dt);
   P.vel.multiplyScalar(Math.exp(-(P.finished ? 0.9 : 0.14) * dt));
-  const grip = FL.on ? 4.5 : (k.drift && can ? CS.drift : 7.5);
+  const grip = FL.on ? 4.5 : (k.drift && can ? CS.drift : 7.5) * (cfg.env === 'nightRain' && !FL.on ? 0.82 : 1); /* rain: less grip, more slide */
   const nf = V3(Math.sin(P.h), 0, Math.cos(P.h)), sp2 = P.vel.length();
   P.vel.lerp(nf.multiplyScalar(fwd >= 0 ? sp2 : -sp2), 1 - Math.exp(-grip * dt));
   const slip = P.vel.dot(V3(-Math.cos(P.h), 0, Math.sin(P.h)));
@@ -772,10 +914,10 @@ function stepPlayer(dt, racing) {
     P.vel.multiplyScalar(1 - 0.5 * dt);
   } else if (ad > W) shake = Math.max(shake, 0.12);
   P.prog = P.crosses * N + best + clamp((rx * t.x + rz * t.z) / ds, -0.5, 0.5);
-  if (can && !FL.on && state === 'race') for (const pd of pads) {
+  if (can && !FL.on && state === 'race') for (const pd of allPads()) {
     const u = pd.userData; if (u.cd > 0) continue;
     const dx = P.pos.x - pd.position.x, dz = P.pos.z - pd.position.z;
-    if (dx * dx + dz * dz < 12.5) { u.cd = 1.2; u.flash = 1; RD.pads++; P.nitro = Math.min(1, P.nitro + 0.3); P.vel.addScaledVector(f, 6); sfxPad(); }
+    if (dx * dx + dz * dz < 12.5) { u.cd = 1.2; u.flash = 1; RD.pads++; P.nitro = Math.min(1, P.nitro + (cfg.env === 'nightRain' ? 0.45 : 0.3)); P.vel.addScaledVector(f, cfg.env === 'nightRain' ? 8.5 : 6); sfxPad(); }
   }
   const nx = (best + 1) % N, fr = clamp((rx * t.x + rz * t.z) / ds, 0, 1);
   y = pts[best].y + (pts[nx].y - pts[best].y) * fr; pitch = -Math.atan2(t.y, Math.hypot(t.x, t.z));
@@ -901,7 +1043,48 @@ function hud(dt, sp, boosting) {
   if (ghostCar && ghostCar.active && ghostCar.group.visible) { const [gx, gy] = mxy(ghostCar.group.position.x, ghostCar.group.position.z); mc.strokeStyle = '#8df'; mc.lineWidth = 3; mc.beginPath(); mc.arc(gx, gy, 8, 0, 7); mc.stroke(); }
 }
 
+/* multiplayer race end: live standings from the room, fixed payout, no boards */
+let mpRefT = 0;
+function finishMp() {
+  P.finished = true; setState('finished');
+  net.onFinish(Math.round(raceT * 1000), P.prog);
+  const rows = [{ name: 'YOU', me: true, uid: net.uid(), tms: Math.round(raceT * 1000), prog: P.prog, fin: true },
+    ...net.players.filter(p => p.uid !== net.uid()).map(p => ({ name: p.name || 'RIVAL', uid: p.uid, tms: p.tms || 0, prog: p.prog || 0, fin: !!p.fin }))]
+    .sort((a, b) => (b.fin - a.fin) || ((a.fin && b.fin) ? a.tms - b.tms : b.prog - a.prog));
+  const place = rows.findIndex(r => r.me) + 1;
+  const pay = [6000, 4000, 2500, 1500, 1000, 800];
+  const cash = Math.round((pay[Math.min(place - 1, pay.length - 1)] || 500) * Math.min(4, Math.max(1, rows.length / 2)));
+  P.mpCash = cash;
+  economy.stats.races++; if (place === 1) economy.stats.wins++;
+  economy.add(cash); economy.saveStats();
+  renderMpResults(rows, place, cash);
+  if (place === 1) { confetti(80); sfxMission(); } else sfxCoin();
+  $('fNext').style.display = 'none'; $('fRetry').style.display = 'none';
+  setTimeout(() => { if (state === 'finished') show('finish', true); }, 1200);
+}
+function renderMpResults(rows, place, cash) {
+  if (state !== 'finished' || cfg.mode !== 'mp') return;
+  $('fh').textContent = place === 1 ? 'ONLINE WINNER!' : `${ord(place)} OF ${rows.length}`;
+  $('fp').textContent = `Room ${net.code}  ·  Time ${fmt(raceT)}`;
+  $('fres').innerHTML = rows.map((r, i) => `<div class="rr${r.me ? ' me' : ''}"><b>${i + 1}</b><span>${esc(r.name)}</span><em>${r.fin ? fmt(r.tms / 1000) : 'RACING…'}</em></div>`).join('');
+  $('fearn').innerHTML = `<div class="lbl">EARNINGS</div><div class="rr"><span>Online race reward</span><em style="color:#7dff8a">+$${cash.toLocaleString()}</em></div><div class="rr me"><span>TOTAL CASH</span><em style="color:#7dff8a">$${economy.money.toLocaleString()}</em></div>`;
+  $('fmis').innerHTML = '';
+}
+/* multiplayer lobby UI */
+function renderMp() {
+  const lobby = $('mpLobby'), home = $('mpHome'), list = $('mpList'), code = $('mpCode'), stat = $('mpStat');
+  if (!lobby || !home) return;
+  if (!net.active) { lobby.classList.add('hide'); home.classList.remove('hide'); return; }
+  home.classList.add('hide'); lobby.classList.remove('hide');
+  if (code) code.textContent = net.code;
+  const rs = net.players.length, host = net.isHost && net.room && net.room.status === 'lobby';
+  if (list) list.innerHTML = net.players.map((p, i) => `<div class="rr${p.uid === net.uid() ? ' me' : ''}"><b>${i + 1}</b><span>${esc(p.name || 'RIVAL')}${p.uid === net.uid() ? ' · YOU' : ''}</span><em>${p.fin ? 'FINISHED' : (net.room && net.room.status === 'racing' ? 'RACING' : 'READY')}</em></div>`).join('') || '<div class="lbl">WAITING FOR DRIVERS…</div>';
+  if (stat) stat.textContent = !net.room ? 'CONNECTING…' : net.room.status === 'racing' ? 'RACE LIVE · FINISH THE LAPS!' : `${rs} DRIVER${rs === 1 ? '' : 'S'} IN LOBBY · ${net.room.laps || 3} LAPS · ${String(net.room.env || 'day').toUpperCase()}`;
+  if ($('mpStart')) $('mpStart').style.display = host ? '' : 'none';
+}
+
 function finishRace() {
+  if (cfg.mode === 'mp') { finishMp(); return; }
   P.finished = true; setState('finished');
   if (FL.on) FL.land = true;
   const arenaOn = cfg.type === 'arena', sc = Math.floor(A.score);
@@ -926,8 +1109,9 @@ function finishRace() {
   } else { cash = Math.round(sc / 2); earnRows.push(['Drift score bonus', cash]); }
   const db = arenaOn ? 0 : Math.round(RD.pts / 10);
   if (db > 0) { cash += db; earnRows.push(['Drift bonus', db]); }
-  const fb = Math.round(FL.time * 100);
-  if (fb > 0) { cash += fb; earnRows.push(['Flight time bonus', fb]); }
+  const fb = Math.round(FL.time * (cfg.env === 'nightRain' ? 180 : 100));
+  if (fb > 0) { cash += fb; earnRows.push(['Flight time bonus' + (cfg.env === 'nightRain' ? ' ×1.8' : ''), fb]); }
+  if (cfg.env === 'nightRain' && cash > 0) { const nb = Math.round(cash * 0.8); cash += nb; earnRows.push(['NIGHT CIRCUIT BONUS ×1.8', nb]); }
   economy.add(cash);
   let misDone = missionEvent('finish', 1);
   if (!arenaOn && place <= 3) misDone = misDone.concat(missionEvent('podium', 1));
@@ -937,6 +1121,11 @@ function finishRace() {
   misDone = misDone.concat(missionEvent('fly', FL.time));
   misDone = misDone.concat(missionEvent('own', economy.ownedCount()));
   misDone = misDone.concat(missionEvent('earn', cash));
+  if (cfg.env === 'nightRain') {
+    misDone = misDone.concat(missionEvent('nightdrift', arenaOn ? sc : Math.floor(RD.pts)));
+    misDone = misDone.concat(missionEvent('nightfly', FL.time));
+    if (!arenaOn && place === 1 && cfg.ai) misDone = misDone.concat(missionEvent('nightwin', 1));
+  }
   economy.saveStats();
   /* ghost save + global board submission (Firebase, silent if offline) */
   const fgl = $('fglobal'); if (fgl) fgl.textContent = '';
@@ -971,16 +1160,21 @@ function finishRace() {
   if (!arenaOn && bestLap < 1e8) sub += `  ·  Best lap ${fmt(bestLap)}`;
   let list = rows.map((r, i) => `<div class="rr${r.me ? ' me' : ''}"><b>${i + 1}</b><span>${r.name}</span>${extra(r)}</div>`).join('');
   let next = false;
-  if (cfg.mode === 'tour' && T) {
-    rows.forEach((r, i) => { r.pts = PTS[i] || 0; T.pts[r.name] = (T.pts[r.name] || 0) + r.pts; });
-    T.round++;
-    list = rows.map((r, i) => `<div class="rr${r.me ? ' me' : ''}"><b>${i + 1}</b><span>${r.name}</span><em>+${r.pts}</em><i>${T.pts[r.name]} pts</i></div>`).join('');
-    if (T.round >= CUPS.length) {
-      const fin = Object.entries(T.pts).sort((a, b) => b[1] - a[1]), fp = fin.findIndex(([n]) => n === 'YOU') + 1;
-      head = fp === 1 ? 'CHAMPION!' : `FINAL: ${ord(fp)}`; sub = 'Tournament complete';
+  const myCups = cfg.chapter === 'night' ? NCUPS : CUPS;
+  let myT = cfg.chapter === 'night' ? NT : T;
+  if (cfg.mode === 'tour' && myT) {
+    rows.forEach((r, i) => { r.pts = PTS[i] || 0; myT.pts[r.name] = (myT.pts[r.name] || 0) + r.pts; });
+    myT.round++;
+    list = rows.map((r, i) => `<div class="rr${r.me ? ' me' : ''}"><b>${i + 1}</b><span>${r.name}</span><em>+${r.pts}</em><i>${myT.pts[r.name]} pts</i></div>`).join('');
+    if (myT.round >= myCups.length) {
+      const fin = Object.entries(myT.pts).sort((a, b) => b[1] - a[1]), fp = fin.findIndex(([n]) => n === 'YOU') + 1;
+      head = fp === 1 ? (cfg.chapter === 'night' ? 'NIGHT KING!' : 'CHAMPION!') : `FINAL: ${ord(fp)}`; sub = cfg.chapter === 'night' ? 'Night Circuit complete · the streets bow to you' : 'Tournament complete';
       list = fin.map(([n, p], i) => `<div class="rr${n === 'YOU' ? ' me' : ''}"><b>${i + 1}</b><span>${n}</span><i>${p} pts</i></div>`).join('');
-      T = null; store.set('sr.t', null);
-    } else { store.set('sr.t', T); next = true; $('fNext').textContent = `NEXT: ${CUPS[T.round].name}`; }
+      if (cfg.chapter === 'night') { NT = null; store.set('sr.nt', null); } else { T = null; store.set('sr.t', null); }
+    } else {
+      if (cfg.chapter === 'night') { NT = myT; store.set('sr.nt', NT); } else { T = myT; store.set('sr.t', T); }
+      next = true; $('fNext').textContent = `NEXT: ${myCups[myT.round].name}`;
+    }
   } else if (cfg.mode !== 'tour') {
     if (arenaOn) {
       const key = `sr.best.arena.${A.dur}`, prev = store.get(key, null);
@@ -1002,6 +1196,7 @@ function finishRace() {
 function updateMoneyUI() {
   const el = $('moneyVal'); if (el) el.textContent = '$' + economy.money.toLocaleString();
   if (lastScreen === 'garage') renderGarage();
+  updateNightUI();
 }
 const statBar = (label, v) => `<div class="bar"><span>${label}</span><i style="--w:${Math.round(clamp(v, 0, 1) * 100)}%"></i></div>`;
 function renderGarage() {
@@ -1198,8 +1393,20 @@ function frameBody(now) {
   }
   smoke.forEach(o => { if (o.life > 0) { o.life -= dt; o.s.position.addScaledVector(o.vel, dt); o.s.scale.addScalar(dt * 3.5); o.s.material.opacity = Math.max(0, o.life / o.max) * 0.4; if (o.life <= 0) o.s.visible = false; } });
   pollPad();
-  pads.forEach(p => { const u = p.userData; if (u.cd > 0) u.cd -= dt; if (u.flash > 0) u.flash -= dt * 1.5; p.material.opacity = 0.55 + Math.sin(performance.now() * 0.004 + u.k) * 0.15 + Math.max(0, u.flash) * 0.4; });
+  pads.concat(padsNight).forEach(p => { const u = p.userData; if (u.cd > 0) u.cd -= dt; if (u.flash > 0) u.flash -= dt * 1.5; p.material.opacity = 0.55 + Math.sin(performance.now() * 0.004 + u.k) * 0.15 + Math.max(0, u.flash) * 0.4; });
   arena.update(dt);
+  updateRain(dt);
+  net.tick(dt, state === 'race', P, raceT, P.finished);
+  if (cfg.mode === 'mp' && state === 'finished') {
+    mpRefT -= dt;
+    if (mpRefT <= 0) {
+      mpRefT = 0.7;
+      const rows = [{ name: 'YOU', me: true, tms: Math.round(raceT * 1000), prog: P.prog, fin: true },
+        ...net.players.filter(p => p.uid !== net.uid()).map(p => ({ name: p.name || 'RIVAL', tms: p.tms || 0, prog: p.prog || 0, fin: !!p.fin }))]
+        .sort((a, b) => (b.fin - a.fin) || ((a.fin && b.fin) ? a.tms - b.tms : b.prog - a.prog));
+      renderMpResults(rows, rows.findIndex(r => r.me) + 1, P.mpCash || 0);
+    }
+  }
   if (state === 'menu') {
     /* showroom camera: slow cinematic orbit with the car framed on the right side of the screen */
     menuT += dt * 0.15;
@@ -1219,6 +1426,15 @@ muted = opt.snd === 'off';
 economy.init(); missionsInit();
 bootCloud();
 if (store.get('sr.glfix', 0)) { store.set('sr.glfix', 0); setTimeout(() => toast('GRAPHICS RECOVERED · GO RACE', '#8df'), 900); }
+net.init({
+  THREE, scene, toast, driverName,
+  mkCar: (id, color) => makeCar(color, carGeo(id), getCar(id).tint || null),
+  carId: () => economy.selected(), carColor: () => curColor,
+  optEnv: () => opt.env, optLaps: () => opt.laps,
+  netGo(room) { startRace({ mode: 'mp', laps: room.laps || 3, env: room.env || 'day', ai: 0, diff: 2, title: `ROOM ${net.code} · ${net.players.length} DRIVERS` }); },
+  inRace: () => state === 'race' || state === 'count' || state === 'finished',
+  onLobby: () => renderMp()
+});
 const swHTML = COLORS.map(c => `<button class="sw" data-c="${c}" style="background:#${c.toString(16).padStart(6, '0')}" aria-label="Paint"></button>`).join('');
 $('swatches').innerHTML = swHTML; $('paintBar').innerHTML = swHTML; $('paintBtn').onclick = () => $('paintBar').classList.toggle('open');
 paintPlayer(store.get('sr.color', COLORS[0]));
