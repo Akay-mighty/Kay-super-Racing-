@@ -7,7 +7,7 @@
 <link rel="icon" type="image/jpeg" href="/logos/logo-blue.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,500;0,700;0,800;1,700;1,800;1,900&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 /* ============ KAY SUPER RACING · V4 SHOWROOM UI ============ */
 :root{
@@ -445,6 +445,105 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
   .mLogo{height:42px}
 }
 @media (max-height:700px){.screen:not(#navMain){max-height:70vh;max-height:70dvh}}
+
+/* ============ V7 · VERTICAL SHOWROOM UI (cards · dock · new type) ============ */
+:root{--fd:'Exo 2','Segoe UI',system-ui,sans-serif;--ft:'Barlow','Segoe UI',system-ui,sans-serif;--hot:#ff2f6d;--hot2:#ff6a3d}
+body{font-family:var(--ft);font-weight:600}
+/* tracking tuned for the wider type */
+.ph p,.lbl,.hrTag,.hrSub,.tile span,.sq b,.bslogan,.bar span,.carCard .tag,.rr em,.mr .rw small,.hints{letter-spacing:.1em}
+.btitle{font-weight:900;letter-spacing:.01em}
+.ph h2{font-weight:900;letter-spacing:.01em;font-size:23px}
+.act{letter-spacing:.06em;font-weight:900}
+
+/* top bar: logo + wallet, minimal */
+#topbar{height:62px;padding:max(6px,env(safe-area-inset-top)) 14px 0}
+#moneyBadge{margin-left:auto;background:linear-gradient(135deg,rgba(19,60,40,.9),rgba(8,20,16,.9));border-color:rgba(60,232,138,.5)}
+#moneyBadge b{font-weight:900;font-size:17px}
+
+/* ---------- HOME ---------- */
+#navMain{justify-content:flex-start;gap:0;padding:0;width:min(560px,100%)}
+.homeScroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:12px;padding:4px 2px 14px;scrollbar-width:none}
+.homeScroll::-webkit-scrollbar{display:none}
+.secLbl{font:800 12px var(--fd);letter-spacing:.22em;color:#9fb0c8;margin:6px 4px -2px;display:flex;align-items:center;gap:10px}
+.secLbl::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.18),transparent)}
+/* hero card, like the CAREER card: big art + coloured label plate */
+.heroRace{flex:none;min-height:clamp(170px,27dvh,250px);padding:0;justify-content:space-between;align-items:stretch;border-radius:22px;border:1px solid rgba(255,255,255,.14);clip-path:none;overflow:hidden;
+  background:
+   linear-gradient(180deg,rgba(0,0,0,0) 35%,rgba(0,0,0,.55)),
+   repeating-linear-gradient(115deg,rgba(255,255,255,.07) 0 2px,transparent 2px 26px),
+   radial-gradient(120% 90% at 85% 10%,#1fa8ff 0%,#0c3f7a 45%,#060b1a 100%);
+  box-shadow:0 18px 44px rgba(0,0,0,.55)}
+.heroRace::before{content:attr(data-ic);position:absolute;right:14px;top:6px;font-size:clamp(74px,22vw,116px);line-height:1;filter:drop-shadow(0 8px 18px rgba(0,0,0,.55));transform:rotate(-8deg)}
+.heroRace::after{width:26%}
+.hrTag{position:relative;margin:14px 0 0 16px;align-self:flex-start;padding:5px 10px;border-radius:8px;background:rgba(0,0,0,.45);font:800 11px var(--fd);letter-spacing:.22em;color:#8be5ff;backdrop-filter:blur(6px)}
+.hrPlate{position:relative;display:flex;flex-direction:column;gap:3px;padding:14px 16px 15px;background:linear-gradient(90deg,var(--hot),var(--hot2));box-shadow:0 -1px 0 rgba(255,255,255,.25) inset}
+.hrBig{font:900 italic clamp(26px,8vw,34px)/1 var(--fd);letter-spacing:.01em;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.35)}
+.hrSub{font:700 11px var(--ft);letter-spacing:.1em;color:rgba(255,255,255,.88)}
+/* mode cards: tall, art on top, label plate at the bottom */
+.tileGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{min-height:clamp(128px,19dvh,168px);padding:0;justify-content:flex-end;align-items:stretch;gap:0;border-radius:20px;border:1px solid rgba(255,255,255,.13);overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.45);
+  background:
+   linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.6)),
+   repeating-linear-gradient(115deg,rgba(255,255,255,.06) 0 2px,transparent 2px 22px),
+   radial-gradient(110% 90% at 80% 0%,color-mix(in srgb,var(--tc) 70%,#000) 0%,#0a1020 78%)}
+.tile::before{content:attr(data-ic);position:absolute;left:auto;top:8px;right:10px;bottom:auto;width:auto;background:none;box-shadow:none;border-radius:0;font-size:46px;line-height:1;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55));transform:rotate(-6deg)}
+.tile::after{content:'';position:absolute;left:0;right:0;bottom:0;top:auto;width:auto;height:4px;background:var(--tc);opacity:1;box-shadow:0 0 14px var(--tc)}
+.tile b{position:relative;display:block;padding:0 12px;font:900 italic 16px/1.1 var(--fd);letter-spacing:.01em;color:#fff}
+.tile span{position:relative;display:block;padding:3px 12px 13px;font:700 10.5px/1.25 var(--ft);letter-spacing:.07em;color:#c3d1e6}
+.tile:hover{transform:none}
+.t-neon{background:
+   linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.6)),
+   repeating-linear-gradient(115deg,rgba(255,255,255,.05) 0 2px,transparent 2px 22px),
+   radial-gradient(110% 90% at 80% 0%,#c21fd0 0%,#2a0d4a 55%,#070a1c 100%);border-color:rgba(45,226,255,.5);box-shadow:0 0 22px rgba(45,226,255,.22),0 12px 30px rgba(0,0,0,.45)}
+.t-neon b{background:none;color:#fff;-webkit-text-fill-color:#fff}
+.tile.locked{filter:grayscale(.8) brightness(.55)}
+/* daily bonus: slim banner (main.js writes plain text into it) */
+.tile.daily{flex:none;min-height:0;padding:14px 16px;justify-content:center;align-items:center;text-align:center;border-radius:16px;font:900 italic 14px/1.2 var(--fd);letter-spacing:.04em;color:#ffe9b3;background:linear-gradient(100deg,rgba(120,84,12,.95),rgba(60,42,10,.8));border-color:rgba(255,194,61,.45);box-shadow:0 10px 26px rgba(0,0,0,.4)}
+.tile.daily::before,.tile.daily::after{display:none}
+.tile.daily:disabled{opacity:.6}
+.tile.daily.pulse{animation:dailyPulse 1.8s ease-in-out infinite}
+@keyframes dailyPulse{50%{box-shadow:0 0 0 3px rgba(255,194,61,.35),0 10px 26px rgba(0,0,0,.4)}}
+
+/* bottom dock (like a game tab bar) */
+.tileRow.dock{flex:none;display:grid;grid-template-columns:repeat(6,1fr);gap:2px;margin:0 -2px;padding:8px 6px max(8px,env(safe-area-inset-bottom));border-radius:22px 22px 0 0;background:linear-gradient(180deg,rgba(16,24,40,.92),rgba(6,9,16,.98));border:1px solid rgba(255,255,255,.1);border-bottom:0;box-shadow:0 -10px 34px rgba(0,0,0,.5);backdrop-filter:blur(18px)}
+.dock .sq{min-height:56px;border:0;border-radius:14px;background:transparent;backdrop-filter:none;gap:3px;padding:6px 0}
+.dock .sq i{font-size:21px;color:#fff;filter:none}
+.dock .sq b{font:800 9px var(--fd);letter-spacing:.06em;color:#aebdd3}
+.dock .sq:active{background:rgba(255,255,255,.1)}
+.dock .sq:hover{filter:none;background:rgba(255,255,255,.06)}
+#botbar{height:0;padding:0;overflow:hidden}
+
+/* ---------- SHEETS ---------- */
+.screen:not(#navMain){border-radius:26px 26px 0 0;margin-bottom:0;padding:10px 16px max(14px,env(safe-area-inset-bottom));max-height:68dvh;width:min(560px,100%)}
+.lbl{font:800 11.5px var(--fd);letter-spacing:.16em}
+.seg button{font:800 13px var(--fd);letter-spacing:.04em}
+/* numbered rows (tournament / night / boards): badge + title + meta */
+.rr{position:relative;gap:12px;padding:12px 14px;margin:7px 0;border-radius:16px;background:linear-gradient(100deg,rgba(24,34,56,.9),rgba(12,18,30,.8));border:1px solid rgba(255,255,255,.1);border-left:1px solid rgba(255,255,255,.1);font:700 15px var(--ft);letter-spacing:.02em}
+.rr b{display:flex;align-items:center;justify-content:center;flex:none;min-width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.08);font:900 italic 16px var(--fd);color:#c3d1e6}
+.rr span{font-weight:800}
+.rr em{font-weight:700;color:#9fb0c8;letter-spacing:.05em}
+.rr i{font-weight:900;color:#7dff8a;min-width:0}
+.rr.me{background:linear-gradient(100deg,rgba(30,150,210,.38),rgba(12,20,34,.85));border-color:rgba(100,230,255,.65);box-shadow:0 0 0 1px rgba(100,230,255,.25),0 8px 22px rgba(30,160,230,.2)}
+.rr.me b{background:var(--cy);color:#02141f}
+.mr{border-radius:16px;border:1px solid rgba(255,255,255,.1);border-left:1px solid rgba(255,255,255,.1);background:linear-gradient(100deg,rgba(24,34,56,.9),rgba(12,18,30,.8))}
+.mr .ic{border-radius:12px}
+.mr .tt b{font:800 14.5px var(--fd);letter-spacing:.02em}
+.mr.done{border-color:rgba(60,232,138,.5)}
+/* garage: big swipe cards, clear stats + button */
+.carCard{flex:0 0 84%;border-radius:24px}
+.carCard .top{font:900 italic 20px var(--fd)}
+.carCard .price{font:900 italic 21px var(--fd)}
+.carCard .desc{font-weight:600}
+.carCard::after{font:900 italic 14px var(--fd);letter-spacing:.04em;border-radius:16px;padding:13px}
+.bar span{font:800 9.5px var(--fd)}
+.bar i{height:6px}
+/* overlays */
+.ovwrap{border-radius:26px}
+.ov h1{font-weight:900}
+#pos,#spd,#ascore,#cd,#toast,#driftHud{font-family:var(--fd)}
+@media (max-width:430px){.hrBig{font-size:27px}.tile b{font-size:15px}}
+@media (max-height:700px){.heroRace{min-height:150px}.tile{min-height:112px}}
+@media (min-width:760px){.homeScroll{padding-bottom:20px}}
 </style>
 </head>
 <body>
@@ -528,26 +627,28 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
   <div id="stage">
     <!-- MAIN DASHBOARD -->
     <div class="screen on" data-s="main" id="navMain">
-      <button class="heroRace" data-go="quick" type="button">
-        <span class="hrTag">READY TO RACE</span>
-        <span class="hrBig">START ENGINE</span>
-        <span class="hrSub">QUICK RACE &middot; PICK LAPS &middot; PICK TIME OF DAY</span>
-      </button>
-      <div class="tileGrid">
-        <button class="tile t-red" data-go="tour" type="button"><b>TOURNAMENT</b><span>5 EVENTS &middot; TAKE THE CROWN</span></button>
-        <button class="tile t-neon" id="nightTile" data-go="night" data-act="nightTile" type="button"><b>NIGHT CIRCUIT</b><span id="nightSub">HARD · RAIN · NEON · ×1.8 CASH</span></button>
-        <button class="tile t-pur" data-go="arena" type="button"><b>DRIFT ARENA</b><span>SLIDE &middot; SMASH &middot; SCORE</span></button>
-        <button class="tile t-cy" data-go="tt" type="button"><b>TIME TRIAL</b><span>SOLO &middot; BEAT YOUR GHOST</span></button>
-        <button class="tile t-grn gold" id="dailyBtn" data-act="daily" type="button"><b>DAILY BONUS</b><span>FREE CASH EVERY DAY</span></button>
+      <div class="homeScroll">
+        <button class="heroRace" data-go="quick" data-ic="&#127937;" type="button">
+          <span class="hrTag">READY TO RACE</span>
+          <span class="hrPlate"><span class="hrBig">START ENGINE</span><span class="hrSub">QUICK RACE &middot; PICK LAPS &middot; PICK TIME OF DAY</span></span>
+        </button>
+        <div class="secLbl">GAME MODES</div>
+        <div class="tileGrid">
+          <button class="tile t-red" data-go="tour" data-ic="&#127942;" type="button"><b>TOURNAMENT</b><span>5 EVENTS &middot; TAKE THE CROWN</span></button>
+          <button class="tile t-neon" id="nightTile" data-go="night" data-act="nightTile" data-ic="&#127747;" type="button"><b>NIGHT CIRCUIT</b><span id="nightSub">HARD · RAIN · NEON · ×1.8 CASH</span></button>
+          <button class="tile t-pur" data-go="arena" data-ic="&#128168;" type="button"><b>DRIFT ARENA</b><span>SLIDE &middot; SMASH &middot; SCORE</span></button>
+          <button class="tile t-cy" data-go="tt" data-ic="&#9201;&#65039;" type="button"><b>TIME TRIAL</b><span>SOLO &middot; BEAT YOUR GHOST</span></button>
+        </div>
+        <button class="tile t-grn gold daily" id="dailyBtn" data-act="daily" type="button">DAILY BONUS</button>
       </div>
-      <div class="tileRow">
-        <button class="sq" data-go="garage" type="button"><i>&#9881;&#65039;</i><b>GARAGE</b></button>
+      <nav class="tileRow dock">
+        <button class="sq" data-go="garage" type="button"><i>&#128663;</i><b>GARAGE</b></button>
         <button class="sq" data-go="missions" type="button"><i>&#127919;</i><b>MISSIONS</b></button>
         <button class="sq" data-go="multi" type="button"><i>&#127760;</i><b>MULTI</b></button>
-        <button class="sq" data-go="online" type="button"><i>&#9741;</i><b>RIVALS</b></button>
+        <button class="sq" data-go="online" type="button"><i>&#128081;</i><b>RIVALS</b></button>
         <button class="sq" data-go="settings" type="button"><i>&#9881;</i><b>SETTINGS</b></button>
         <button class="sq" data-go="how" type="button"><i>?</i><b>HELP</b></button>
-      </div>
+      </nav>
     </div>
     <!-- QUICK RACE -->
     <section class="screen" data-s="quick">
