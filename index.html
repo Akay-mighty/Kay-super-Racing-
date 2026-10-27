@@ -290,6 +290,13 @@ body.nc #driftPts{color:#5ef2ff}
 body.nc #altbar{background:#45f0ff}
 /* multiplayer lobby */
 .mpcode{display:block;width:100%;padding:14px;margin:6px 0;border:1px dashed rgba(45,226,255,.6);border-radius:8px;background:rgba(10,18,36,.7);color:#5df5ff;font:900 italic clamp(28px,7vw,44px)/1 var(--fd);letter-spacing:.35em;text-align:center;cursor:pointer;text-shadow:0 0 18px rgba(45,226,255,.5)}
+/* mp panels: exactly one of home / join-step / lobby is visible at a time */
+#mpHome.hide,#mpJoin.hide,#mpLobby.hide{display:none}
+/* code entry: big tap-friendly neon input (matches gate inputs) */
+#mpCodeIn{display:block;width:100%;padding:14px 12px;margin:10px 0 4px;border-radius:8px;border:1px solid rgba(45,226,255,.55);background:rgba(8,14,26,.92);color:#dff5ff;font:900 26px/1.2 var(--fd);letter-spacing:.4em;text-align:center;text-transform:uppercase;outline:none;box-shadow:inset 0 0 18px rgba(45,226,255,.12)}
+#mpCodeIn::placeholder{color:#33536b;letter-spacing:.4em;font-weight:700}
+#mpCodeIn:focus{border-color:#2de2ff;box-shadow:inset 0 0 18px rgba(45,226,255,.12),0 0 20px rgba(45,226,255,.35)}
+.mpEcho{min-height:30px;margin:2px 0 10px;font:900 italic 24px/1.2 var(--fd);letter-spacing:.4em;text-align:center;color:#2de2ff;text-shadow:0 0 14px rgba(45,226,255,.6)}
 
 /* ============ TOUCH CONTROLS ============ */
 #touch{position:fixed;inset:0;pointer-events:none;z-index:3}
@@ -517,10 +524,15 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
         <div id="mpHome">
           <div class="lbl">CREATE A ROOM AND SHARE THE CODE — OR JOIN A FRIEND</div>
           <button class="act go" data-act="mpCreate" type="button">CREATE ROOM</button>
-          <div class="lbl">JOIN WITH CODE</div>
-          <input id="mpCodeIn" maxlength="5" spellcheck="false" autocomplete="off" autocapitalize="characters" placeholder="e.g. K7X2Q" style="text-transform:uppercase;letter-spacing:.3em;text-align:center;font-weight:900">
-          <button class="act" data-act="mpJoin" type="button">JOIN ROOM</button>
+          <button class="act" data-act="mpJoinOpen" type="button">JOIN ROOM</button>
           <div class="lbl">SIGN IN (SETTINGS) AND STAY CONNECTED TO RACE ONLINE. FRIENDS SEE EACH OTHER LIVE DURING THE RACE — GHOST SYNC, ZERO LAG SPIKES.</div>
+        </div>
+        <div id="mpJoin" class="hide">
+          <div class="lbl">JOIN A FRIEND — ASK THEM FOR THE 5-LETTER ROOM CODE</div>
+          <input id="mpCodeIn" maxlength="5" spellcheck="false" autocomplete="off" autocapitalize="characters" placeholder="K7X2Q" aria-label="Room code">
+          <div id="mpCodeEcho" class="mpEcho">&nbsp;</div>
+          <button class="act go" data-act="mpJoin" type="button">JOIN ROOM</button>
+          <button class="act ghost" data-act="mpJoinBack" type="button">BACK</button>
         </div>
         <div id="mpLobby" class="hide">
           <div class="lbl">ROOM CODE — TAP TO COPY</div>
