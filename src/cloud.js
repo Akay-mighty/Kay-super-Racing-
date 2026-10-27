@@ -53,15 +53,19 @@ export const cloud = {
      preload() warms the SDK and restores any saved session; init() connects
      Firestore for the signed-in account. No account -> local mode. */
   get user() { return S.user; },
+  get redirectErr() { return S.redirectErr || null; },
+  clearRedirectErr() { S.redirectErr = null; },
   get email() { return S.user && !S.user.isAnonymous ? (S.user.email || '') : ''; },
 
   async preload() {
     if (S.app) return S.status;
     try {
-      const [{ initializeApp, getApps }, { getAuth, onAuthStateChanged }] =
+      const [{ initializeApp, getApps }, { getAuth, onAuthStateChanged, getRedirectResult }] =
         await Promise.all([import('firebase/app'), import('firebase/auth')]);
       const app = getApps().length ? getApps()[0] : initializeApp(CFG);
       S.app = app; S.auth = getAuth(app);
+      /* finish a Google sign-in that used the redirect fallback */
+      try { await Promise.race([getRedirectResult(S.auth), new Promise(res => setTimeout(res, 7000))]); } catch (e) { S.redirectErr = e; }
       /* restore any saved session — but never hang here: race a timeout and show the gate anyway */
       await Promise.race([
         new Promise(res => { try { onAuthStateChanged(S.auth, u => { S.user = u; res(); }); } catch (e) { res(); } }),
@@ -97,8 +101,19 @@ export const cloud = {
 
   async google() {
     if (!S.auth) await this.preload();
-    const { signInWithPopup, GoogleAuthProvider } = await import('firebase/auth');
-    return withTimeout(signInWithPopup(S.auth, new GoogleAuthProvider()), 60000);
+    const { signInWithPopup, signInWithRedirect, GoogleAuthProvider } = await import('firebase/auth');
+    const prov = new GoogleAuthProvider(); prov.setCustomParameters({ prompt: 'select_account' });
+    const t0 = Date.now();
+    try { return await withTimeout(signInWithPopup(S.auth, prov), 90000); }
+    catch (e) {
+      const c = (e && e.code) || '', quick = Date.now() - t0 < 2500;
+      /* popup blocked, unsupported, or slammed shut instantly (mobile browsers): use the full-page redirect instead */
+      if (c === 'auth/popup-blocked' || c === 'auth/operation-not-supported-in-this-environment' || ((c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') && quick)) {
+        await signInWithRedirect(S.auth, prov);
+        return new Promise(() => { }); /* the page navigates away */
+      }
+      throw e;
+    }
   },
 
   async signOutAuth() {

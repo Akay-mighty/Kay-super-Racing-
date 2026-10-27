@@ -799,8 +799,8 @@ function act(a) {
   }
   else if (a === 'ntReset') { NT = null; store.set('sr.nt', null); renderNight(); }
   else if (a === 'nightTile') { if (!nightUnlocked()) { toast('LOCKED · OWN TESLA SPARK OR $150,000', '#ff7b7b'); sfxThud(); } }
-  else if (a === 'mpCreate') { net.create(); }
-  else if (a === 'mpJoinOpen') { mpStep = 'join'; const ci = $('mpCodeIn'); if (ci) ci.value = ''; const ec = $('mpCodeEcho'); if (ec) ec.textContent = '\u00a0'; renderMp(); if (ci) setTimeout(() => ci.focus(), 80); }
+  else if (a === 'mpCreate') { if (mpReady()) net.create(); else mpBlocked(); }
+  else if (a === 'mpJoinOpen') { if (!mpReady()) { mpBlocked(); return; } mpStep = 'join'; const ci = $('mpCodeIn'); if (ci) ci.value = ''; const ec = $('mpCodeEcho'); if (ec) ec.textContent = '\u00a0'; renderMp(); if (ci) setTimeout(() => ci.focus(), 80); }
   else if (a === 'mpJoinBack') { mpStep = 'home'; renderMp(); }
   else if (a === 'mpJoin') { net.join($('mpCodeIn').value); }
   else if (a === 'mpStart') { net.start(); }
@@ -813,6 +813,8 @@ function act(a) {
   else if (a === 'daily') claimDaily();
   else if (a === 'refreshBoard') renderBoard();
   else if (a === 'rival') raceRival();
+  else if (a === 'signin') { import('./boot.js').then(m => m.openGate()).catch(() => toast('COULD NOT OPEN SIGN-IN', '#ff6b6b')); }
+  else if (a === 'cloudRetry') { toast('RECONNECTING\u2026', '#8df'); cloud.init().then(() => { updateCloudUI(); cloudSyncIn(); }); }
   else if (a === 'signout') { cloud.signOutAuth().then(() => location.reload()); }
   else if (a === 'resume') resume();
   else if (a === 'glreload') { store.set('sr.glfix', 1); location.reload(); }
@@ -1074,7 +1076,32 @@ function renderMpResults(rows, place, cash) {
 }
 /* multiplayer lobby UI — exactly one panel visible: home / join-step / lobby */
 let mpStep = 'home';
+const mpReady = () => !!(cloud.user && cloud.status === 'online');
+function mpReason() {
+  const st = cloud.status, err = String(cloud.lastErr || '');
+  if (!cloud.user) return { t: 'OFFLINE MODE', s: 'SIGN IN OR CREATE A FREE ACCOUNT TO RACE FRIENDS ONLINE.', b: 'SIGN IN / CREATE ACCOUNT', a: 'signin', c: 'off' };
+  if (st === 'connecting' || st === 'boot') return { t: 'CONNECTING\u2026', s: 'CONTACTING THE RACE SERVER.', b: '', a: '', c: 'wait' };
+  if (st !== 'online') {
+    const s = /permission|denied/i.test(err) ? 'THE SERVER REJECTED THIS ACCOUNT (FIRESTORE RULES). OWNER: PUBLISH firestore.rules IN FIREBASE.'
+      : /unavailable|timeout|network|offline/i.test(err) ? 'CANNOT REACH THE SERVER. CHECK YOUR CONNECTION.'
+      : 'CLOUD IS OFFLINE' + (err ? ' \u00b7 ' + err.slice(0, 40).toUpperCase() : '') + '.';
+    return { t: 'CLOUD OFFLINE', s, b: 'RETRY CONNECTION', a: 'cloudRetry', c: 'off' };
+  }
+  return { t: 'ONLINE \u00b7 ' + driverName(), s: 'CREATE A ROOM AND SHARE THE CODE, OR JOIN A FRIEND.', b: '', a: '', c: 'on' };
+}
+function updateMpGate() {
+  const g = $('mpGate'); if (!g) return; const r = mpReason();
+  g.className = 'mpGate ' + r.c; $('mpGateT').textContent = r.t; $('mpGateS').textContent = r.s;
+  const b = $('mpGateBtn'); b.style.display = r.b ? '' : 'none'; if (r.b) { b.textContent = r.b; b.dataset.act = r.a; }
+  document.querySelectorAll('#mpHome [data-act="mpCreate"], #mpHome [data-act="mpJoinOpen"]').forEach(x => x.classList.toggle('locked', r.c !== 'on'));
+}
+function mpBlocked() {
+  updateMpGate(); const g = $('mpGate');
+  if (g) { g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake'); }
+  toast('MULTIPLAYER NEEDS AN ONLINE ACCOUNT', '#ffd166');
+}
 function renderMp() {
+  updateMpGate();
   const lobby = $('mpLobby'), home = $('mpHome'), join = $('mpJoin');
   if (!lobby || !home || !join) return;
   if (net.active) mpStep = 'home';
@@ -1280,6 +1307,8 @@ function updateCloudUI() {
   const ae = $('acctEmail'); if (ae) ae.textContent = cloud.email ? 'ACCOUNT \u00b7 ' + cloud.email : (st === 'online' ? 'CLOUD \u00b7 ' + driverName() : 'OFFLINE MODE \u00b7 PROGRESS SAVES ON THIS DEVICE');
   const dn = $('dname');
   if (dn && document.activeElement !== dn) dn.value = driverName();
+  const si = $('btnSignIn'), so = $('btnSignOut'); if (si) si.style.display = cloud.email ? 'none' : ''; if (so) so.style.display = cloud.email ? '' : 'none';
+  updateMpGate();
 }
 let pushT = 0;
 function cloudPush() {

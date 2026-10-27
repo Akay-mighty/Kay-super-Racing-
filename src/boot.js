@@ -18,6 +18,12 @@ const AUTH_ERR = {
   'auth/user-not-found': 'NO ACCOUNT WITH THAT EMAIL',
   'auth/wrong-password': 'WRONG PASSWORD',
   'auth/invalid-credential': 'WRONG EMAIL OR PASSWORD',
+  'auth/invalid-login-credentials': 'WRONG EMAIL OR PASSWORD',
+  'auth/configuration-not-found': 'AUTHENTICATION IS NOT SET UP IN FIREBASE CONSOLE',
+  'auth/invalid-api-key': 'INVALID FIREBASE API KEY',
+  'auth/internal-error': 'FIREBASE INTERNAL ERROR · RETRY',
+  'auth/operation-not-supported-in-this-environment': 'THIS BROWSER BLOCKS GOOGLE SIGN-IN · OPEN IN CHROME',
+  'auth/web-storage-unsupported': 'ENABLE COOKIES / SITE DATA FOR THIS SITE',
   'auth/email-already-in-use': 'ACCOUNT EXISTS · USE SIGN IN',
   'auth/weak-password': 'PASSWORD TOO WEAK · 6+ CHARACTERS',
   'auth/too-many-requests': 'TOO MANY TRIES · WAIT A MOMENT',
@@ -28,9 +34,15 @@ const AUTH_ERR = {
   'auth/unauthorized-domain': 'THIS DOMAIN IS NOT ALLOWED · ADD IT IN FIREBASE CONSOLE',
   'auth/operation-not-allowed': 'ENABLE THIS SIGN-IN METHOD IN FIREBASE CONSOLE',
   'auth/admin-restricted-operation': 'SIGN-UPS DISABLED IN FIREBASE CONSOLE',
-  timeout: 'SERVER NOT RESPONDING · TRY OFFLINE MODE'
+  timeout: 'NO RESPONSE FROM FIREBASE · CHECK DATA/WIFI AND RETRY'
 };
-const errText = e => AUTH_ERR[(e && e.code) || ''] || 'SIGN-IN FAILED · CHECK CONNECTION AND RETRY';
+const errCode = e => (e && e.code) || (e && e.message === 'timeout' ? 'timeout' : '');
+const errText = e => {
+  const c = errCode(e);
+  if (c.startsWith('auth/requests-from-referer')) return 'API KEY BLOCKS THIS SITE · ALLOW IT IN GOOGLE CLOUD CONSOLE';
+  return AUTH_ERR[c] || ('SIGN-IN FAILED · ' + String(c || (e && e.message) || 'UNKNOWN').slice(0, 44).toUpperCase());
+};
+const showErr = e => { $('gErr').textContent = e ? errText(e) : ''; const gc = $('gCode'); if (gc) gc.textContent = e ? 'CODE · ' + (errCode(e) || 'none').slice(0, 80) : ''; };
 
 /* ---------- SPLASH ---------- */
 function splash(hooks) {
@@ -62,7 +74,7 @@ function gate(hooks, autoP) {
   return new Promise(resolve => {
     const g = $('gate'), err = $('gErr'), go = $('gGo'), gg = $('gGoogle'), skip = $('gSkip');
     let mode = 'in', left = false;
-    g.classList.remove('hide');
+    g.classList.remove('hide', 'out'); $('gPass').value = ''; showErr(cloud.redirectErr); cloud.clearRedirectErr();
     /* a saved session may land while the card is up — close and enter automatically */
     if (autoP) autoP.then(u => { if (u && !left) finish('auth'); }).catch(() => { });
     const tabs = [...g.querySelectorAll('.gtabs button')];
@@ -71,7 +83,7 @@ function gate(hooks, autoP) {
       tabs.forEach(b => b.classList.toggle('on', b.dataset.t === m));
       go.textContent = m === 'in' ? 'SIGN IN' : 'CREATE ACCOUNT';
       $('gPass').setAttribute('autocomplete', m === 'in' ? 'current-password' : 'new-password');
-      err.textContent = '';
+      showErr(null);
     };
     tabs.forEach(b => b.onclick = () => setMode(b.dataset.t));
     setMode('in');
@@ -79,7 +91,7 @@ function gate(hooks, autoP) {
     const finish = how => {
       if (left) return; left = true;
       g.classList.add('out');
-      setTimeout(() => { g.remove(); resolve(how); }, 420);
+      setTimeout(() => { g.classList.add('hide'); g.classList.remove('out'); resolve(how); }, 420);
     };
     const afterAuth = async email => {
       /* upgrade the default driver name from the account once (custom names are never touched) */
@@ -91,20 +103,20 @@ function gate(hooks, autoP) {
       const email = $('gEmail').value.trim(), pass = $('gPass').value;
       if (!/^\S+@\S+\.\S+$/.test(email)) { err.textContent = 'ENTER A VALID EMAIL'; return; }
       if (pass.length < 6) { err.textContent = 'PASSWORD NEEDS 6+ CHARACTERS'; return; }
-      busy(true); err.textContent = '';
+      busy(true); showErr(null);
       go.textContent = mode === 'in' ? 'SIGNING IN\u2026' : 'CREATING\u2026';
       try {
         if (mode === 'in') await cloud.signIn(email, pass); else await cloud.signUp(email, pass);
         busy(false); await afterAuth(cloud.email || email);
-      } catch (e) { busy(false); setMode(mode); err.textContent = errText(e); }
+      } catch (e) { busy(false); setMode(mode); showErr(e); }
     };
     gg.onclick = async () => {
-      busy(true); err.textContent = '';
+      busy(true); showErr(null);
       try { await cloud.google(); busy(false); await afterAuth(cloud.email); }
-      catch (e) { busy(false); err.textContent = errText(e); }
+      catch (e) { busy(false); showErr(e); }
     };
     skip.onclick = () => finish('skip');
-    [$('gEmail'), $('gPass')].forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') go.click(); }));
+    [$('gEmail'), $('gPass')].forEach(i => { i.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') go.click(); }; });
     setTimeout(() => $('gEmail').focus(), 350);
   });
 }
@@ -127,4 +139,12 @@ export async function bootFlow(hooks) {
     try { await preloadP; await cloud.init(); window.dispatchEvent(new Event('ksr-auth')); } catch (e) { }
   }
   hooks.enter();
+}
+
+/* re-open the account card later (Settings / Multiplayer) */
+export async function openGate() {
+  await Promise.race([cloud.preload().catch(() => { }), new Promise(res => setTimeout(res, 9000))]);
+  const how = await gate({}, null);
+  if (how === 'auth') { try { await cloud.init(); } catch (e) { } window.dispatchEvent(new Event('ksr-auth')); }
+  return how;
 }
