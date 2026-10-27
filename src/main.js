@@ -43,7 +43,7 @@ scene.environmentIntensity = 0.4;
 scene.fog = new THREE.Fog(0xcfe0f0, 260, 1500);
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 1, 2800);
 
-const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, { type: THREE.HalfFloatType, samples: 4 }));
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, { type: THREE.HalfFloatType, samples: mobile ? 0 : 4 }));
 composer.addPass(new RenderPass(scene, camera));
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.4, 0.35, 2.2);
 composer.addPass(bloomPass);
@@ -51,6 +51,32 @@ composer.addPass(new OutputPass());
 addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+});
+
+/* ---------- WebGL context-loss recovery ----------
+   Mobile browsers (Chrome Android) kill the GL context when memory runs low
+   (many tabs / apps, low battery). three.js then silently stops drawing:
+   HUD keeps updating but the 3D canvas goes blank. We detect it, pause the
+   race, show a recovery overlay, and auto-reload if the driver never comes
+   back. We also lower the GPU budget on mobile so the kill is less likely. */
+let glLost = false, glWatch = 0;
+renderer.domElement.addEventListener('webglcontextlost', e => {
+  e.preventDefault();
+  if (glLost) return; glLost = true;
+  if (state === 'race' || state === 'count') pause();
+  show('glFix', true); const t = $('glT'); if (t) t.textContent = '7';
+  let n = 7; clearInterval(glWatch);
+  glWatch = setInterval(() => {
+    if (--n <= 0) { clearInterval(glWatch); store.set('sr.glfix', 1); location.reload(); }
+    else { const t2 = $('glT'); if (t2) t2.textContent = String(n); }
+  }, 1000);
+});
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  if (!glLost) return; glLost = false; clearInterval(glWatch);
+  show('glFix', false);
+  renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight);
+  last = performance.now();
+  toast('GRAPHICS RESTORED', '#8df');
 });
 
 const canvasTex = (w, h, draw, srgb = true) => {
@@ -67,7 +93,7 @@ function drawSky(stops) {
 const sky = new THREE.Mesh(new THREE.SphereGeometry(2500, 24, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, depthWrite: false, map: skyTex }));
 const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAttenuation: false, fog: false, transparent: true, opacity: 0, depthWrite: false });
 {
-  const sp = []; for (let i = 0; i < 600; i++) { const a = rand(0, 6.283), e = rand(0.05, 1.3), r = 2300; sp.push(Math.cos(a) * Math.cos(e) * r, Math.sin(e) * r, Math.sin(a) * Math.cos(e) * r); }
+  const sp = []; for (let i = 0; i < (mobile ? 280 : 600); i++) { const a = rand(0, 6.283), e = rand(0.05, 1.3), r = 2300; sp.push(Math.cos(a) * Math.cos(e) * r, Math.sin(e) * r, Math.sin(a) * Math.cos(e) * r); }
   const stars = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)), starMat); stars.frustumCulled = false; sky.add(stars);
 }
 const sunSpr = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -86,7 +112,7 @@ const cloudTex = canvasTex(128, 64, (g, w, h) => {
   }
 });
 const clouds = [];
-for (let i = 0; i < 46; i++) {
+for (let i = 0; i < (mobile ? 22 : 46); i++) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, fog: false, depthWrite: false, transparent: true, opacity: 0.9 }));
   const a = rand(0, 6.283), r = rand(1000, 2000);
   s.position.set(Math.cos(a) * r, rand(180, 520), Math.sin(a) * r); s.scale.set(rand(380, 700), rand(160, 260), 1);
@@ -96,7 +122,7 @@ const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x607080, 1.1);
 scene.add(hemi);
 const sunOff = V3(120, 200, 80);
 const sun = new THREE.DirectionalLight(0xfff0d8, 2.5);
-sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
+sun.castShadow = true; sun.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
 Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 500 });
 scene.add(sun, sun.target);
 
@@ -492,7 +518,7 @@ const CUPS = [
 const COLORS = [0xeef1f5, 0xd42a2a, 0x1d6fe0, 0xf2b705, 0x22a05a, 0x16181d, 0xff6a00, 0x8a3ffc];
 let cfg = { mode: 'menu', laps: 3, diff: 1, ai: 5, env: 'day' };
 let T = store.get('sr.t', null);
-const opt = Object.assign({ laps: 3, diff: 1, dur: 90, env: 'day', q: 'high', snd: 'on', board: 'race3' }, store.get('sr.opt', {}));
+const opt = Object.assign({ laps: 3, diff: 1, dur: 90, env: 'day', q: mobile ? 'med' : 'high', snd: 'on', board: 'race3' }, store.get('sr.opt', {}));
 const show = (id, on) => $(id).classList.toggle('hide', !on);
 const ord = n => n + ['th', 'st', 'nd', 'rd'][n <= 3 ? n : 0];
 
@@ -652,6 +678,7 @@ function act(a) {
   else if (a === 'rival') raceRival();
   else if (a === 'signout') { cloud.signOutAuth().then(() => location.reload()); }
   else if (a === 'resume') resume();
+  else if (a === 'glreload') { store.set('sr.glfix', 1); location.reload(); }
   else if (a === 'retry') retry();
   else if (a === 'menu') toMenu();
 }
@@ -668,7 +695,7 @@ document.addEventListener('click', e => {
   }
 });
 $('pauseBtn').onclick = pause;
-document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); else last = performance.now(); });
 
 function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
 
@@ -1136,8 +1163,13 @@ async function renderBoard() {
 /* ---------- main loop ---------- */
 const TURBO = location.search.includes('turbo'); /* dev/testing: unclamp dt so game time runs in real time on slow machines */
 let last = performance.now(), fAcc = 0, fN = 0;
+let errT = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  if (glLost) return; /* context dead - three.js would draw nothing anyway */
+  try { frameBody(now); } catch (err) { console.error(err); if (performance.now() - errT > 3000) { errT = performance.now(); toast('ENGINE ERROR · AUTO-RECOVERED', '#ffd166'); } }
+}
+function frameBody(now) {
   const raw = (now - last) / 1000, dt = Math.min(TURBO ? 1 : 0.05, raw); last = now;
   if (state === 'paused') { composer.render(); return; }
   if (state === 'race') {
@@ -1186,6 +1218,7 @@ function frame(now) {
 muted = opt.snd === 'off';
 economy.init(); missionsInit();
 bootCloud();
+if (store.get('sr.glfix', 0)) { store.set('sr.glfix', 0); setTimeout(() => toast('GRAPHICS RECOVERED · GO RACE', '#8df'), 900); }
 const swHTML = COLORS.map(c => `<button class="sw" data-c="${c}" style="background:#${c.toString(16).padStart(6, '0')}" aria-label="Paint"></button>`).join('');
 $('swatches').innerHTML = swHTML; $('paintBar').innerHTML = swHTML; $('paintBtn').onclick = () => $('paintBar').classList.toggle('open');
 paintPlayer(store.get('sr.color', COLORS[0]));
