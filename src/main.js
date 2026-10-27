@@ -800,9 +800,11 @@ function act(a) {
   else if (a === 'ntReset') { NT = null; store.set('sr.nt', null); renderNight(); }
   else if (a === 'nightTile') { if (!nightUnlocked()) { toast('LOCKED · OWN TESLA SPARK OR $150,000', '#ff7b7b'); sfxThud(); } }
   else if (a === 'mpCreate') { net.create(); }
+  else if (a === 'mpJoinOpen') { mpStep = 'join'; const ci = $('mpCodeIn'); if (ci) ci.value = ''; const ec = $('mpCodeEcho'); if (ec) ec.textContent = '\u00a0'; renderMp(); if (ci) setTimeout(() => ci.focus(), 80); }
+  else if (a === 'mpJoinBack') { mpStep = 'home'; renderMp(); }
   else if (a === 'mpJoin') { net.join($('mpCodeIn').value); }
   else if (a === 'mpStart') { net.start(); }
-  else if (a === 'mpLeave') { net.leave(); }
+  else if (a === 'mpLeave') { mpStep = 'home'; net.leave(); }
   else if (a === 'mpCopy') {
     const t = $('mpCode') && $('mpCode').textContent;
     if (t && navigator.clipboard) navigator.clipboard.writeText(t).then(() => toast('CODE COPIED · SEND IT!', '#8df')).catch(() => { });
@@ -1070,12 +1072,17 @@ function renderMpResults(rows, place, cash) {
   $('fearn').innerHTML = `<div class="lbl">EARNINGS</div><div class="rr"><span>Online race reward</span><em style="color:#7dff8a">+$${cash.toLocaleString()}</em></div><div class="rr me"><span>TOTAL CASH</span><em style="color:#7dff8a">$${economy.money.toLocaleString()}</em></div>`;
   $('fmis').innerHTML = '';
 }
-/* multiplayer lobby UI */
+/* multiplayer lobby UI — exactly one panel visible: home / join-step / lobby */
+let mpStep = 'home';
 function renderMp() {
-  const lobby = $('mpLobby'), home = $('mpHome'), list = $('mpList'), code = $('mpCode'), stat = $('mpStat');
-  if (!lobby || !home) return;
-  if (!net.active) { lobby.classList.add('hide'); home.classList.remove('hide'); return; }
-  home.classList.add('hide'); lobby.classList.remove('hide');
+  const lobby = $('mpLobby'), home = $('mpHome'), join = $('mpJoin');
+  if (!lobby || !home || !join) return;
+  if (net.active) mpStep = 'home';
+  home.classList.toggle('hide', net.active || mpStep === 'join');
+  join.classList.toggle('hide', net.active || mpStep !== 'join');
+  lobby.classList.toggle('hide', !net.active);
+  if (!net.active) return;
+  const list = $('mpList'), code = $('mpCode'), stat = $('mpStat');
   if (code) code.textContent = net.code;
   const rs = net.players.length, host = net.isHost && net.room && net.room.status === 'lobby';
   if (list) list.innerHTML = net.players.map((p, i) => `<div class="rr${p.uid === net.uid() ? ' me' : ''}"><b>${i + 1}</b><span>${esc(p.name || 'RIVAL')}${p.uid === net.uid() ? ' · YOU' : ''}</span><em>${p.fin ? 'FINISHED' : (net.room && net.room.status === 'racing' ? 'RACING' : 'READY')}</em></div>`).join('') || '<div class="lbl">WAITING FOR DRIVERS…</div>';
@@ -1435,6 +1442,14 @@ net.init({
   inRace: () => state === 'race' || state === 'count' || state === 'finished',
   onLobby: () => renderMp()
 });
+const mpIn = $('mpCodeIn');
+if (mpIn) {
+  mpIn.addEventListener('input', () => {
+    mpIn.value = mpIn.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 5);
+    const ec = $('mpCodeEcho'); if (ec) ec.textContent = mpIn.value || '\u00a0';
+  });
+  mpIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); act('mpJoin'); } });
+}
 const swHTML = COLORS.map(c => `<button class="sw" data-c="${c}" style="background:#${c.toString(16).padStart(6, '0')}" aria-label="Paint"></button>`).join('');
 $('swatches').innerHTML = swHTML; $('paintBar').innerHTML = swHTML; $('paintBtn').onclick = () => $('paintBar').classList.toggle('open');
 paintPlayer(store.get('sr.color', COLORS[0]));

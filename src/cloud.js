@@ -16,7 +16,24 @@ const CFG = {
 
 const S = { on: false, status: 'boot', listeners: [], db: null, lastErr: '', app: null, auth: null, user: null };
 const setStatus = s => { S.status = s; S.listeners.forEach(cb => { try { cb(s); } catch (e) { } }); };
-const emitErr = e => { S.lastErr = (e && e.code) || String(e); setStatus('offline'); };
+let healT = 0, healN = 0;
+const emitErr = e => { S.lastErr = (e && e.code) || String(e); setStatus('offline'); heal(); };
+/* self-healing: one flaky write/read must NOT kill the whole session (live
+   multiplayer streams every 400ms). Any failure -> quiet re-probe until
+   Firestore answers again, then the badge and multiplayer come back online. */
+function heal() {
+  if (healT || !S.db || !S._fns) return;
+  clearTimeout(healT);
+  healT = setTimeout(async () => {
+    healT = 0;
+    if (!S.db || S.status === 'online' || S.status === 'connecting') return;
+    try {
+      const { doc, getDoc } = S._fns;
+      await getDoc(doc(S.db, 'boards', 'probe'));
+      S.on = true; healN = 0; setStatus('online');
+    } catch (e) { if (++healN < 60) heal(); }
+  }, Math.min(4000 + healN * 4000, 16000));
+}
 
 /* all public calls go through guard(): any failure flips the badge offline
    and resolves to the fallback value so gameplay never breaks */
@@ -57,13 +74,25 @@ export const cloud = {
   async signUp(email, pw) {
     if (!S.auth) await this.preload();
     const { createUserWithEmailAndPassword } = await import('firebase/auth');
-    return withTimeout(createUserWithEmailAndPassword(S.auth, String(email).trim(), pw), 14000);
+    try {
+      return await withTimeout(createUserWithEmailAndPassword(S.auth, String(email).trim(), pw), 14000);
+    } catch (e) {
+      /* some devices finish the network call but stall the SDK promise —
+         if the session actually landed, treat it as success */
+      if (e && (e.message === 'timeout' || e.code === undefined) && S.auth.currentUser) return { user: S.auth.currentUser };
+      throw e;
+    }
   },
 
   async signIn(email, pw) {
     if (!S.auth) await this.preload();
     const { signInWithEmailAndPassword } = await import('firebase/auth');
-    return withTimeout(signInWithEmailAndPassword(S.auth, String(email).trim(), pw), 14000);
+    try {
+      return await withTimeout(signInWithEmailAndPassword(S.auth, String(email).trim(), pw), 14000);
+    } catch (e) {
+      if (e && (e.message === 'timeout' || e.code === undefined) && S.auth.currentUser) return { user: S.auth.currentUser };
+      throw e;
+    }
   },
 
   async google() {
@@ -92,7 +121,7 @@ export const cloud = {
       let probe = null;
       try { probe = await withTimeout(getDoc(doc(S.db, 'boards', 'probe')), 8000); } catch (e) { S.lastErr = (e && e.code) || String(e); }
       if (probe !== null) { S.on = true; setStatus('online'); }
-      else { setStatus('offline'); }
+      else { setStatus('offline'); heal(); } /* slow first connect — heal() keeps probing in the background */
     } catch (e) { emitErr(e); }
     return S.status;
   },
@@ -191,7 +220,7 @@ export const cloud = {
   async roomCreate(code, data) {
     return guard(async () => {
       const { doc, setDoc, serverTimestamp } = S._fns;
-      await withTimeout(setDoc(doc(S.db, 'rooms', code), { ...data, updated: serverTimestamp() }), 9000);
+      await withTimeout(setDoc(doc(S.db, 'rooms', code), { ...data, updated: serverTimestamp() }), 12000);
       return true;
     }, false);
   },
@@ -207,7 +236,7 @@ export const cloud = {
   async roomPlayerSet(code, uid, data) {
     return guard(async () => {
       const { doc, setDoc, serverTimestamp } = S._fns;
-      await withTimeout(setDoc(doc(S.db, 'rooms', code, 'p', uid), { ...data, at: serverTimestamp() }, { merge: true }), 8000);
+      await withTimeout(setDoc(doc(S.db, 'rooms', code, 'p', uid), { ...data, at: serverTimestamp() }, { merge: true }), 10000);
       return true;
     }, false);
   },
