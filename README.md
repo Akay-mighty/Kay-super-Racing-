@@ -73,14 +73,25 @@ npm run build    # production build in dist/
 ## ☁ Firebase setup (one time)
 The Firebase project **kay-super-racing** is configured in `src/cloud.js` and `public/admin.html`.
 
-1. **Authentication → Sign-in method**: enable **Anonymous** (players) and **Email/Password** (owner only).
+1. **Authentication → Sign-in method**: enable **Email/Password** (players + owner) and
+   **Google** (one-click sign-in for players). Anonymous is no longer used by the game.
 2. **Authentication → Users → Add user**: create the owner account yourself
    (`admin@kayracing.com` + a long, unique password). The admin page never creates accounts.
 3. Copy that user's **User UID**. Paste it in two places:
    `ADMIN_UID` in `public/admin.html` and `PASTE_OWNER_UID_HERE` in `firestore.rules`.
 4. **Firestore Database → Rules**: paste the contents of `firestore.rules` and **Publish**
    (test it first in the *Rules Playground*). Do not leave the database in test mode.
-5. Redeploy. The HUD badge shows **CLOUD ONLINE** when connected.
+5. **Authentication → Settings → Authorized domains**: make sure your production domain
+   (e.g. `y-super-racing.vercel.app`) is listed, or Google sign-in will refuse it.
+6. Redeploy. The HUD badge shows **CLOUD ONLINE** when connected.
+
+## 👤 Player accounts (V5)
+On first launch the game plays the animated **KSR logo splash**, then asks the player to
+**Sign in / Create account (email + password) / Continue with Google**. Progress (cash, cars,
+missions) syncs to the signed-in player's driver name, so switching devices keeps everything.
+A *Skip · play offline* link keeps the game fully playable without an account (local save only).
+Players can switch identity in **Settings → Sign out**. Driver name still defaults from the
+email prefix once, and can be changed in Settings.
 
 > This is a client-side game, so Firestore rules are the real security boundary. Rules stop outsiders from
 > touching the grants log or admin-only actions and reject absurd values, but they cannot prove a score or
