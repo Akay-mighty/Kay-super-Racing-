@@ -20,7 +20,20 @@ canvas{display:block}
 #nit{position:absolute;left:0;right:0;top:108px;text-align:center;font-size:14px;color:#6df}
 #mm{left:16px;bottom:16px;width:170px;height:170px;border-radius:10px;background:rgba(10,14,22,.5)}
 #toast{top:15%;left:0;right:0;text-align:center;font-size:30px;color:#7dff8a;opacity:0;transition:opacity .3s}
-#count{top:50%;left:50%;transform:translate(-50%,-70%);width:120px;height:120px;border-radius:50%;background:rgba(0,0,0,.7);border:4px solid #fff;display:none;align-items:center;justify-content:center;font-size:68px}
+#count{top:50%;left:50%;transform:translate(-50%,-70%);border-radius:16px;background:rgba(0,0,0,.72);border:4px solid #fff;padding:16px 26px 12px;display:none;flex-direction:column;align-items:center;gap:8px}
+#count .lamps{display:flex;gap:12px}
+#count .lamps i{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.14);border:2px solid rgba(255,255,255,.25)}
+#count .lamps i.r{background:#e33;border-color:#f88}
+#count .lamps i.g{background:#2e6;border-color:#8f8}
+#cd{font-size:56px;line-height:1}
+#altwrap{right:18px;bottom:190px;width:14px;height:170px;border-radius:8px;background:rgba(10,14,22,.55);border:2px solid rgba(255,255,255,.3);display:none;overflow:hidden}
+#altbar{position:absolute;left:0;right:0;bottom:0;height:0%;background:linear-gradient(0deg,#3cf,#aef);border-radius:6px}
+#altlab{position:absolute;left:0;right:0;top:-24px;text-align:center;font-size:12px;color:#8df;letter-spacing:.1em}
+body.flying #altwrap{display:block}
+#driftHud{top:24%;left:0;right:0;text-align:center;font-size:26px;color:#ffb347;opacity:0;transition:opacity .2s}
+#driftHud small{display:block;font-size:14px;color:#fff;opacity:.85}
+#moneyBadge{position:fixed;top:14px;right:14px;z-index:6;display:none;align-items:center;gap:8px;background:rgba(10,14,22,.65);border:1px solid rgba(127,223,138,.4);border-radius:8px;padding:8px 14px;font:800 italic 18px 'Segoe UI',system-ui,sans-serif;color:#7dff8a}
+body.menu #moneyBadge{display:flex}
 .ov{position:fixed;inset:0;background:rgba(5,8,14,.82);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;z-index:5}
 .ov h1{font-size:clamp(36px,8vw,84px);font-style:italic;letter-spacing:.04em;background:linear-gradient(90deg,#fff,#5cf);-webkit-background-clip:text;color:transparent}
 .ov p{opacity:.8;line-height:1.7;max-width:520px;padding:0 16px}
@@ -35,6 +48,10 @@ canvas{display:block}
 .mb{display:block;width:min(86vw,340px);padding:14px 0;margin:5px 0;font:800 italic 19px 'Segoe UI',system-ui,sans-serif;color:#fff;background:rgba(255,255,255,.1);border:0;border-left:5px solid #456;border-radius:4px;letter-spacing:.1em;cursor:pointer}
 .mb:not(.sec){background:linear-gradient(90deg,#0b6d93,#1599bd);border-left-color:#7df}
 .mb.go{background:linear-gradient(90deg,#0a8f5a,#18b97a);border-left-color:#7fe8b8;margin-top:12px}
+.mb.gold{background:linear-gradient(90deg,#b8860b,#e8b800);border-left-color:#ffe28a;position:relative}
+.mb.gold.pulse{animation:goldPulse 1.2s ease-in-out infinite}
+@keyframes goldPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.35)}}
+.mb:disabled{opacity:.45;cursor:default}
 .mb:active{filter:brightness(1.25)}
 .lbl{font-size:12px;letter-spacing:.2em;opacity:.75;margin-top:12px;font-weight:700}
 .seg,.row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;max-width:340px}
@@ -49,7 +66,7 @@ canvas{display:block}
 #finish h1,#pause h1{margin-bottom:4px}
 #fres{margin:6px 0 10px}
 #pauseBtn{position:fixed;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(10,14,22,.55);color:#fff;font:900 16px 'Segoe UI',system-ui,sans-serif;letter-spacing:2px;z-index:4;cursor:pointer}
-body.menu #ainfo,body.menu #paintBtn,body.menu #paintBar,body.done #paintBar,body.done #paintBtn,body.menu #info,body.menu #mm,body.menu #speedo,body.menu #touch,body.menu #pauseBtn,body.menu #fx,body.menu #toast,body.menu #count,body.done #touch,body.done #pauseBtn{display:none!important}
+body.menu #ainfo,body.menu #paintBtn,body.menu #paintBar,body.done #paintBar,body.done #paintBtn,body.menu #info,body.menu #mm,body.menu #speedo,body.menu #touch,body.menu #pauseBtn,body.menu #fx,body.menu #toast,body.menu #count,body.menu #driftHud,body.done #touch,body.done #pauseBtn{display:none!important}
 #touch{position:fixed;inset:0;pointer-events:none;z-index:3}
 #touch[hidden]{display:none}
 #stick{position:absolute;left:max(20px,env(safe-area-inset-left));bottom:max(26px,env(safe-area-inset-bottom));width:150px;height:150px;border-radius:50%;background:rgba(10,14,22,.45);border:2px solid rgba(255,255,255,.35);pointer-events:auto;touch-action:none}
@@ -61,14 +78,17 @@ body.menu #ainfo,body.menu #paintBtn,body.menu #paintBar,body.done #paintBar,bod
 #bBoost{right:max(20px,env(safe-area-inset-right));bottom:max(30px,env(safe-area-inset-bottom));width:100px;height:100px;font-size:17px;border-color:#6df}
 #bBrake{right:calc(max(20px,env(safe-area-inset-right)) + 112px);bottom:max(30px,env(safe-area-inset-bottom));width:74px;height:74px}
 #bDrift{right:max(30px,env(safe-area-inset-right));bottom:calc(max(30px,env(safe-area-inset-bottom)) + 112px);width:74px;height:74px}
+#bFly{right:calc(max(20px,env(safe-area-inset-right)) + 112px);bottom:calc(max(30px,env(safe-area-inset-bottom)) + 112px);width:64px;height:64px;font-size:13px;border-color:#8df;display:none}
+body.canfly #bFly{display:flex}
 .tk{display:none}
 body.touch .kb{display:none}
 body.touch .tk{display:block}
 body.touch #info{transform:scale(.72);transform-origin:top left;top:max(10px,env(safe-area-inset-top));left:12px}
 body.touch #mm{left:auto;bottom:auto;right:12px;top:max(10px,env(safe-area-inset-top));width:100px;height:100px}
 body.touch #speedo{transform:scale(.7);transform-origin:top right;right:12px;bottom:auto;top:calc(max(10px,env(safe-area-inset-top)) + 108px)}
+body.touch #altwrap{transform:scale(.7);transform-origin:top right;right:calc(max(10px,env(safe-area-inset-right)) + 78px);bottom:auto;top:calc(max(10px,env(safe-area-inset-top)) + 108px)}
 body.touch #toast{font-size:22px;top:22%}
-body.touch #count{width:96px;height:96px;font-size:54px}
+body.touch #count{transform:translate(-50%,-70%) scale(.85)}
 #ainfo{display:none;top:16px;left:16px;background:rgba(10,14,22,.55);border-left:4px solid #ffb347;padding:8px 16px;border-radius:4px;min-width:170px}
 body.arena #ainfo{display:block}body.arena #info,body.arena #mm{display:none}
 #ascore{font-size:38px;line-height:1}#acombo{font-size:14px;letter-spacing:.1em;color:#ffb347;margin:2px 0}#atime{font-size:15px;letter-spacing:.08em}
@@ -78,6 +98,40 @@ body.arena #paintBtn{display:flex}
 #paintBar.open{display:flex}#paintBar .sw{width:30px;height:30px;border-width:2px}
 body.touch #ainfo{transform:scale(.72);transform-origin:top left;top:max(10px,env(safe-area-inset-top));left:12px}
 body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
+/* garage / shop */
+#moneyBadge b{font-style:italic}
+.carCard{width:min(86vw,380px);background:rgba(255,255,255,.06);border-left:5px solid #456;border-radius:6px;margin:4px 0;padding:10px 14px;text-align:left;cursor:pointer}
+.carCard:hover{background:rgba(255,255,255,.11)}
+.carCard.sel{border-left-color:#3cf;background:rgba(51,204,255,.16)}
+.carCard.locked{border-left-color:#e33}
+.carCard .top{display:flex;align-items:center;gap:8px;font:800 italic 17px 'Segoe UI',system-ui,sans-serif}
+.carCard .tag{font-size:10px;letter-spacing:.12em;background:#18a;border-radius:4px;padding:2px 6px}
+.carCard .tag.fly{background:#7a3cff}
+.carCard .tag.own{background:#0a8f5a}
+.carCard .tag.sel{background:#e8b800;color:#012}
+.carCard .price{margin-left:auto;color:#7dff8a}
+.carCard .price.no{color:#ff7b7b}
+.carCard .price.own{color:#8fd}
+.carCard .desc{font-size:12px;opacity:.75;margin:3px 0 6px;font-style:normal}
+.bars{display:flex;gap:10px}
+.bar{flex:1}
+.bar span{font-size:9px;letter-spacing:.15em;opacity:.7;display:block}
+.bar i{display:block;height:6px;border-radius:3px;background:rgba(255,255,255,.14);position:relative;overflow:hidden}
+.bar i::after{content:'';position:absolute;left:0;top:0;bottom:0;width:var(--w);border-radius:3px;background:linear-gradient(90deg,#3cf,#8df)}
+/* mission rows */
+.mr{width:min(86vw,380px);display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.07);border-radius:6px;padding:8px 12px;margin:3px 0;text-align:left}
+.mr .ic{width:34px;height:34px;border-radius:50%;background:#18a;display:flex;align-items:center;justify-content:center;font-style:normal;font-size:16px;flex:none}
+.mr.done .ic{background:#0a8f5a}
+.mr .tt{flex:1}
+.mr .tt b{font:800 italic 15px 'Segoe UI',system-ui,sans-serif;display:block}
+.mr .tt small{font-size:11px;opacity:.75;font-style:normal}
+.mr .rw{text-align:right;font:800 italic 14px 'Segoe UI',system-ui,sans-serif;color:#7dff8a;flex:none}
+.mr .rw small{display:block;color:#8fd;font-size:10px;letter-spacing:.1em}
+.mr .rw.done{color:#e8b800}
+/* confetti */
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:9;overflow:hidden}
+.cf{position:absolute;top:-20px;width:10px;height:16px;opacity:.95;animation:cfFall linear forwards}
+@keyframes cfFall{to{transform:translateY(115vh) rotate(720deg);opacity:.7}}
 </style>
 </head>
 <body>
@@ -88,14 +142,19 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
   <svg viewBox="0 0 156 156"><circle cx="78" cy="78" r="70" fill="rgba(10,14,22,.6)"/><circle cx="78" cy="78" r="62" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="7"/><circle id="ring" cx="78" cy="78" r="62" fill="none" stroke="#3cf" stroke-width="7" stroke-linecap="round" stroke-dasharray="389.6" stroke-dashoffset="389.6" transform="rotate(-90 78 78)"/></svg>
   <div id="spd">0</div><div id="kmh">KM/H</div><div id="nit">NITRO 100%</div>
 </div>
+<div id="altwrap" class="hud"><div id="altlab">ALT</div><div id="altbar"></div></div>
+<div id="driftHud" class="hud"><span id="driftPts">DRIFT 0</span><small id="driftMult">x1</small></div>
+<div id="moneyBadge" class="hud"><b id="moneyVal">0</b></div>
 <section id="touch" hidden aria-label="Touch controls">
   <div id="stick"><span id="knob"></span></div>
   <button class="tb" id="bBrake" data-a="down" type="button">BRAKE</button>
   <button class="tb" id="bDrift" data-a="drift" type="button">DRIFT</button>
   <button class="tb" id="bBoost" data-a="boost" type="button">NITRO</button>
+  <button class="tb" id="bFly" data-a="fly" type="button">FLY</button>
 </section>
 <div id="toast" class="hud">OVERTAKE</div>
-<div id="count" class="hud">3</div>
+<div id="count" class="hud"><div class="lamps"><i id="l1"></i><i id="l2"></i><i id="l3"></i></div><span id="cd">3</span></div>
+<div id="confetti"></div>
 
 <div id="ainfo" class="hud"><div id="ascore">0</div><div id="acombo">DRIFT TO SCORE</div><div id="atime">0:00.00</div></div>
 <button id="paintBtn" type="button" aria-label="Paint">&#127912;</button>
@@ -110,7 +169,9 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
       <button class="mb" data-go="tour">TOURNAMENT</button>
       <button class="mb" data-go="arena">DRIFT ARENA</button>
       <button class="mb" data-go="tt">TIME TRIAL</button>
-      <button class="mb sec" data-go="garage">GARAGE</button>
+      <button class="mb" data-go="garage">GARAGE &amp; CAR SHOP</button>
+      <button class="mb" data-go="missions">MISSIONS &amp; REWARDS</button>
+      <button class="mb gold" id="dailyBtn" data-act="daily">DAILY BONUS</button>
       <button class="mb sec" data-go="settings">SETTINGS</button>
       <button class="mb sec" data-go="how">HOW TO PLAY</button>
     </div>
@@ -143,16 +204,25 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
       <button class="mb sec" data-go="main">BACK</button>
     </div>
     <div class="screen" data-s="garage">
+      <div class="lbl">CAR SHOP · EARN CASH IN RACES &amp; MISSIONS</div>
+      <div id="carList"></div>
       <div class="lbl">PAINT</div><div class="row" id="swatches"></div>
       <button class="mb go" data-go="main">DONE</button>
+    </div>
+    <div class="screen" data-s="missions">
+      <div class="lbl">COMPLETE MISSIONS · EARN CASH</div>
+      <div id="misList"></div>
+      <div id="misStat" class="lbl"></div>
+      <button class="mb go" data-go="main">BACK</button>
     </div>
     <div class="screen" data-s="settings">
       <div class="lbl">SOUND</div><div class="seg" data-k="snd"><button data-v="on">ON</button><button data-v="off">OFF</button></div>
       <div class="lbl">GRAPHICS</div><div class="seg" data-k="q"><button data-v="high">HIGH</button><button data-v="med">MEDIUM</button><button data-v="low">LOW</button></div>
+      <button class="mb sec" data-act="admin">ADMIN PANEL</button>
       <button class="mb go" data-go="main">DONE</button>
     </div>
     <div class="screen" data-s="how">
-      <p class="how"><span class="kb"><b>W</b>/<b>↑</b> gas · <b>S</b>/<b>↓</b> brake · <b>A D</b>/<b>← →</b> steer<br><b>Shift</b> nitro · <b>Space</b> drift · <b>Esc</b> pause · <b>R</b> restart · <b>T</b> respawn<br></span><span class="tk">Drag the left stick to steer. You accelerate automatically.<br>NITRO boosts, DRIFT slides, BRAKE slows.<br></span>Overtake rivals to refill nitro. Drift to charge it.</p>
+      <p class="how"><span class="kb"><b>W</b>/<b>↑</b> gas · <b>S</b>/<b>↓</b> brake · <b>A D</b>/<b>← →</b> steer<br><b>Shift</b> nitro · <b>Space</b> drift · <b>F</b> take off / land · <b>C</b> camera<br><b>Esc</b> pause · <b>R</b> restart · <b>T</b> respawn<br></span><span class="tk">Drag the left stick to steer. You accelerate automatically.<br>NITRO boosts, DRIFT slides, BRAKE slows, FLY takes off.<br></span>Overtake rivals to refill nitro. Drift to charge it. Flying cars drain nitro while airborne. Hit glowing pads for instant nitro. Gamepad supported.</p>
       <button class="mb go" data-go="main">BACK</button>
     </div>
   </div>
@@ -162,7 +232,7 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
   <button class="mb go" data-act="resume">RESUME</button><button class="mb sec" data-act="retry">RESTART</button><button class="mb sec" data-act="menu">QUIT TO MENU</button>
 </div>
 
-<div id="finish" class="ov hide"><h1 id="fh">FINISH</h1><p id="fp"></p><div id="fres"></div>
+<div id="finish" class="ov hide"><h1 id="fh">FINISH</h1><p id="fp"></p><div id="fres"></div><div id="fearn"></div><div id="fmis"></div>
   <button class="mb go" id="fNext" data-act="next">NEXT RACE</button><button class="mb sec" id="fRetry" data-act="retry">RETRY</button><button class="mb sec" data-act="menu">MAIN MENU</button>
 </div>
 <script type="module" src="/src/main.js"></script>

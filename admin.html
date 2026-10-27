@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kay Super Racing — Admin</title>
+<style>
+*{box-sizing:border-box;margin:0}
+body{min-height:100vh;background:#070a10;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{width:min(94vw,460px);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:26px}
+h1{font:900 italic 26px/1.2 'Segoe UI',system-ui,sans-serif;background:linear-gradient(90deg,#fff,#5cf);-webkit-background-clip:text;color:transparent;margin-bottom:4px}
+.sub{font-size:12px;letter-spacing:.2em;opacity:.6;margin-bottom:18px}
+label{display:block;font-size:11px;letter-spacing:.15em;opacity:.7;margin:14px 0 6px;font-weight:700}
+input{width:100%;padding:12px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;font:600 16px 'Segoe UI',system-ui,sans-serif;outline:none}
+input:focus{border-color:#3cf}
+button{width:100%;padding:13px;margin-top:10px;border:0;border-radius:8px;font:800 italic 16px 'Segoe UI',system-ui,sans-serif;letter-spacing:.08em;color:#fff;cursor:pointer;background:linear-gradient(90deg,#0b6d93,#1599bd)}
+button.gold{background:linear-gradient(90deg,#b8860b,#e8b800);color:#111}
+button.red{background:linear-gradient(90deg,#8f1d1d,#c0392b)}
+button.ghost{background:rgba(255,255,255,.1)}
+.row{display:flex;gap:8px}
+.row button{margin-top:10px}
+#msg{text-align:center;font-weight:700;margin-top:12px;min-height:20px}
+.money{font:900 italic 34px 'Segoe UI',system-ui,sans-serif;color:#7dff8a;text-align:center;margin:8px 0}
+.hidden{display:none}
+.back{display:block;text-align:center;margin-top:14px;font-size:13px;opacity:.6;color:#8df;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <!-- Change the admin password here: -->
+  <div id="gate">
+    <h1>ADMIN PANEL</h1>
+    <div class="sub">KAY SUPER RACING · OWNER TOOLS</div>
+    <label>ADMIN PASSWORD</label>
+    <input id="pw" type="password" placeholder="Enter password">
+    <button onclick="tryLogin()">UNLOCK</button>
+    <div id="msg"></div>
+  </div>
+
+  <div id="panel" class="hidden">
+    <h1>ADMIN PANEL</h1>
+    <div class="sub">KAY SUPER RACING · OWNER TOOLS</div>
+    <label>CURRENT CASH</label>
+    <div class="money" id="cur">$0</div>
+    <label>ADD CASH (AMOUNT)</label>
+    <input id="amt" type="number" min="0" step="1000" value="100000">
+    <div class="row">
+      <button class="gold" onclick="addCash()">ADD CASH</button>
+      <button class="ghost" onclick="setCash()">SET EXACT</button>
+    </div>
+    <div class="row">
+      <button class="ghost" onclick="quick(10000)">+10K</button>
+      <button class="ghost" onclick="quick(100000)">+100K</button>
+      <button class="ghost" onclick="quick(1000000)">+1M</button>
+    </div>
+    <label>OTHER TOOLS</label>
+    <button onclick="unlockAll()">UNLOCK ALL CARS</button>
+    <button class="red" onclick="resetAll()">RESET ALL GAME PROGRESS</button>
+    <div id="msg2"></div>
+    <a class="back" href="/">← BACK TO GAME</a>
+  </div>
+</div>
+
+<script>
+/* ====== CHANGE YOUR ADMIN PASSWORD HERE ====== */
+const ADMIN_PASSWORD = 'KAY2025';
+
+const read = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
+const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+const money = () => read('ksr.money', 5000);
+const say = t => { document.getElementById('msg').textContent = t; document.getElementById('msg2').textContent = t; setTimeout(() => { document.getElementById('msg').textContent = ''; document.getElementById('msg2').textContent = ''; }, 2500); };
+
+function tryLogin() {
+  const v = document.getElementById('pw').value;
+  if (v === ADMIN_PASSWORD) {
+    document.getElementById('gate').classList.add('hidden');
+    document.getElementById('panel').classList.remove('hidden');
+    refresh();
+  } else say('WRONG PASSWORD');
+}
+document.getElementById('pw').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
+
+function refresh() { document.getElementById('cur').textContent = '$' + money().toLocaleString(); }
+function addCash() {
+  const a = Math.max(0, parseInt(document.getElementById('amt').value || '0', 10));
+  write('ksr.money', money() + a);
+  const s = read('ksr.stats', { earned: 0, races: 0, wins: 0 }); s.earned += a; write('ksr.stats', s);
+  refresh(); say('ADDED $' + a.toLocaleString());
+}
+function setCash() {
+  const a = Math.max(0, parseInt(document.getElementById('amt').value || '0', 10));
+  write('ksr.money', a); refresh(); say('SET TO $' + a.toLocaleString());
+}
+function quick(a) { write('ksr.money', money() + a); refresh(); say('ADDED $' + a.toLocaleString()); }
+function unlockAll() {
+  const ids = ['cruiser', 'cab', 'titan', 'blaze', 'nova', 'tesla', 'phantom', 'ghost'];
+  const owned = [...new Set([...(read('ksr.owned', ['cruiser']) || []), ...ids])];
+  write('ksr.owned', owned); say('ALL CARS UNLOCKED');
+}
+function resetAll() {
+  if (!confirm('Wipe ALL progress (cash, cars, missions)?')) return;
+  ['ksr.money', 'ksr.owned', 'ksr.sel', 'ksr.missions', 'ksr.daily', 'ksr.stats'].forEach(k => localStorage.removeItem(k));
+  refresh(); say('PROGRESS RESET');
+}
+refresh();
+</script>
+</body>
+</html>
