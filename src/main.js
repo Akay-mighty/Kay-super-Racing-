@@ -12,6 +12,9 @@ import { createArena } from './arena.js';
 import { CARS, getCar, carGeo, tintPart } from './cars-data.js';
 import { economy } from './economy.js';
 import { missionsInit, missionEvent, missionState, missionsCompleted, MISSIONS } from './missions.js';
+import { cloud } from './cloud.js';
+import { GhostRec, makeGhostCar } from './ghost.js';
+import { colorize } from './carcolor.js';
 
 const $ = id => document.getElementById(id);
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -272,22 +275,7 @@ const arena = createArena(canvasTex);
 scene.add(arena.group, camera);
 /* ---------- cars ---------- */
 const SPORT_GEO = buildCarGeometry(SPORT);
-const PART = { 1: '#0e1a26', 2: '#09090b', 3: '#c9ced6', 4: '#16191e', 6: '#222222', 7: '#101114', 8: '#101114' };
 const carMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, metalness: 0.45, roughness: 0.3, clearcoat: 0.6, clearcoatRoughness: 0.12 });
-function colorize(geo, color) {
-  const pid = geo.attributes.partId.array, pos = geo.attributes.position.array;
-  let at = geo.attributes.color; if (!at) { at = new THREE.BufferAttribute(new Float32Array(pid.length * 3), 3); geo.setAttribute('color', at); }
-  const paint = new THREE.Color(color), tmp = new THREE.Color(), lum = paint.r * 0.3 + paint.g * 0.6 + paint.b * 0.1;
-  const stripe = new THREE.Color(lum > 0.45 ? 0xd42a2a : 0xf2f2f2);
-  for (let i = 0; i < pid.length; i++) {
-    const id = pid[i], x = Math.abs(pos[i * 3]), y = pos[i * 3 + 1];
-    let c;
-    if (id === 0 || id === 5) c = id === 0 && ((x < 0.17 && y > 0.55) || (x > 0.9 && y > 0.42 && y < 0.5)) ? stripe : paint;
-    else c = tmp.set(PART[id] || '#111');
-    at.array[i * 3] = c.r; at.array[i * 3 + 1] = c.g; at.array[i * 3 + 2] = c.b;
-  }
-  at.needsUpdate = true;
-}
 function makeCar(color, specGeo = SPORT_GEO, tint = null) {
   const g = new THREE.Group(), geo = specGeo.clone();
   colorize(geo, color);
@@ -350,6 +338,9 @@ const P = { spin: 0, pos: V3(), vel: V3(), h: 0, idx: 0, crosses: 0, nitro: 1, p
 /* flight (Tesla Spark / Ghost X) + race drift scoring */
 const FL = { on: false, alt: 0, tgt: 0, land: false, time: 0 };
 const RD = { pts: 0, hold: 0, comboT: 0, mult: 1, maxMult: 1, pads: 0 };
+/* ghost recorder (your best runs) + replay car (local ghost or downloaded rival) */
+const GR = new GhostRec();
+let ghostCar = null;
 /* AI */
 const AI_IDS = ['cruiser', 'titan', 'cab', 'blaze', 'nova'];
 const AI = [0xc0222a, 0x1b1d22, 0x2b6cb0, 0xe5b800, 0x2f9e5b].map((c, k) => ({
@@ -500,7 +491,7 @@ const CUPS = [
 const COLORS = [0xeef1f5, 0xd42a2a, 0x1d6fe0, 0xf2b705, 0x22a05a, 0x16181d, 0xff6a00, 0x8a3ffc];
 let cfg = { mode: 'menu', laps: 3, diff: 1, ai: 5, env: 'day' };
 let T = store.get('sr.t', null);
-const opt = Object.assign({ laps: 3, diff: 1, dur: 90, env: 'day', q: 'high', snd: 'on' }, store.get('sr.opt', {}));
+const opt = Object.assign({ laps: 3, diff: 1, dur: 90, env: 'day', q: 'high', snd: 'on', board: 'race3' }, store.get('sr.opt', {}));
 const show = (id, on) => $(id).classList.toggle('hide', !on);
 const ord = n => n + ['th', 'st', 'nd', 'rd'][n <= 3 ? n : 0];
 
@@ -524,14 +515,15 @@ function resetWorld(c) {
   Object.assign(A, { score: 0, comboT: 0, hold: 0, mult: 1, maxMult: 1, cones: 0, dur: c.dur || 90, t: c.dur || 90, hit: 0 });
   Object.assign(FL, { on: false, alt: 0, tgt: 0, land: false, time: 0 }); document.body.classList.remove('flying');
   Object.assign(RD, { pts: 0, hold: 0, comboT: 0, mult: 1, maxMult: 1, pads: 0 });
+  GR.reset();
   pads.forEach(p => { p.userData.cd = 0; p.userData.flash = 0; });
   resetSkids();
   raceT = 0; shake = 0; lastRank = c.ai + 1; ovCool = 0; goT = 0; prevCrosses = 0; lapStart = 0; bestLap = Infinity; camYaw = P.h;
   camera.position.set(g.p.x - Math.sin(P.h) * 9, g.p.y + 4, g.p.z - Math.cos(P.h) * 9);
 }
 function startRace(c) {
-  show('menu', false); show('pause', false); show('finish', false);
-  resetWorld(c); setState('count'); cdT = 3; $('cd').textContent = '3'; ['l1', 'l2', 'l3'].forEach(l => $(l).className = ''); $('count').style.display = 'flex';
+  show('menu', false); show('pause', false); show('finish', false); if ($('fglobal')) $('fglobal').textContent = '';
+  resetWorld(c); setupGhost(); setState('count'); cdT = 3; $('cd').textContent = '3'; ['l1', 'l2', 'l3'].forEach(l => $(l).className = ''); $('count').style.display = 'flex';
   if (!actx) initAudio(); if (actx && actx.state === 'suspended') actx.resume();
   if (c.title) toast(c.title, '#7df');
 }
@@ -564,6 +556,7 @@ function showScreen(n) {
   if (n === 'arena') renderArBest();
   if (n === 'garage') { renderGarage(); rebuildCar(economy.selected()); }
   if (n === 'missions') renderMissions();
+  if (n === 'online') renderBoard();
   if (n === 'main') renderDaily();
   if (n === 'quick' || n === 'tt' || n === 'arena') setEnv(opt.env);
 }
@@ -598,6 +591,8 @@ function act(a) {
   }
   else if (a === 'tourReset') { T = null; store.set('sr.t', null); renderTour(); }
   else if (a === 'daily') claimDaily();
+  else if (a === 'refreshBoard') renderBoard();
+  else if (a === 'rival') raceRival();
   else if (a === 'admin') window.open('admin.html', '_blank');
   else if (a === 'resume') resume();
   else if (a === 'retry') retry();
@@ -611,7 +606,7 @@ document.addEventListener('click', e => {
   else if (b.dataset.c) paintPlayer(+b.dataset.c);
   else if (b.dataset.v !== undefined && b.parentElement.classList.contains('seg')) {
     const k = b.parentElement.dataset.k; opt[k] = (k === 'laps' || k === 'diff' || k === 'dur') ? +b.dataset.v : b.dataset.v; store.set('sr.opt', opt); syncSegs();
-    if (k === 'env') setEnv(opt.env); if (k === 'laps') renderBest(); if (k === 'dur') renderArBest(); if (k === 'q') applyQuality(); if (k === 'snd') muted = opt.snd === 'off';
+    if (k === 'env') setEnv(opt.env); if (k === 'laps') renderBest(); if (k === 'dur') renderArBest(); if (k === 'q') applyQuality(); if (k === 'snd') muted = opt.snd === 'off'; if (k === 'board') renderBoard();
   }
 });
 $('pauseBtn').onclick = pause;
@@ -818,6 +813,7 @@ function hud(dt, sp, boosting) {
   mc.clearRect(0, 0, mm.width, mm.height); mc.drawImage(mmBase, 0, 0);
   AIs.forEach(a => { const [x, y] = mxy(a.mesh.position.x, a.mesh.position.z); mc.fillStyle = a.css; mc.beginPath(); mc.arc(x, y, 8, 0, 7); mc.fill(); mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke(); });
   const [px, py] = mxy(P.pos.x, P.pos.z); mc.fillStyle = '#fff'; mc.beginPath(); mc.arc(px, py, 10, 0, 7); mc.fill(); mc.strokeStyle = '#3cf'; mc.lineWidth = 4; mc.stroke();
+  if (ghostCar && ghostCar.active && ghostCar.group.visible) { const [gx, gy] = mxy(ghostCar.group.position.x, ghostCar.group.position.z); mc.strokeStyle = '#8df'; mc.lineWidth = 3; mc.beginPath(); mc.arc(gx, gy, 8, 0, 7); mc.stroke(); }
 }
 
 function finishRace() {
@@ -857,6 +853,33 @@ function finishRace() {
   misDone = misDone.concat(missionEvent('own', economy.ownedCount()));
   misDone = misDone.concat(missionEvent('earn', cash));
   economy.saveStats();
+  /* ghost save + global board submission (Firebase, silent if offline) */
+  const fgl = $('fglobal'); if (fgl) fgl.textContent = '';
+  if (!arenaOn && cfg.mode !== 'tour' && !cfg.ai) {
+    const key = `sr.best.${cfg.mode}.${cfg.laps}`, prev = store.get(key, null), isBest = prev === null || raceT < prev;
+    if (isBest) {
+      const flat = GR.finish();
+      if (flat) store.set(`sr.ghost.${cfg.mode}.${cfg.laps}`, flat);
+      if (cloud.status === 'online' && flat) {
+        const cat = `${cfg.mode}${cfg.laps}`;
+        if (fgl) fgl.textContent = '\u2601 SUBMITTING TO GLOBAL BOARD\u2026';
+        cloud.uploadGhost(cat, driverName(), economy.selected(), curColor, flat).then(id => {
+          cloud.submitScore(cat, { name: driverName(), car: economy.selected(), val: Math.round(raceT * 1000), ghostId: id }, true).then(ok => {
+            if (fgl) fgl.textContent = ok ? '\u2601 GLOBAL BEST SUBMITTED \u2014 THE WORLD CAN RACE YOUR GHOST!' : '';
+            if (ok) toast('GLOBAL TIME SUBMITTED \u2601', '#8df');
+          });
+        });
+      }
+    }
+  } else if (arenaOn && cfg.mode !== 'tour') {
+    const prevA = store.get(`sr.best.arena.${A.dur}`, null);
+    if (prevA === null || sc > prevA) {
+      if (fgl) fgl.textContent = '\u2601 SUBMITTING TO GLOBAL BOARD\u2026';
+      cloud.submitScore(`arena${A.dur}`, { name: driverName(), car: economy.selected(), val: sc }, false).then(ok => {
+        if (fgl) fgl.textContent = ok ? '\u2601 GLOBAL SCORE SUBMITTED!' : '';
+      });
+    }
+  }
   const extra = r => (r.val !== undefined ? `<em>${r.val.toLocaleString()}</em>` : '');
   let head = arenaOn ? (place === 1 ? 'DRIFT KING!' : `${ord(place)} PLACE`) : (!cfg.ai ? 'FINISHED' : place === 1 ? 'YOU WIN!' : `${ord(place)} PLACE`);
   let sub = arenaOn ? `Score ${sc.toLocaleString()}  ·  Best combo x${A.maxMult}  ·  Cones ${A.cones}` : `Time ${fmt(raceT)}`;
@@ -956,6 +979,98 @@ function confetti(n = 90) {
   }
 }
 
+/* ---------- cloud (Firebase): badge, profile sync, global boards, rival ghosts ---------- */
+const esc = s => String(s == null ? '' : s).replace(/[<>&"]/g, '');
+const carName = id => { const c = getCar(id); return c ? c.name : 'CAR'; };
+const driverName = () => cloud.name(store.get('sr.name', 'KAY'));
+let boardCache = {};
+function updateCloudUI() {
+  const st = cloud.status, b = $('cloudBadge');
+  if (b) { b.className = 'hud ' + (st === 'online' ? 'on' : st === 'connecting' ? 'wait' : 'off'); $('cloudTxt').textContent = 'CLOUD ' + (st === 'online' ? 'ONLINE' : st === 'connecting' ? '\u2026' : 'OFFLINE'); }
+  const os = $('cloudStat'); if (os) os.textContent = st === 'online' ? '\u2601 CONNECTED AS ' + driverName() : st === 'connecting' ? 'CLOUD: CONNECTING\u2026' : 'CLOUD OFFLINE \u00b7 LOCAL PROGRESS ONLY';
+  const dn = $('dname');
+  if (dn && document.activeElement !== dn) dn.value = driverName();
+}
+let pushT = 0;
+function cloudPush() {
+  if (cloud.status !== 'online') return;
+  clearTimeout(pushT);
+  pushT = setTimeout(() => cloud.pushProfile(driverName(), { money: economy.money, owned: economy.owned, sel: economy.sel, stats: economy.stats, missions: economy.getMissions(), daily: economy.getDaily() }), 2500);
+}
+async function cloudSyncIn() {
+  if (cloud.status !== 'online') return;
+  const remote = await cloud.pullProfile(driverName());
+  if (!remote) { cloudPush(); return; }
+  let merged = false;
+  if ((remote.money || 0) > economy.money) { economy.setMoney(remote.money); merged = true; }
+  const newCars = (remote.owned || []).filter(id => !economy.has(id));
+  if (newCars.length) { economy.unlockAll(newCars); merged = true; }
+  const s = remote.stats || {};
+  ['earned', 'races', 'wins'].forEach(k => { if ((s[k] || 0) > economy.stats[k]) { economy.stats[k] = s[k]; merged = true; } });
+  const rm = remote.missions || {};
+  if (Object.keys(rm).length) {
+    const cur = economy.getMissions() || {};
+    for (const id in rm) {
+      const a = cur[id] || { p: 0, done: false }, b = rm[id] || {};
+      if ((b.p || 0) > (a.p || 0) || (b.done && !a.done)) { cur[id] = { p: Math.max(a.p || 0, b.p || 0), done: !!(a.done || b.done) }; merged = true; }
+    }
+    economy.setMissions(cur); missionsInit();
+  }
+  const rd = remote.daily;
+  if (rd && rd.last && !(economy.getDaily() && economy.getDaily().last >= rd.last)) { economy.setDaily(rd); merged = true; }
+  if (merged) { economy.save(); updateMoneyUI(); toast('CLOUD: PROGRESS RESTORED \u2601', '#8df'); }
+  cloudPush();
+}
+function bootCloud() {
+  cloud.onStatus(updateCloudUI);
+  updateCloudUI();
+  cloud.init().then(() => { updateCloudUI(); cloudSyncIn(); });
+  window.addEventListener('ksr-money', cloudPush);
+  const dn = $('dname');
+  if (dn) dn.addEventListener('change', () => { store.set('sr.name', cloud.name(dn.value || 'KAY')); updateCloudUI(); toast('DRIVER: ' + driverName(), '#8df'); cloudSyncIn(); });
+  const mb = $('moneyBadge');
+  if (mb) mb.addEventListener('click', () => { if (cloud.status === 'online') { toast('SYNCING CLOUD\u2026', '#8df'); cloudSyncIn(); } });
+}
+/* ghost replay for the current race: cfg.ghost (rival download) or local best */
+function setupGhost() {
+  if (ghostCar && ghostCar.group.parent) scene.remove(ghostCar.group);
+  ghostCar = null;
+  if (cfg.type === 'arena') return;
+  const rival = cfg.ghost, local = !rival && cfg.mode === 'tt' ? store.get(`sr.ghost.tt.${cfg.laps}`, null) : null;
+  const flat = rival || local;
+  if (flat && flat.length >= 10) {
+    const id = cfg.ghostCar || economy.selected();
+    ghostCar = makeGhostCar(id, cfg.ghostColor || 0x66ddff, getCar(id).tint || null, cfg.ghostName || 'MY GHOST');
+    ghostCar.set(flat);
+  }
+}
+/* online rivals */
+async function raceRival() {
+  const top = (boardCache[opt.board] || [])[0];
+  if (!top || !top.ghostId) return;
+  toast('FETCHING RIVAL GHOST\u2026', '#8df');
+  const g = await cloud.fetchGhost(top.ghostId);
+  if (!g || !g.flat || g.flat.length < 10) { toast('GHOST UNAVAILABLE', '#ff7b7b'); return; }
+  const laps = opt.board === 'race3' ? 3 : opt.board.startsWith('tt') ? Math.max(1, +opt.board.slice(2) || 3) : 3;
+  startRace({ mode: 'tt', laps, diff: 1, ai: 0, env: opt.env, ghost: g.flat, ghostCar: g.car || 'cruiser', ghostColor: g.color || 0x66ddff, ghostName: 'RIVAL ' + (g.name || top.name || '?'), title: `VS ${g.name || top.name || 'GHOST'}` });
+}
+async function renderBoard() {
+  updateCloudUI();
+  const cat = opt.board, list = $('boardList'); if (!list) return;
+  list.innerHTML = '<div class="lbl">LOADING\u2026</div>';
+  const entries = await cloud.fetchBoard(cat);
+  if (entries === null) { list.innerHTML = '<div class="lbl">CLOUD OFFLINE \u00b7 NO GLOBAL BOARD</div>'; $('rivalGo').style.display = 'none'; return; }
+  boardCache[cat] = entries;
+  if (!entries.length) list.innerHTML = '<div class="lbl">NO TIMES YET \u00b7 BE THE FIRST!</div>';
+  else {
+    const isTime = !cat.startsWith('arena'), mine = driverName();
+    list.innerHTML = entries.slice(0, 12).map((e, i) =>
+      `<div class="rr${e.name === mine ? ' me' : ''}"><b>${i + 1}</b><span>${esc(e.name)}${e.ghostId ? ' \u{1F47B}' : ''}</span><em>${esc(carName(e.car))}</em><i>${isTime ? fmt((e.val || 0) / 1000) : Math.round(e.val || 0).toLocaleString()}</i></div>`).join('');
+  }
+  const top = entries[0];
+  $('rivalGo').style.display = top && top.ghostId ? '' : 'none';
+}
+
 /* ---------- main loop ---------- */
 const TURBO = location.search.includes('turbo'); /* dev/testing: unclamp dt so game time runs in real time on slow machines */
 let last = performance.now(), fAcc = 0, fN = 0;
@@ -977,6 +1092,8 @@ function frame(now) {
   if (state === 'race') raceT += dt;
   const out = stepPlayer(dt, racing);
   stepAI(dt, racing);
+  if (state === 'race' && !P.finished && cfg.type !== 'arena') GR.tick(raceT, car.position, P.h);
+  if (ghostCar && ghostCar.active) ghostCar.update(scene, raceT);
   if (state === 'race' && cfg.type === 'arena') { A.t -= dt; if (A.t <= 0 && !P.finished) { A.t = 0; finishRace(); } }
   if (state === 'race' && cfg.type !== 'arena') {
     if (P.crosses !== prevCrosses) {
@@ -1002,6 +1119,7 @@ function frame(now) {
 /* boot */
 muted = opt.snd === 'off';
 economy.init(); missionsInit();
+bootCloud();
 const swHTML = COLORS.map(c => `<button class="sw" data-c="${c}" style="background:#${c.toString(16).padStart(6, '0')}" aria-label="Paint"></button>`).join('');
 $('swatches').innerHTML = swHTML; $('paintBar').innerHTML = swHTML; $('paintBtn').onclick = () => $('paintBar').classList.toggle('open');
 paintPlayer(store.get('sr.color', COLORS[0]));
