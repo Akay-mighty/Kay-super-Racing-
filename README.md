@@ -70,46 +70,27 @@ npm run dev      # http://localhost:5173
 npm run build    # production build in dist/
 ```
 
-## ☁ Firebase setup (one time, ~3 minutes)
-The Firebase project **kay-super-racing** is already configured in `src/cloud.js`
-and `admin.html`. To make the online features live:
+## ☁ Firebase setup (one time)
+The Firebase project **kay-super-racing** is configured in `src/cloud.js` and `public/admin.html`.
 
-1. **Authentication** → *Get started* → enable **Email/Password** (used by the admin
-   panel; the owner account is auto-created on first admin login) and optionally
-   **Anonymous** (used as a light auth for players).
-2. **Firestore Database** → *Create database* → start in **test mode**.
-3. Deploy / open the game. The HUD badge shows **CLOUD ONLINE** when connected.
+1. **Authentication → Sign-in method**: enable **Anonymous** (players) and **Email/Password** (owner only).
+2. **Authentication → Users → Add user**: create the owner account yourself
+   (`admin@kayracing.com` + a long, unique password). The admin page never creates accounts.
+3. Copy that user's **User UID**. Paste it in two places:
+   `ADMIN_UID` in `public/admin.html` and `PASTE_OWNER_UID_HERE` in `firestore.rules`.
+4. **Firestore Database → Rules**: paste the contents of `firestore.rules` and **Publish**
+   (test it first in the *Rules Playground*). Do not leave the database in test mode.
+5. Redeploy. The HUD badge shows **CLOUD ONLINE** when connected.
 
-Suggested rules once you want to lock things down (Firestore → Rules):
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /players/{name}  { allow read, write: if true; }  // tighten later: request.auth != null
-    match /boards/{cat}    { allow read, write: if true; }
-    match /ghosts/{id}     { allow read, write: if true; }
-    match /grants/{id}     { allow read: if true; write: if true; }
-  }
-}
-```
-> Note: this is a client-side game, so Firestore rules are the real security boundary.
-> Test-mode rules are fine to launch; before marketing the game, tighten them and
-> change the admin password in the Firebase console (Authentication → Users → reset).
+> This is a client-side game, so Firestore rules are the real security boundary. Rules stop outsiders from
+> touching the grants log or admin-only actions and reject absurd values, but they cannot prove a score or
+> cash amount is honest. Player profiles are keyed by driver name (that is what makes cross-device sync work),
+> so a determined player can still edit another driver's profile. Fixing that needs real accounts or a server.
 
 ## Admin panel
-Open **`/admin.html`** (e.g. `https://your-site.vercel.app/admin.html`).
-
-- **Cloud mode** — sign in with the owner account (**admin@kayracing.com** /
-  your admin password). The account is created automatically the first time if it
-  doesn't exist. Then: load any player by Driver Name → add/set cash (+10K/+100K/+1M
-  quick buttons), unlock all cars, or reset that player. Includes a **Top Players**
-  list (by cash) — click a row to load that player. Every grant is logged to the
-  `grants` collection.
-- **Local mode** — if Firebase is unreachable, a fallback password gate lets you edit
-  the current browser's offline save only.
-
-Players receive granted cash the next time they launch the game with cloud connected
-(or instantly via clicking their cash badge → sync).
+Not linked from the game. Open **`/admin.html`** directly and sign in with the owner account.
+To remove it from the public site entirely, delete `public/admin.html`.
+Load a player by driver name, add/set cash, unlock all cars or reset them. Every grant is logged to `grants`.
 
 ## Tech
 - three.js 0.170 (procedural lofted car bodies, city, track, arena — zero model assets)

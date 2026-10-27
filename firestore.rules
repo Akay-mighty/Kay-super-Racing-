@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1) Firebase console -> Authentication -> Users -> copy the owner's "User UID" and paste it here
+    //    (and into ADMIN_UID in public/admin.html).
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == 'PASTE_OWNER_UID_HERE';
+    }
+    // Players are signed in anonymously by the game (Authentication -> Sign-in method -> Anonymous must be ON).
+    function signedIn() { return request.auth != null; }
+
+    // Cloud profiles, keyed by driver name (A-Z 0-9 _ -, max 12 chars).
+    match /players/{name} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() || (
+        signedIn()
+        && name.matches('^[A-Z0-9_-]{1,12}$')
+        && request.resource.data.get('name', name) == name
+        && request.resource.data.get('money', 0) is number
+        && request.resource.data.get('money', 0) >= 0
+        && request.resource.data.get('money', 0) <= 50000000
+        && request.resource.data.get('owned', []) is list
+        && request.resource.data.get('owned', []).size() <= 20
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Leaderboards: one document per board, at most 20 entries.
+    match /boards/{cat} {
+      allow read: if signedIn();
+      allow create, update: if isAdmin() || (
+        signedIn()
+        && request.resource.data.get('entries', []) is list
+        && request.resource.data.get('entries', []).size() <= 20
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Ghost runs: anyone signed in can add one (size-limited); nobody but the owner can change or delete.
+    match /ghosts/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.name is string
+        && request.resource.data.name.matches('^[A-Z0-9_-]{1,12}$')
+        && request.resource.data.flat is list
+        && request.resource.data.flat.size() <= 20000;
+      allow update, delete: if isAdmin();
+    }
+
+    // Admin cash-grant log: owner only.
+    match /grants/{id} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
