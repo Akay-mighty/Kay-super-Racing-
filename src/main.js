@@ -741,7 +741,7 @@ function showScreen(n) {
   if (n === 'multi') renderMp();
   if (n === 'tt') renderBest();
   if (n === 'arena') renderArBest();
-  if (n === 'garage') { renderGarage(); rebuildCar(economy.selected()); }
+  if (n === 'garage') { previewId = null; renderGarage(); rebuildCar(economy.selected()); }
   if (n === 'missions') renderMissions();
   if (n === 'online') renderBoard();
   if (n === 'main') renderDaily();
@@ -1234,23 +1234,29 @@ function updateMoneyUI() {
   updateNightUI();
 }
 const statBar = (label, v) => `<div class="bar"><span>${label}</span><i style="--w:${Math.round(clamp(v, 0, 1) * 100)}%"></i></div>`;
+let previewId = null;
 function renderGarage() {
   const list = $('carList'); if (!list) return;
+  const keep = list.scrollLeft;
   list.innerHTML = CARS.map(c => {
     const owned = economy.has(c.id), sel = economy.selected() === c.id, afford = economy.money >= c.price;
     const tags = [c.stats.fly ? '<span class="tag fly">FLYING \u2708</span>' : '', owned ? '<span class="tag own">OWNED</span>' : (c.tag && !(c.stats.fly && /FLYING/i.test(c.tag)) ? `<span class="tag">${c.tag}</span>` : ''), sel ? '<span class="tag sel">SELECTED</span>' : ''].join(' ');
     const price = owned ? (sel ? 'SELECTED' : 'OWNED') : '$' + c.price.toLocaleString();
-    return `<div class="carCard${sel ? ' sel' : ''}${!owned && !afford ? ' locked' : ''}" data-car="${c.id}">
+    const cta = sel ? 'SELECTED' : owned ? 'TAP TO SELECT' : (previewId === c.id ? (afford ? 'TAP AGAIN TO BUY $' + c.price.toLocaleString() : 'NEED $' + (c.price - economy.money).toLocaleString() + ' MORE') : 'TAP TO PREVIEW');
+    return `<div class="carCard${sel ? ' sel' : ''}${!owned && !afford ? ' locked' : ''}${!owned && afford && previewId === c.id ? ' cta-buy' : ''}${!owned && !afford && previewId === c.id ? ' cta-no' : ''}" data-car="${c.id}" data-cta="${cta}">
       <div class="top"><span>${c.name}</span> ${tags}<span class="price ${owned ? 'own' : afford ? '' : 'no'}">${price}</span></div>
       <div class="desc">${c.desc}</div>
       <div class="bars">${statBar('SPEED', c.stats.top / 132)}${statBar('ACCEL', c.stats.accel / 68)}${statBar('GRIP', (c.stats.steer - 1.5) / 0.8)}</div>
     </div>`;
   }).join('');
+  list.scrollLeft = keep;
 }
 function garageClick(id) {
   const c = getCar(id), owned = economy.has(id);
-  if (owned) { applyPlayerCar(id); rebuildCar(id); toast(`${c.name} SELECTED`, '#7df'); sfxPad(); renderGarage(); return; }
+  if (owned) { previewId = null; applyPlayerCar(id); rebuildCar(id); toast(`${c.name} SELECTED`, '#7df'); sfxPad(); renderGarage(); return; }
+  if (previewId !== id) { previewId = id; rebuildCar(id); sfxPad(); renderGarage(); return; } /* first tap on an unowned car = preview it in the showroom */
   if (economy.money >= c.price) {
+    previewId = null;
     economy.buy(id, c.price); applyPlayerCar(id); rebuildCar(id); sfxMission(); confetti(45);
     toast(`${c.name} PURCHASED!`, '#7dff8a'); renderGarage();
   } else { toast(`NEED $${(c.price - economy.money).toLocaleString()} MORE`, '#ff7b7b'); beep(220, 0.2, 'square', 0.1); }
@@ -1450,7 +1456,8 @@ function frameBody(now) {
     const r = 9.2 + Math.sin(menuT * 0.6) * 1.2, a = menuT;
     camera.position.set(car.position.x + Math.sin(a) * r, car.position.y + 2.0 + Math.sin(menuT * 0.45) * 0.5, car.position.z + Math.cos(a) * r);
     const look = V3(car.position.x, car.position.y + 0.8, car.position.z);
-    look.addScaledVector(V3(Math.cos(a), 0, -Math.sin(a)), -(camera.aspect < 1 ? 0.9 : 2.3));
+    look.addScaledVector(V3(Math.cos(a), 0, -Math.sin(a)), -(camera.aspect < 1 ? 0.3 : 2.3));
+    if (camera.aspect < 1) look.y -= 1.9; /* portrait: car sits in the top half, above the menu sheet */
     camera.lookAt(look);
     camera.fov += (45 - camera.fov) * 0.08; camera.updateProjectionMatrix(); sky.position.copy(camera.position); followSun();
   } else updateCamera(dt, out.boosting, out.sp);
