@@ -265,6 +265,10 @@ body.arena #paintBtn{display:flex}
 .ovwrap .act,.ovwrap .rr{width:100%}
 #fres,#fearn,#fmis{width:100%}
 #fglobal{margin-top:2px}
+/* GL recovery overlay */
+#glFix .gspin{width:46px;height:46px;border-radius:50%;border:4px solid rgba(47,212,255,.18);border-top-color:#2fd4ff;animation:gspin 1s linear infinite}
+#glFix .gsm{font-size:11px;color:#7d8ea6;letter-spacing:.08em}
+@keyframes gspin{to{transform:rotate(360deg)}}
 
 /* ============ TOUCH CONTROLS ============ */
 #touch{position:fixed;inset:0;pointer-events:none;z-index:3}
@@ -380,6 +384,13 @@ body.touch.arena #speedo{top:calc(max(10px,env(safe-area-inset-top)) + 10px)}
 <div id="driftHud" class="hud"><span id="driftPts">DRIFT 0</span><small id="driftMult">x1</small></div>
 <div id="toast" class="hud">OVERTAKE</div>
 <div id="count" class="hud"><div class="lamps"><i id="l1"></i><i id="l2"></i><i id="l3"></i></div><span id="cd">3</span></div>
+<div id="glFix" class="ov hide"><div class="ovwrap">
+  <h1>FIXING GRAPHICS</h1>
+  <div class="gspin"><i></i></div>
+  <p>YOUR PHONE FREED UP MEMORY AND THE 3D ENGINE PAUSED.<br>RESTARTING THE ENGINE IN <b id="glT">7</b>s&hellip;</p>
+  <p class="gsm">TIP: CLOSE SOME TABS OR APPS TO KEEP THE RACE SMOOTH</p>
+  <button class="act" data-act="glreload" type="button">RESTART NOW</button>
+</div></div>
 <div id="confetti"></div>
 <div id="ainfo" class="hud"><div id="ascore">0</div><div id="acombo">DRIFT TO SCORE</div><div id="atime">0:00.00</div></div>
 <button id="paintBtn" type="button" aria-label="Paint">&#127912;</button>
