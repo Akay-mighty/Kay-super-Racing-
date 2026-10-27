@@ -106,7 +106,7 @@ const firebaseConfig = {
   measurementId: "G-3TYSZTMQFS"
 };
 const ADMIN_EMAIL = 'admin@kayracing.com';   /* only this email gets access */
-const ADMIN_UID = '';  /* PASTE the owner's UID here (Firebase console → Authentication → Users → User UID), same value as in firestore.rules */
+const ADMIN_UID = 'KXVphmcLTng1HaOXwlI0YZmmqll1';  /* PASTE the owner's UID here (Firebase console → Authentication → Users → User UID), same value as in firestore.rules */
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const CAR_IDS = ['cruiser', 'cab', 'titan', 'blaze', 'nova', 'tesla', 'phantom', 'ghost'];
