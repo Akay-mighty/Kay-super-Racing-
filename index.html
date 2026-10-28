@@ -557,6 +557,34 @@ body{font-family:var(--ft);font-weight:600}
 @media (max-width:430px){.hrBig{font-size:27px}.tile b{font-size:15px}}
 @media (max-height:700px){.heroRace{min-height:150px}.tile{min-height:112px}}
 @media (min-width:760px){.homeScroll{padding-bottom:20px}}
+
+/* ============ V7b · multiplayer live order · lap stepper · tilt control ============ */
+#mpBoard{top:calc(max(10px,env(safe-area-inset-top)) + 70px);left:12px;display:flex;flex-direction:column;gap:3px;width:min(168px,44vw);pointer-events:none}
+#mpBoard .mb{display:flex;align-items:center;gap:8px;padding:5px 10px 5px 6px;border-radius:10px;background:rgba(8,12,22,.66);border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(8px);font:800 13px var(--fd);letter-spacing:.02em}
+#mpBoard .mb b{flex:none;min-width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.1);font:900 italic 13px var(--fd)}
+#mpBoard .mb span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mpBoard .mb i{font-style:normal;color:#7dff8a}
+#mpBoard .mb.first{background:linear-gradient(100deg,rgba(255,194,61,.32),rgba(8,12,22,.7));border-color:rgba(255,194,61,.7)}
+#mpBoard .mb.first b{background:none;font-size:16px}
+#mpBoard .mb.me{border-color:rgba(100,230,255,.75)}
+#mpBoard .mb.me span{color:#8be5ff}
+#mpBoard .mb.first.me span{color:#ffe9b3}
+body.menu #mpBoard,body.done #mpBoard,body.arena #mpBoard{display:none!important}
+/* lap stepper in the lobby */
+.lapStep{display:flex;align-items:stretch;gap:10px;margin:6px 0 12px}
+.stepBtn{flex:none;width:64px;border-radius:18px;border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(40,60,96,.9),rgba(14,22,38,.95));color:#fff;font:900 30px/1 var(--fd);cursor:pointer;transition:transform .1s,filter .1s}
+.stepBtn:active{transform:scale(.94);filter:brightness(1.3)}
+.lapMid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 6px;border-radius:18px;background:rgba(255,255,255,.05);border:1px solid rgba(100,230,255,.35)}
+.lapMid b{font:900 italic 44px/1 var(--fd);color:#8be5ff;text-shadow:0 0 18px rgba(45,226,255,.45)}
+.lapMid span{font:800 12px var(--fd);letter-spacing:.24em;color:#cfe4ff;margin-top:2px}
+.lapMid small{font:700 10px var(--ft);letter-spacing:.12em;color:#9fb0c8;margin-top:4px}
+.lapStep.ro .stepBtn{opacity:.25;pointer-events:none}
+/* tilt: hide the stick, show a small steering indicator */
+body.tilt #stick{display:none}
+#tiltHud{position:absolute;left:max(20px,env(safe-area-inset-left));bottom:max(34px,env(safe-area-inset-bottom));width:150px;height:56px;border-radius:30px;background:rgba(10,15,26,.5);border:2px solid rgba(255,255,255,.3);pointer-events:none}
+#tiltHud[hidden]{display:none}
+#tiltHud i{position:absolute;left:50%;top:9px;width:26px;height:26px;margin-left:-13px;border-radius:50%;background:var(--cy);box-shadow:0 0 14px var(--cy);transition:transform .05s linear}
+#tiltHud span{position:absolute;left:0;right:0;bottom:4px;text-align:center;font:800 9px var(--fd);letter-spacing:.18em;color:#9fb0c8}
 </style>
 </head>
 <body>
@@ -604,6 +632,7 @@ body{font-family:var(--ft);font-weight:600}
 </div>
 <div id="altwrap" class="hud"><div id="altlab">ALT</div><div id="altbar"></div></div>
 <div id="driftHud" class="hud"><span id="driftPts">DRIFT 0</span><small id="driftMult">x1</small></div>
+<div id="mpBoard" class="hud" style="display:none"></div>
 <div id="toast" class="hud">OVERTAKE</div>
 <div id="count" class="hud"><div class="lamps"><i id="l1"></i><i id="l2"></i><i id="l3"></i></div><span id="cd">3</span></div>
 <div id="ncIntro"><h1>NIGHT CIRCUIT</h1><div class="ncSub">RAIN · LOW GRIP · NEON CITY · ×1.8 CASH</div><div class="ncRain"><i style="--x:6"></i><i style="--x:14"></i><i style="--x:23"></i><i style="--x:31"></i><i style="--x:38"></i><i style="--x:47"></i><i style="--x:56"></i><i style="--x:63"></i><i style="--x:72"></i><i style="--x:79"></i><i style="--x:88"></i><i style="--x:95"></i></div></div>
@@ -621,6 +650,7 @@ body{font-family:var(--ft);font-weight:600}
 <button id="pauseBtn" type="button" aria-label="Pause">II</button>
 <section id="touch" hidden aria-label="Touch controls">
   <div id="stick"><span id="knob"></span></div>
+  <div id="tiltHud" hidden><i></i><span>TILT TO STEER</span></div>
   <button class="tb" id="bBrake" data-a="down" type="button">BRAKE</button>
   <button class="tb" id="bDrift" data-a="drift" type="button">DRIFT</button>
   <button class="tb" id="bBoost" data-a="boost" type="button">NITRO</button>
@@ -735,6 +765,11 @@ body{font-family:var(--ft);font-weight:600}
           <div class="lbl">ROOM CODE — TAP TO COPY</div>
           <button class="mpcode" data-act="mpCopy" id="mpCode" type="button">&middot;&middot;&middot;&middot;&middot;</button>
           <div id="mpStat" class="lbl"></div>
+          <div id="mpLapStep" class="lapStep">
+            <button type="button" class="stepBtn" data-act="mpLapsDown" aria-label="Fewer laps">&minus;</button>
+            <div class="lapMid"><b id="mpLapN">3</b><span id="mpLapUnit">LAPS</span><small id="mpLapWho"></small></div>
+            <button type="button" class="stepBtn" data-act="mpLapsUp" aria-label="More laps">+</button>
+          </div>
           <div id="mpList"></div>
           <button class="act go" id="mpStart" data-act="mpStart" type="button">START RACE</button>
           <button class="act ghost" data-act="mpLeave" type="button">LEAVE ROOM</button>
@@ -776,6 +811,8 @@ body{font-family:var(--ft);font-weight:600}
         <input id="dname" maxlength="12" spellcheck="false" autocomplete="off" placeholder="KAY">
         <div id="acctEmail" class="lbl"></div>
         <div class="lbl">SOUND</div><div class="seg" data-k="snd"><button data-v="on" type="button">ON</button><button data-v="off" type="button">OFF</button></div>
+        <div class="lbl">CONTROLS &middot; HOW YOU STEER</div><div class="seg" data-k="ctrl"><button data-v="stick" type="button">JOYSTICK</button><button data-v="tilt" type="button">PHONE TILT</button></div>
+        <div class="lbl" style="text-transform:none;letter-spacing:.03em;font-weight:600;margin-top:6px">Phone tilt: lean your phone left or right like a steering wheel. Gas is automatic.</div>
         <div class="lbl">GRAPHICS</div><div class="seg" data-k="q"><button data-v="high" type="button">HIGH</button><button data-v="med" type="button">MEDIUM</button><button data-v="low" type="button">LOW</button></div>
         <button class="act go" id="btnSignIn" data-act="signin" type="button">SIGN IN / CREATE ACCOUNT</button>
         <button class="act ghost" id="btnSignOut" data-act="signout" type="button">SIGN OUT</button>
