@@ -1134,6 +1134,7 @@ function renderMp() {
   updateMpGate();
   const lobby = $('mpLobby'), home = $('mpHome'), join = $('mpJoin');
   if (!lobby || !home || !join) return;
+  if (net.active && (state === 'race' || state === 'count')) return; /* mid-race: menu is hidden — skip DOM churn from live snapshots */
   if (net.active) mpStep = 'home';
   home.classList.toggle('hide', net.active || mpStep === 'join');
   join.classList.toggle('hide', net.active || mpStep !== 'join');
