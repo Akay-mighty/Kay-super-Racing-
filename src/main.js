@@ -7,7 +7,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildCarGeometry, SPORT } from './car-geometry.js';
 import { vehicleContact, resolveVehicleContact } from './vehicle-physics.js';
-import { touch } from './touch.js';
+import { touch, setControl } from './touch.js';
 import { createArena } from './arena.js';
 import { CARS, getCar, carGeo, tintPart } from './cars-data.js';
 import { economy } from './economy.js';
@@ -630,7 +630,7 @@ function renderNight() {
 const COLORS = [0xeef1f5, 0xd42a2a, 0x1d6fe0, 0xf2b705, 0x22a05a, 0x16181d, 0xff6a00, 0x8a3ffc];
 let cfg = { mode: 'menu', laps: 3, diff: 1, ai: 5, env: 'day' };
 let T = store.get('sr.t', null);
-const opt = Object.assign({ laps: 3, diff: 1, dur: 90, env: 'day', q: mobile ? 'med' : 'high', snd: 'on', board: 'race3' }, store.get('sr.opt', {}));
+const opt = Object.assign({ laps: 3, diff: 1, dur: 90, env: 'day', q: mobile ? 'med' : 'high', snd: 'on', board: 'race3', ctrl: 'stick' }, store.get('sr.opt', {}));
 const show = (id, on) => $(id).classList.toggle('hide', !on);
 const ord = n => n + ['th', 'st', 'nd', 'rd'][n <= 3 ? n : 0];
 
@@ -780,6 +780,12 @@ function paintPlayer(c) {
   curColor = c; colorize(car.children[0].geometry, c); store.set('sr.color', c);
   document.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', +b.dataset.c === c));
 }
+function applyCtrl(user) {
+  setControl(opt.ctrl, ok => {
+    if (!ok) { opt.ctrl = 'stick'; store.set('sr.opt', opt); syncSegs(); setControl('stick'); if (user) toast('TILT NOT AVAILABLE ON THIS DEVICE \u00b7 USING JOYSTICK', '#ffd166'); }
+    else if (user && opt.ctrl === 'tilt') toast('PHONE TILT ON \u00b7 LEAN LEFT / RIGHT TO STEER', '#8df');
+  }, !!user);
+}
 function applyQuality() {
   pr = Math.min(devicePixelRatio, { high: 2, med: 1.5, low: 1 }[opt.q] || 2);
   renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight);
@@ -804,6 +810,7 @@ function act(a) {
   else if (a === 'mpJoinBack') { mpStep = 'home'; renderMp(); }
   else if (a === 'mpJoin') { net.join($('mpCodeIn').value); }
   else if (a === 'mpStart') { net.start(); }
+  else if (a === 'mpLapsDown' || a === 'mpLapsUp') { if (net.isHost) net.setLaps(((net.room && net.room.laps) || 3) + (a === 'mpLapsUp' ? 1 : -1)); }
   else if (a === 'mpLeave') { mpStep = 'home'; net.leave(); }
   else if (a === 'mpCopy') {
     const t = $('mpCode') && $('mpCode').textContent;
@@ -830,7 +837,7 @@ document.addEventListener('click', e => {
   else if (b.dataset.c) paintPlayer(+b.dataset.c);
   else if (b.dataset.v !== undefined && b.parentElement.classList.contains('seg')) {
     const k = b.parentElement.dataset.k; opt[k] = (k === 'laps' || k === 'diff' || k === 'dur') ? +b.dataset.v : b.dataset.v; store.set('sr.opt', opt); syncSegs();
-    if (k === 'env') setEnv(opt.env); if (k === 'laps') renderBest(); if (k === 'dur') renderArBest(); if (k === 'q') applyQuality(); if (k === 'snd') muted = opt.snd === 'off'; if (k === 'board') renderBoard();
+    if (k === 'env') setEnv(opt.env); if (k === 'laps') renderBest(); if (k === 'dur') renderArBest(); if (k === 'q') applyQuality(); if (k === 'snd') muted = opt.snd === 'off'; if (k === 'board') renderBoard(); if (k === 'ctrl') applyCtrl(true);
   }
 });
 $('pauseBtn').onclick = pause;
@@ -1022,12 +1029,15 @@ function hud(dt, sp, boosting) {
   if (cfg.type === 'arena') { $('ascore').textContent = Math.floor(A.score).toLocaleString(); $('acombo').textContent = A.comboT > 0 ? `DRIFT  x${A.mult}` : 'DRIFT TO SCORE'; $('atime').textContent = fmt(Math.max(0, A.t)); }
   const all = [{ p: P.prog, me: true }, ...AIs.map(a => ({ p: a.prog }))].sort((a, b) => b.p - a.p);
   const rank = all.findIndex(o => o.me) + 1;
-  if (state === 'race' && !P.finished && cfg.type !== 'arena') {
+  if (state === 'race' && !P.finished && cfg.type !== 'arena' && cfg.mode !== 'mp') {
     ovCool -= dt;
     if (rank < lastRank && ovCool <= 0) { toast(`OVERTAKE  +${lastRank - rank}`); P.nitro = Math.min(1, P.nitro + 0.12); ovCool = 0.9; }
     lastRank = rank; P.rank = rank;
   }
-  $('pos').innerHTML = cfg.ai ? `${P.rank}<small>/${cfg.ai + 1}</small>` : 'TT';
+  if (cfg.mode === 'mp') mpHud(dt);
+  else $('mpBoard').style.display = 'none';
+  if (cfg.mode === 'mp') { /* live rank among everyone in the room */ }
+  else $('pos').innerHTML = cfg.ai ? `${P.rank}<small>/${cfg.ai + 1}</small>` : 'TT';
   $('lap').textContent = `LAP ${clamp(P.crosses, 1, TOTAL)}/${TOTAL}`;
   $('time').textContent = fmt(raceT);
   const kph = Math.round(sp * 3.6); $('spd').textContent = kph;
@@ -1043,18 +1053,37 @@ function hud(dt, sp, boosting) {
   if (toastT > 0 && (toastT -= dt) <= 0) $('toast').style.opacity = 0;
   mc.clearRect(0, 0, mm.width, mm.height); mc.drawImage(mmBase, 0, 0);
   AIs.forEach(a => { const [x, y] = mxy(a.mesh.position.x, a.mesh.position.z); mc.fillStyle = a.css; mc.beginPath(); mc.arc(x, y, 8, 0, 7); mc.fill(); mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke(); });
-  if (cfg.mode === 'mp') for (const o of net.remotes()) { const [rx, ry] = mxy(o.x, o.z); mc.fillStyle = '#ffb300'; mc.beginPath(); mc.arc(rx, ry, 8, 0, 7); mc.fill(); mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke(); }
+  if (cfg.mode === 'mp') for (const o of net.remotes()) { const [rx, ry] = mxy(o.x, o.z); mc.fillStyle = o.uid === mpLeadId ? '#ffe14a' : '#ff7a1a'; mc.beginPath(); mc.arc(rx, ry, 8, 0, 7); mc.fill(); mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke(); }
   const [px, py] = mxy(P.pos.x, P.pos.z); mc.fillStyle = '#fff'; mc.beginPath(); mc.arc(px, py, 10, 0, 7); mc.fill(); mc.strokeStyle = '#3cf'; mc.lineWidth = 4; mc.stroke();
   if (ghostCar && ghostCar.active && ghostCar.group.visible) { const [gx, gy] = mxy(ghostCar.group.position.x, ghostCar.group.position.z); mc.strokeStyle = '#8df'; mc.lineWidth = 3; mc.beginPath(); mc.arc(gx, gy, 8, 0, 7); mc.stroke(); }
 }
 
+/* multiplayer: live "who is 1st" board + rank + lead-change toast */
+let mpBoardT = 0, mpLeader = null, mpLeadName = '';
+function mpHud(dt) {
+  const board = $('mpBoard'), live = state === 'race' || state === 'finished';
+  board.style.display = live ? 'block' : 'none';
+  if (!live) { mpLeader = null; return; }
+  mpBoardT -= dt; if (mpBoardT > 0) return; mpBoardT = 0.25;
+  const rows = net.standings({ prog: P.prog, fin: P.finished, tms: Math.round(raceT * 1000) });
+  const me = rows.findIndex(r => r.me) + 1;
+  P.rank = me; $('pos').innerHTML = `${me}<small>/${rows.length}</small>`;
+  const lead = rows[0];
+  if (lead && mpLeader !== lead.uid) {
+    if (mpLeader !== null && !lead.fin) toast(lead.me ? '\u{1F451} YOU TAKE THE LEAD!' : `\u{1F451} ${lead.name} TAKES THE LEAD`, lead.me ? '#7dff8a' : '#ffd166');
+    mpLeader = lead.uid;
+  }
+  mpLeadId = lead ? lead.uid : null;
+  board.innerHTML = rows.slice(0, 5).map((r, i) => `<div class="mb${r.me ? ' me' : ''}${i === 0 ? ' first' : ''}"><b>${i === 0 ? '\u{1F451}' : i + 1}</b><span>${esc(r.name)}</span>${r.fin ? '<i>\u2714</i>' : ''}</div>`).join('') + (me > 5 ? `<div class="mb me"><b>${me}</b><span>YOU</span></div>` : '');
+}
+let mpLeadId = null;
 /* multiplayer race end: live standings from the room, fixed payout, no boards */
 let mpRefT = 0;
 function finishMp() {
   P.finished = true; setState('finished');
   net.onFinish(Math.round(raceT * 1000), P.prog);
   const rows = [{ name: 'YOU', me: true, uid: net.uid(), tms: Math.round(raceT * 1000), prog: P.prog, fin: true },
-    ...net.players.filter(p => p.uid !== net.uid()).map(p => ({ name: p.name || 'RIVAL', uid: p.uid, tms: p.tms || 0, prog: p.prog || 0, fin: !!p.fin }))]
+    ...net.players.filter(p => p.uid !== net.uid()).map(p => ({ name: p.name || 'RIVAL', uid: p.uid, tms: p.tms || 0, prog: p.prog || (p.state && p.state.prog) || 0, fin: !!p.fin }))]
     .sort((a, b) => (b.fin - a.fin) || ((a.fin && b.fin) ? a.tms - b.tms : b.prog - a.prog));
   const place = rows.findIndex(r => r.me) + 1;
   const pay = [6000, 4000, 2500, 1500, 1000, 800];
@@ -1113,9 +1142,16 @@ function renderMp() {
   const list = $('mpList'), code = $('mpCode'), stat = $('mpStat');
   if (code) code.textContent = net.code;
   const rs = net.players.length, host = net.isHost && net.room && net.room.status === 'lobby';
-  if (list) list.innerHTML = net.players.map((p, i) => `<div class="rr${p.uid === net.uid() ? ' me' : ''}"><b>${i + 1}</b><span>${esc(p.name || 'RIVAL')}${p.uid === net.uid() ? ' · YOU' : ''}</span><em>${p.fin ? 'FINISHED' : (net.room && net.room.status === 'racing' ? 'RACING' : 'READY')}</em></div>`).join('') || '<div class="lbl">WAITING FOR DRIVERS…</div>';
+  if (list) list.innerHTML = net.players.map((p, i) => `<div class="rr${p.uid === net.uid() ? ' me' : ''}"><b>${i + 1}</b><span>${esc(p.name || 'RIVAL')}${p.uid === net.uid() ? ' · YOU' : ''}${net.room && p.uid === net.room.host ? ' \u{1F451}' : ''}</span><em>${p.fin ? 'FINISHED' : (net.room && net.room.status === 'racing' ? 'RACING' : 'READY')}</em></div>`).join('') || '<div class="lbl">WAITING FOR DRIVERS…</div>';
   if (stat) stat.textContent = !net.room ? 'CONNECTING…' : net.room.status === 'racing' ? 'RACE LIVE · FINISH THE LAPS!' : `${rs} DRIVER${rs === 1 ? '' : 'S'} IN LOBBY · ${net.room.laps || 3} LAPS · ${String(net.room.env || 'day').toUpperCase()}`;
   if ($('mpStart')) $('mpStart').style.display = host ? '' : 'none';
+  const laps = (net.room && net.room.laps) || 3, st = $('mpLapStep');
+  if (st) {
+    st.classList.toggle('ro', !host);
+    $('mpLapN').textContent = laps;
+    $('mpLapWho').textContent = host ? 'TAP + / \u2212 TO CHOOSE' : 'HOST CHOOSES THE LAPS';
+    $('mpLapUnit').textContent = laps === 1 ? 'LAP' : 'LAPS';
+  }
 }
 
 function finishRace() {
@@ -1445,7 +1481,7 @@ function frameBody(now) {
     if (mpRefT <= 0) {
       mpRefT = 0.7;
       const rows = [{ name: 'YOU', me: true, tms: Math.round(raceT * 1000), prog: P.prog, fin: true },
-        ...net.players.filter(p => p.uid !== net.uid()).map(p => ({ name: p.name || 'RIVAL', tms: p.tms || 0, prog: p.prog || 0, fin: !!p.fin }))]
+        ...net.players.filter(p => p.uid !== net.uid()).map(p => ({ name: p.name || 'RIVAL', tms: p.tms || 0, prog: p.prog || (p.state && p.state.prog) || 0, fin: !!p.fin }))]
         .sort((a, b) => (b.fin - a.fin) || ((a.fin && b.fin) ? a.tms - b.tms : b.prog - a.prog));
       renderMpResults(rows, rows.findIndex(r => r.me) + 1, P.mpCash || 0);
     }
@@ -1493,6 +1529,6 @@ paintPlayer(store.get('sr.color', COLORS[0]));
 rebuildCar(economy.selected());
 window.addEventListener('ksr-money', updateMoneyUI);
 updateMoneyUI();
-syncSegs(); applyQuality(); gateBoot();
+syncSegs(); applyQuality(); applyCtrl(false); gateBoot();
 if (TURBO) window.__DBG = { P, FL, keys, pts, tan, N, get CS() { return CS; } }; /* dev test hook */
 requestAnimationFrame(frame);

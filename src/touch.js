@@ -1,6 +1,6 @@
 // Touch input, using the pointer-capture pattern from mrdoob/slop-newyork (MIT) js/touch-controls.js.
 // Each finger is tracked by pointerId so steering and buttons work at the same time.
-export const touch = { active: false, steer: 0, down: 0, boost: 0, drift: 0, fly: 0 };
+export const touch = { active: false, steer: 0, down: 0, boost: 0, drift: 0, fly: 0, mode: 'stick' };
 
 const root = document.getElementById('touch');
 const stick = document.getElementById('stick');
@@ -46,3 +46,51 @@ const reset = () => { touch.steer = touch.down = touch.boost = touch.drift = tou
 addEventListener('blur', reset);
 document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
 document.addEventListener('contextmenu', e => e.preventDefault());
+
+/* ---------- CONTROL TYPE: joystick or phone tilt ----------
+   Tilt = lean the phone left / right like a steering wheel. Works in portrait and landscape:
+   portrait uses the left-right roll (gamma); landscape uses the matching axis (beta).
+   iPhones need a one-time permission, which has to come from a tap (the Settings button). */
+const tiltHud = document.getElementById('tiltHud'), tiltDot = tiltHud && tiltHud.firstElementChild;
+const TILT_DEAD = 4, TILT_FULL = 26; /* degrees: ignore wobble under 4, full lock at 26 */
+let tiltOn = false, tiltAsked = false, tiltSeen = 0, tiltSm = 0;
+function screenAngle() { return (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (typeof window.orientation === 'number' ? (window.orientation + 360) % 360 : 0); }
+function onTilt(e) {
+  if (e.gamma == null && e.beta == null) return;
+  tiltSeen++;
+  const a = screenAngle(), g = e.gamma || 0, b = e.beta || 0;
+  let lean = a === 90 ? b : a === 270 ? -b : a === 180 ? -g : g; /* + = right edge of the screen dips */
+  lean = clamp(lean, -60, 60);
+  const m = Math.abs(lean), v = m < TILT_DEAD ? 0 : Math.pow(clamp((m - TILT_DEAD) / (TILT_FULL - TILT_DEAD), 0, 1), 1.1);
+  tiltSm += (Math.sign(lean) * v - tiltSm) * 0.45; /* light smoothing, no lag you can feel */
+  touch.steer = Math.abs(tiltSm) < 0.02 ? 0 : -tiltSm; /* same sign convention as the stick: left = + */
+  if (tiltDot) tiltDot.style.transform = `translateX(${(tiltSm * 46).toFixed(1)}px)`;
+}
+function tiltListen(on) {
+  if (on === tiltOn) return; tiltOn = on;
+  if (on) addEventListener('deviceorientation', onTilt, true); else { removeEventListener('deviceorientation', onTilt, true); tiltSm = 0; if (tiltDot) tiltDot.style.transform = ''; }
+}
+async function tiltStart(cb, gesture) {
+  const D = window.DeviceOrientationEvent;
+  if (!D) { cb && cb(false); return; }
+  if (typeof D.requestPermission === 'function') { /* iOS: the prompt only works from a tap */
+    if (!gesture) return; /* wait for the next tap instead of failing */
+    tiltAsked = true;
+    try { if ((await D.requestPermission()) !== 'granted') { cb && cb(false); return; } } catch (e) { cb && cb(false); return; }
+  }
+  tiltSeen = 0; tiltListen(true);
+  if (!cb) return;
+  setTimeout(() => cb(tiltSeen > 0 || !touch.active), 1600); /* no sensor data on a touch device = unsupported */
+}
+export function setControl(mode, cb, gesture) {
+  touch.mode = mode === 'tilt' ? 'tilt' : 'stick';
+  document.body.classList.toggle('tilt', touch.mode === 'tilt');
+  if (tiltHud) tiltHud.hidden = touch.mode !== 'tilt';
+  touch.steer = 0;
+  if (touch.mode === 'tilt') tiltStart(cb, gesture);
+  else { tiltListen(false); cb && cb(true); }
+}
+/* iPhone: if tilt was saved from last time, the permission prompt needs a fresh tap */
+addEventListener('click', () => {
+  if (touch.mode === 'tilt' && !tiltOn && !tiltAsked) tiltStart(undefined, true);
+}, { capture: true, passive: true });

@@ -152,9 +152,18 @@ export const net = {
     renderLobby();
   },
 
+  /* host only: change the lap count while everyone waits in the lobby (1-20) */
+  async setLaps(n) {
+    if (!N.host || !N.code || !N.room || N.room.status !== 'lobby') return;
+    n = Math.max(1, Math.min(20, Math.round(n)));
+    N.room.laps = n; renderLobby(); /* instant feedback, Firestore echo confirms it */
+    await cloud.roomTouch(N.code, { laps: n });
+  },
+
   async start() { /* host only */
     if (!N.host || !N.code) return;
-    await cloud.roomTouch(N.code, { status: 'racing', env: N.deps.optEnv(), laps: N.deps.optLaps(), goAt: Date.now() + 4500 });
+    const laps = (N.room && N.room.laps) || N.deps.optLaps(); /* the lap count the host picked in the lobby */
+    await cloud.roomTouch(N.code, { status: 'racing', env: N.deps.optEnv(), laps, goAt: Date.now() + 4500 });
   },
 
   async backToLobby() { if (N.code) await cloud.roomTouch(N.code, { status: 'lobby' }); },
@@ -208,5 +217,15 @@ export const net = {
   myName() { return N.deps.driverName(); },
   myState() { return { name: this.myName(), car: N.deps.carId(), color: N.deps.carColor() }; },
   uid() { return N.uid; },
-  remotes() { const o = []; for (const [uid, r] of N.cars) if (r.shown && r.g.visible) o.push({ uid, x: r.g.position.x, z: r.g.position.z }); return o; }
+  remotes() { const o = []; for (const [uid, r] of N.cars) if (r.shown && r.g.visible) o.push({ uid, x: r.g.position.x, z: r.g.position.z }); return o; },
+  /* live race order: finished drivers first (by time), then by track progress */
+  standings(me) {
+    const rows = [{ uid: N.uid, name: 'YOU', me: true, prog: me.prog, fin: !!me.fin, tms: me.tms || 0 }];
+    for (const p of N.players) {
+      if (p.uid === N.uid) continue;
+      const s = p.state || {};
+      rows.push({ uid: p.uid, name: p.name || 'RIVAL', prog: s.prog !== undefined ? s.prog : (p.prog || 0), fin: !!(p.fin || s.fin), tms: p.tms || s.tms || 0 });
+    }
+    return rows.sort((a, b) => (b.fin - a.fin) || ((a.fin && b.fin) ? a.tms - b.tms : b.prog - a.prog));
+  }
 };
