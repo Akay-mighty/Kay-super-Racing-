@@ -29,4 +29,19 @@ function swPrecache() {
   };
 }
 
-export default defineConfig({ plugins: [swPrecache()] });
+export default defineConfig({
+  plugins: [swPrecache()],
+  build: {
+    rollupOptions: {
+      output: {
+        /* split the big libraries into their own cacheable chunks so game-code
+           updates no longer re-download three.js / firebase on cheap phones */
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('three')) return 'three';
+          if (id.includes('firebase')) return 'firebase';
+        }
+      }
+    }
+  }
+});

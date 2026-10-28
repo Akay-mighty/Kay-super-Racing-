@@ -14,10 +14,18 @@
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
 <link rel="icon" type="image/png" sizes="64x64" href="/icons/favicon-64.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,500;0,700;0,800;1,700;1,800;1,900&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
+/* self-hosted fonts (no Google Fonts request — faster first paint, works offline) */
+@font-face{font-family:'Exo 2';font-style:normal;font-weight:500;src:url(/fonts/exo2-500.woff2) format('woff2');font-display:swap}
+@font-face{font-family:'Exo 2';font-style:normal;font-weight:700;src:url(/fonts/exo2-700.woff2) format('woff2');font-display:swap}
+@font-face{font-family:'Exo 2';font-style:normal;font-weight:800;src:url(/fonts/exo2-800.woff2) format('woff2');font-display:swap}
+@font-face{font-family:'Exo 2';font-style:italic;font-weight:700;src:url(/fonts/exo2-i700.woff2) format('woff2');font-display:swap}
+@font-face{font-family:'Exo 2';font-style:italic;font-weight:800;src:url(/fonts/exo2-i800.woff2) format('woff2');font-display:swap}
+@font-face{font-family:'Exo 2';font-style:italic;font-weight:900;src:url(/fonts/exo2-i900.woff2) format('woff2');font-display:swap}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:500;src:url(/fonts/barlow-500.woff2) format('woff2');font-display:swap}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:600;src:url(/fonts/barlow-600.woff2) format('woff2');font-display:swap}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:700;src:url(/fonts/barlow-700.woff2) format('woff2');font-display:swap}
+
 /* ============ KAY SUPER RACING · V4 SHOWROOM UI ============ */
 :root{
   --bg:#05070c; --panel:rgba(9,13,22,.86); --panel2:rgba(13,19,32,.94); --glass:rgba(10,15,26,.62);
@@ -318,6 +326,16 @@ body.nc #altbar{background:#45f0ff}
 #mpCodeIn{display:block;width:100%;padding:14px 12px;margin:10px 0 4px;border-radius:8px;border:1px solid rgba(45,226,255,.55);background:rgba(8,14,26,.92);color:#dff5ff;font:900 26px/1.2 var(--fd);letter-spacing:.4em;text-align:center;text-transform:uppercase;outline:none;box-shadow:inset 0 0 18px rgba(45,226,255,.12)}
 #mpCodeIn::placeholder{color:#33536b;letter-spacing:.4em;font-weight:700}
 #mpCodeIn:focus{border-color:#2de2ff;box-shadow:inset 0 0 18px rgba(45,226,255,.12),0 0 20px rgba(45,226,255,.35)}
+/* WhatsApp share + garage upgrade chips */
+.act.wa{background:#128c4b;border-color:#25d366;color:#eafff2;margin-top:10px}
+.act.wa:active{background:#0d6e3b}
+.upRow{display:flex;gap:6px;margin-top:8px}
+.upBtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 4px;border-radius:8px;border:1px solid rgba(45,226,255,.4);background:rgba(10,20,34,.85);color:#bfeaff;font:700 10px/1.25 var(--ft);letter-spacing:.06em;cursor:pointer}
+.upBtn b{font:800 12px/1.25 var(--fd);color:#7dff8a}
+.upBtn small{font-weight:600;color:#ffd166}
+.upBtn.cant small{color:#ff7b7b}
+.upBtn.max{opacity:.55;border-style:dashed}
+.upBtn:active{transform:scale(.96)}
 .mpEcho{min-height:30px;margin:2px 0 10px;font:900 italic 24px/1.2 var(--fd);letter-spacing:.4em;text-align:center;color:#2de2ff;text-shadow:0 0 14px rgba(45,226,255,.6)}
 
 /* ============ TOUCH CONTROLS ============ */
@@ -771,6 +789,7 @@ body.tilt #stick{display:none}
             <button type="button" class="stepBtn" data-act="mpLapsUp" aria-label="More laps">+</button>
           </div>
           <div id="mpList"></div>
+          <button class="act wa" data-act="mpShare" type="button">SHARE ON WHATSAPP</button>
           <button class="act go" id="mpStart" data-act="mpStart" type="button">START RACE</button>
           <button class="act ghost" data-act="mpLeave" type="button">LEAVE ROOM</button>
         </div>
