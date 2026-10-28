@@ -4,7 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Kay Super Racing</title>
-<link rel="icon" type="image/jpeg" href="/logos/logo-blue.jpg">
+<meta name="theme-color" content="#05070c">
+<meta name="application-name" content="Kay Super Racing">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kay Racing">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="64x64" href="/icons/favicon-64.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,500;0,700;0,800;1,700;1,800;1,900&family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
@@ -65,6 +74,10 @@ button{font-family:var(--ft)}
 .gtabs button.on{background:linear-gradient(135deg,var(--cy2),#0a5f8c);color:#fff;border-color:var(--cy)}
 .gateCard input{width:100%;padding:13px 14px;margin:7px 0;border-radius:6px;border:1px solid var(--line2);background:rgba(16,24,40,.85);color:#fff;font:600 15px var(--ft);letter-spacing:.06em;outline:none}
 .gateCard input:focus{border-color:var(--cy);box-shadow:0 0 12px rgba(47,212,255,.22)}
+.updBar{position:fixed;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translate(-50%,160%);z-index:200;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;background:var(--panel2);border:1px solid var(--line2);box-shadow:0 12px 34px rgba(0,0,0,.55);font:800 italic 13px var(--fd);letter-spacing:.08em;transition:transform .35s cubic-bezier(.2,.9,.2,1)}
+.updBar.on{transform:translate(-50%,0)}
+.updBar button{font:800 italic 12px var(--fd);letter-spacing:.08em;border:0;border-radius:9px;padding:9px 14px;cursor:pointer;color:#03141f;background:var(--cy)}
+.updBar button#updLater{background:transparent;color:var(--dim);border:1px solid var(--line2)}
 .gcode{min-height:13px;font:600 10px var(--ft);letter-spacing:.14em;color:var(--dim2);text-align:center;margin:2px 0 4px;word-break:break-all}
 .mpGate{margin:2px 0 12px;padding:12px 14px;border:1px solid var(--line2);border-left:4px solid #7d8aa0;border-radius:8px;background:rgba(10,15,26,.7)}
 .mpGate.on{border-left-color:var(--grn)}.mpGate.wait{border-left-color:var(--gold)}.mpGate.off{border-left-color:var(--red)}
@@ -766,6 +779,10 @@ body{font-family:var(--ft);font-weight:600}
         <div class="lbl">GRAPHICS</div><div class="seg" data-k="q"><button data-v="high" type="button">HIGH</button><button data-v="med" type="button">MEDIUM</button><button data-v="low" type="button">LOW</button></div>
         <button class="act go" id="btnSignIn" data-act="signin" type="button">SIGN IN / CREATE ACCOUNT</button>
         <button class="act ghost" id="btnSignOut" data-act="signout" type="button">SIGN OUT</button>
+        <div class="lbl" style="margin-top:18px">APP</div>
+        <button class="act go" id="btnInstall" type="button" style="display:none">INSTALL APP</button>
+        <div id="iosHint" class="lbl" style="display:none">ON IPHONE / IPAD: TAP THE SHARE ICON, THEN &ldquo;ADD TO HOME SCREEN&rdquo; TO INSTALL.</div>
+        <div id="appNote" class="lbl" style="display:none">RUNNING AS AN INSTALLED APP &middot; PLAYS OFFLINE</div>
       </div>
     </section>
     <!-- HOW TO PLAY -->
@@ -786,6 +803,8 @@ body{font-family:var(--ft);font-weight:600}
 <div id="finish" class="ov hide"><div class="ovwrap"><h1 id="fh">FINISH</h1><p id="fp"></p><div id="fres"></div><div id="fearn"></div><div id="fmis"></div><div id="fglobal" class="lbl"></div>
   <button class="act go" id="fNext" data-act="next" type="button">NEXT RACE</button><button class="act ghost" id="fRetry" data-act="retry" type="button">RETRY</button><button class="act ghost" data-act="menu" type="button">MAIN MENU</button>
 </div></div>
+<div id="updBar" class="updBar"><span>NEW VERSION READY</span><button id="updGo" type="button">UPDATE</button><button id="updLater" type="button">LATER</button></div>
 <script type="module" src="/src/main.js"></script>
+<script type="module" src="/src/pwa.js"></script>
 </body>
 </html>
