@@ -398,15 +398,27 @@ function sample(s, lat = 0) {
 
 /* player — selected car from the garage */
 let curColor = store.get('sr.color', 0xeef1f5);
+/* base stats + garage upgrades: ENGINE +3% top/+6% accel · TYRES +3.5% steer/+5% drift per level,
+   NITRO boosts harder, drains slower, refills faster (applied in the boost code below) */
+const carStats = id => {
+  const s = { ...getCar(id).stats };
+  const en = economy.upLevel(id, 'en'), ty = economy.upLevel(id, 'ty');
+  s.top = Math.round(s.top * (1 + 0.03 * en) * 10) / 10;
+  s.accel = Math.round(s.accel * (1 + 0.06 * en) * 10) / 10;
+  s.steer = Math.round(s.steer * (1 + 0.035 * ty) * 100) / 100;
+  s.drift = Math.round(s.drift * (1 + 0.05 * ty) * 100) / 100;
+  s.ni = economy.upLevel(id, 'ni');
+  return s;
+};
 const car = makeCar(curColor, carGeo(economy.selected()), getCar(economy.selected()).tint || null);
-let CS = getCar(economy.selected()).stats;
+let CS = carStats(economy.selected());
 function rebuildCar(id) {
   const c = getCar(id), g = carGeo(id).clone();
   const old = car.children[0]; if (old) { car.remove(old); }
   colorize(g, curColor);
   if (c.tint) for (const [pid, hex] of Object.entries(c.tint)) tintPart(g, +pid, hex);
   const body = new THREE.Mesh(g, carMat); body.castShadow = true; car.add(body);
-  CS = c.stats;
+  CS = carStats(id);
   document.body.classList.toggle('canfly', !!c.stats.fly);
 }
 function applyPlayerCar(id) { economy.select(id); rebuildCar(id); updateMoneyUI(); }
@@ -789,6 +801,13 @@ function applyCtrl(user) {
 function applyQuality() {
   pr = Math.min(devicePixelRatio, { high: 2, med: 1.5, low: 1 }[opt.q] || 2);
   renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight);
+  /* LOW now really means LOW: no bloom, no shadow pass — half the GPU work on cheap phones */
+  const low = opt.q === 'low';
+  if (bloomPass) bloomPass.enabled = !low;
+  if (renderer.shadowMap.enabled === low) {
+    renderer.shadowMap.enabled = !low; sun.castShadow = !low;
+    scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
+  }
 }
 function act(a) {
   if (a === 'quick') startRace({ mode: 'quick', laps: opt.laps, diff: opt.diff, ai: 5, env: opt.env });
@@ -816,12 +835,18 @@ function act(a) {
     const t = $('mpCode') && $('mpCode').textContent;
     if (t && navigator.clipboard) navigator.clipboard.writeText(t).then(() => toast('CODE COPIED · SEND IT!', '#8df')).catch(() => { });
   }
+  else if (a === 'mpShare') { /* WhatsApp: deep link joins the friend straight into the room */
+    const code = net.code; if (!code) return;
+    const url = location.origin + location.pathname + '?room=' + code;
+    const txt = 'Join my KAY SUPER RACING race! Room code: ' + code + ' - tap the link and you are in: ' + url;
+    window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank', 'noopener');
+  }
   else if (a === 'tourReset') { T = null; store.set('sr.t', null); renderTour(); }
   else if (a === 'daily') claimDaily();
   else if (a === 'refreshBoard') renderBoard();
   else if (a === 'rival') raceRival();
   else if (a === 'signin') { import('./boot.js').then(m => m.openGate()).catch(() => toast('COULD NOT OPEN SIGN-IN', '#ff6b6b')); }
-  else if (a === 'cloudRetry') { toast('RECONNECTING\u2026', '#8df'); cloud.init().then(() => { updateCloudUI(); cloudSyncIn(); }); }
+  else if (a === 'cloudRetry') { toast('RECONNECTING\u2026', '#8df'); cloud.init().then(() => { updateCloudUI(); cloudSyncIn(); tryDeepJoin(); }); }
   else if (a === 'signout') { cloud.signOutAuth().then(() => location.reload()); }
   else if (a === 'resume') resume();
   else if (a === 'glreload') { store.set('sr.glfix', 1); location.reload(); }
@@ -830,6 +855,17 @@ function act(a) {
 }
 document.addEventListener('click', e => {
   kbIdx = -1; document.querySelectorAll('.kfocus').forEach(b => b.classList.remove('kfocus'));
+  const up = e.target.closest('.upBtn'); /* upgrade chip: buy the next level (must run before carCard pick) */
+  if (up && up.dataset.up) {
+    const [cid, k] = up.dataset.up.split(':');
+    const lv = economy.upLevel(cid, k);
+    if (lv < 5) {
+      const cost = economy.upCost(k, lv), lab = { en: 'ENGINE', ty: 'TYRES', ni: 'NITRO' }[k];
+      if (economy.buyUp(cid, k)) { sfxMission(); confetti(12); toast(`${lab} Lv ${lv + 1} INSTALLED${economy.selected() === cid ? ' \u00b7 FEEL THE DIFFERENCE' : ''}`, '#7dff8a'); if (economy.selected() === cid) rebuildCar(cid); }
+      else { toast(`NEED $${(cost - economy.money).toLocaleString()} MORE`, '#ff7b7b'); beep(220, 0.2, 'square', 0.1); }
+    }
+    renderGarage(); return;
+  }
   const card = e.target.closest('.carCard'); if (card && card.dataset.car) { garageClick(card.dataset.car); return; }
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.go) showScreen(b.dataset.go);
@@ -876,9 +912,10 @@ function stepPlayer(dt, racing) {
   }
   const gas = k.up || FL.on;
   const boosting = can && k.boost && P.nitro > 0.02 && gas;
+  const NIV = CS.ni || 0; /* nitro upgrade level: stronger boost, slower burn, faster refill */
   if (can) {
     const air = FL.on;
-    const max = (boosting ? CS.top * 1.22 : CS.top) * (air ? 1.1 : 1), a0 = (boosting ? CS.accel * 1.6 : CS.accel) * (air ? 0.85 : 1);
+    const max = (boosting ? CS.top * (1.22 + 0.02 * NIV) : CS.top) * (air ? 1.1 : 1), a0 = (boosting ? CS.accel * 1.6 : CS.accel) * (air ? 0.85 : 1);
     if (gas) P.vel.addScaledVector(f, a0 * clamp(1 - fwd / max, 0, 1) * dt);
     if (k.down && !air) P.vel.addScaledVector(f, -(fwd > 0 ? 58 : 22) * dt * (fwd > -14 ? 1 : 0));
     let steer = (k.left ? 1 : 0) - (k.right ? 1 : 0); if (!steer) steer = touch.steer; if (!steer) steer = gp.steer;
@@ -891,7 +928,7 @@ function stepPlayer(dt, racing) {
   P.vel.lerp(nf.multiplyScalar(fwd >= 0 ? sp2 : -sp2), 1 - Math.exp(-grip * dt));
   const slip = P.vel.dot(V3(-Math.cos(P.h), 0, Math.sin(P.h)));
   if (FL.on) { /* nitro drained by thrusters above */ }
-  else if (boosting) P.nitro = Math.max(0, P.nitro - 0.26 * dt); else P.nitro = Math.min(1, P.nitro + (0.025 + (k.drift && sp > 30 ? 0.09 : 0)) * dt);
+  else if (boosting) P.nitro = Math.max(0, P.nitro - 0.26 * (1 - 0.06 * NIV) * dt); else P.nitro = Math.min(1, P.nitro + (0.025 + (k.drift && sp > 30 ? 0.09 : 0)) * (1 + 0.10 * NIV) * dt);
   if (cfg.type !== 'arena') {
     const drifting = can && !FL.on && Math.abs(slip) > 4.5 && sp > 18;
     if (drifting) { RD.hold = 1.1; RD.comboT += dt; } else { RD.hold -= dt; if (RD.hold <= 0) RD.comboT = 0; }
@@ -1107,6 +1144,15 @@ function renderMpResults(rows, place, cash) {
 /* multiplayer lobby UI — exactly one panel visible: home / join-step / lobby */
 let mpStep = 'home';
 const mpReady = () => !!(cloud.user && cloud.status === 'online');
+/* WhatsApp / share deep link: ?room=ABCDE — auto-join once signed in and online */
+let deepRoom = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 5);
+function tryDeepJoin() {
+  if (!deepRoom || !mpReady()) return;
+  const code = deepRoom; deepRoom = '';
+  try { history.replaceState(null, '', location.pathname); } catch (e) { } /* clean bar: refresh never rejoins */
+  toast('JOINING ROOM ' + code + '\u2026', '#8df');
+  net.join(code).then(ok => { if (ok) showScreen('multi'); });
+}
 function mpReason() {
   const st = cloud.status, err = String(cloud.lastErr || '');
   if (!cloud.user) return { t: 'OFFLINE MODE', s: 'SIGN IN OR CREATE A FREE ACCOUNT TO RACE FRIENDS ONLINE.', b: 'SIGN IN / CREATE ACCOUNT', a: 'signin', c: 'off' };
@@ -1277,13 +1323,19 @@ function renderGarage() {
   const keep = list.scrollLeft;
   list.innerHTML = CARS.map(c => {
     const owned = economy.has(c.id), sel = economy.selected() === c.id, afford = economy.money >= c.price;
+    const eff = carStats(c.id);
     const tags = [c.stats.fly ? '<span class="tag fly">FLYING \u2708</span>' : '', owned ? '<span class="tag own">OWNED</span>' : (c.tag && !(c.stats.fly && /FLYING/i.test(c.tag)) ? `<span class="tag">${c.tag}</span>` : ''), sel ? '<span class="tag sel">SELECTED</span>' : ''].join(' ');
     const price = owned ? (sel ? 'SELECTED' : 'OWNED') : '$' + c.price.toLocaleString();
     const cta = sel ? 'SELECTED' : owned ? 'TAP TO SELECT' : (previewId === c.id ? (afford ? 'TAP AGAIN TO BUY $' + c.price.toLocaleString() : 'NEED $' + (c.price - economy.money).toLocaleString() + ' MORE') : 'TAP TO PREVIEW');
+    const upRow = owned ? `<div class="upRow">${[['en', 'ENGINE'], ['ty', 'TYRES'], ['ni', 'NITRO']].map(([k, lab]) => {
+      const lv = economy.upLevel(c.id, k), max = lv >= 5, cost = max ? 0 : economy.upCost(k, lv);
+      return `<button type="button" class="upBtn${max ? ' max' : ''}${!max && economy.money < cost ? ' cant' : ''}" data-up="${c.id}:${k}" aria-label="Upgrade ${lab}">${lab}<b>${max ? 'MAX' : 'Lv ' + lv}</b><small>${max ? '\u00b7\u00b7\u00b7' : '$' + cost.toLocaleString()}</small></button>`;
+    }).join('')}</div>` : '';
     return `<div class="carCard${sel ? ' sel' : ''}${!owned && !afford ? ' locked' : ''}${!owned && afford && previewId === c.id ? ' cta-buy' : ''}${!owned && !afford && previewId === c.id ? ' cta-no' : ''}" data-car="${c.id}" data-cta="${cta}">
       <div class="top"><span>${c.name}</span> ${tags}<span class="price ${owned ? 'own' : afford ? '' : 'no'}">${price}</span></div>
       <div class="desc">${c.desc}</div>
-      <div class="bars">${statBar('SPEED', c.stats.top / 132)}${statBar('ACCEL', c.stats.accel / 68)}${statBar('GRIP', (c.stats.steer - 1.5) / 0.8)}</div>
+      <div class="bars">${statBar('SPEED', eff.top / 136)}${statBar('ACCEL', eff.accel / 72)}${statBar('GRIP', (eff.steer - 1.5) / 0.85)}</div>
+      ${upRow}
     </div>`;
   }).join('');
   list.scrollLeft = keep;
@@ -1388,7 +1440,7 @@ function bootCloud() {
   cloud.onStatus(updateCloudUI);
   updateCloudUI();
   /* fired by boot.js after a successful sign-in (or session restore) */
-  addEventListener('ksr-auth', () => { updateCloudUI(); cloudSyncIn(); });
+  addEventListener('ksr-auth', () => { updateCloudUI(); cloudSyncIn(); tryDeepJoin(); });
   window.addEventListener('ksr-money', cloudPush);
   const dn = $('dname');
   if (dn) dn.addEventListener('change', () => { store.set('sr.name', cloud.name(dn.value || 'KAY')); updateCloudUI(); toast('DRIVER: ' + driverName(), '#8df'); cloudSyncIn(); });

@@ -25,6 +25,12 @@ export const CARS = [
     stats: { top: 95, accel: 40, steer: 1.72, drift: 1.55, fly: false }
   },
   {
+    id: 'volt', name: 'VOLT RUNNER', price: 25000, tag: 'ELECTRIC',
+    desc: 'Instant torque, zero noise. Off the line like a slingshot.',
+    spec: cloneSport(s => { s.wheelRadius = 0.36; s.chrome = false; s.cabin.roofY = s.cabin.roofY.map(([z, v]) => [z, v * 0.95]); }),
+    stats: { top: 100, accel: 50, steer: 2.02, drift: 1.72, fly: false }
+  },
+  {
     id: 'blaze', name: 'STREET BLAZE', price: 35000, tag: 'QUICK',
     desc: 'Wide arches, big tyres, eager throttle.',
     spec: cloneSport(s => { s.wheelRadius = 0.38; s.archFlare = 0.05; s.chrome = false; }),
@@ -35,6 +41,12 @@ export const CARS = [
     desc: 'A gentleman\u2019s GT: very fast and very easy to control.',
     spec: cloneSport(s => { s.cabin.roofY = s.cabin.roofY.map(([z, v]) => [z, v * 0.92]); s.chrome = true; }),
     stats: { top: 108, accel: 51, steer: 2.08, drift: 1.75, fly: false }
+  },
+  {
+    id: 'sultan', name: 'DUNE SULTAN', price: 90000, tag: 'DRIFT KING',
+    desc: 'Rally-bred slider. Enters corners sideways, exits them smiling.',
+    spec: cloneSport(s => { s.halfWidth = s.halfWidth.map(([z, v]) => [z, v * 1.04]); s.wheelRadius = 0.40; s.chrome = false; }),
+    stats: { top: 110, accel: 52, steer: 2.00, drift: 2.10, fly: false }
   },
   {
     id: 'tesla', name: 'TESLA SPARK', price: 150000, tag: 'FLYING \u2708', fly: true,
@@ -53,6 +65,12 @@ export const CARS = [
       s.wheelRadius = 0.385; s.cabin.roofY = s.cabin.roofY.map(([z, v]) => [z, v * 0.88]);
     }),
     stats: { top: 124, accel: 62, steer: 2.15, drift: 1.70, fly: false }
+  },
+  {
+    id: 'apex', name: 'APEX ZERO', price: 700000, tag: 'TRACK WEAPON',
+    desc: 'Formula DNA for the road. Corners are a suggestion it ignores.',
+    spec: cloneSport(s => { s.cabin.roofY = s.cabin.roofY.map(([z, v]) => [z, v * 0.9]); s.wheelRadius = 0.375; s.chrome = true; }),
+    stats: { top: 128, accel: 66, steer: 2.20, drift: 1.80, fly: false }
   },
   {
     id: 'ghost', name: 'GHOST X PROTO', price: 1000000, tag: 'FLYING \u2708 KING', fly: true,
