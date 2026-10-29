@@ -840,7 +840,7 @@ function stepRockets(dt, racing) {
       const g = sample(r.s, r.lat);
       r.mesh.position.set(g.p.x, g.p.y + 0.8, g.p.z); r.mesh.rotation.y = Math.atan2(g.t.x, g.t.z);
       puff(r.mesh.position, V3(0, 0.5, 0), 0.8);
-      const hit = racing && Math.abs(gap) * ds < 5;
+      const hit = racing && Math.abs(gap) <= step + 5 / ds; /* reached the target this frame (works at any frame rate) */
       if (hit) { a.spinT = 2.0; a.speed *= 0.1; a.lat += rand(-2, 2); toast('SEEKER HIT ' + a.name + '!', '#ff5ad8'); }
       if (hit || r.life <= 0) { boomFX(r.mesh.position, hit ? 14 : 4); scene.remove(r.mesh); Rockets.splice(i, 1); }
       continue;
