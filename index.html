@@ -32,6 +32,7 @@
   --line:rgba(130,190,255,.14); --line2:rgba(130,190,255,.28);
   --txt:#eef4ff; --dim:#8ea1bd; --dim2:#5f7089;
   --cy:#2fd4ff; --cy2:#0f8fd0; --gold:#ffc23d; --grn:#3ce88a; --red:#ff4d5e; --pur:#9a6cff;
+  --blue:#2e6bff; --blue2:#7aa8ff; --blue3:#123a9e;
   --fd:'Orbitron','Segoe UI',system-ui,sans-serif; --ft:'Rajdhani','Segoe UI',system-ui,sans-serif;
 }
 *{box-sizing:border-box;margin:0}
@@ -284,7 +285,7 @@ body.puitem #bFire{display:flex}
 #ainfo{display:none;top:16px;left:16px;background:var(--glass);border-left:4px solid var(--gold);padding:9px 18px 9px 14px;border-radius:0 6px 6px 0;min-width:180px;backdrop-filter:blur(8px)}
 body.arena #ainfo{display:block}body.arena #info,body.arena #mm{display:none}
 #ascore{font:900 italic 38px/1 var(--fd)}#acombo{font:700 13px var(--ft);letter-spacing:.16em;color:var(--gold);margin:3px 0}#atime{font:700 14px var(--ft);letter-spacing:.12em}
-#pauseBtn{position:fixed;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:44px;height:44px;border-radius:6px;border:1px solid var(--line2);background:var(--glass);color:#fff;font:800 15px var(--ft);letter-spacing:2px;z-index:4;cursor:pointer;backdrop-filter:blur(8px)}
+#pauseBtn{position:fixed;top:max(10px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));width:44px;height:44px;border-radius:6px;border:1px solid var(--line2);background:var(--glass);color:#fff;font:800 15px var(--ft);letter-spacing:2px;z-index:4;cursor:pointer;backdrop-filter:blur(8px)}
 #paintBtn{display:none;position:fixed;top:max(10px,env(safe-area-inset-top));left:calc(50% + 28px);width:44px;height:44px;border-radius:6px;border:1px solid var(--line2);background:var(--glass);font-size:19px;z-index:4;cursor:pointer;align-items:center;justify-content:center}
 body.arena #paintBtn{display:flex}
 #paintBar{display:none;position:fixed;top:calc(max(10px,env(safe-area-inset-top)) + 54px);left:50%;transform:translateX(-50%);flex-wrap:wrap;gap:6px;justify-content:center;width:min(210px,70vw);padding:9px;background:var(--panel2);border:1px solid var(--line2);border-radius:8px;z-index:4}
@@ -337,12 +338,36 @@ body.nc #altbar{background:#45f0ff}
 .act.wa{background:#128c4b;border-color:#25d366;color:#eafff2;margin-top:10px}
 .act.wa:active{background:#0d6e3b}
 .upRow{display:flex;gap:6px;margin-top:8px}
-.upBtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 4px;border-radius:8px;border:1px solid rgba(45,226,255,.4);background:rgba(10,20,34,.85);color:#bfeaff;font:700 10px/1.25 var(--ft);letter-spacing:.06em;cursor:pointer}
-.upBtn b{font:800 12px/1.25 var(--fd);color:#7dff8a}
-.upBtn small{font-weight:600;color:#ffd166}
+.upBtn{flex:1;display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:9px 11px;border-radius:10px;border:1px solid rgba(122,168,255,.42);background:linear-gradient(150deg,rgba(20,38,80,.88),rgba(9,15,30,.92));color:#c9dcff;font:700 10px/1.25 var(--ft);letter-spacing:.06em;cursor:pointer;transition:transform .1s,border-color .15s}
+.upBtn .upLab{font:800 11px var(--fd);letter-spacing:.14em;color:#dfeaff}
+.upBtn .upPips{display:flex;gap:4px}
+.upBtn .upPips i{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.12)}
+.upBtn .upPips i.on{background:linear-gradient(90deg,var(--blue),var(--blue2));box-shadow:0 0 8px rgba(70,130,255,.55)}
+.upBtn small{font-weight:800;color:var(--gold);text-align:right;font-size:11px}
+.upBtn.cant{border-color:rgba(255,123,123,.4)}
 .upBtn.cant small{color:#ff7b7b}
-.upBtn.max{opacity:.55;border-style:dashed}
-.upBtn:active{transform:scale(.96)}
+.upBtn.max{opacity:.6;border-style:dashed}
+.upBtn.max small{color:#8ea1bd}
+.upBtn:active{transform:scale(.97)}
+/* driver picker — KSR blue crew cards */
+#drvList{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.drvCard{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;border:1px solid rgba(122,168,255,.3);background:linear-gradient(140deg,rgba(15,26,54,.92),rgba(8,12,24,.94));color:var(--txt);text-align:left;cursor:pointer;transition:transform .1s,border-color .15s}
+.drvCard:active{transform:scale(.98)}
+.drvCard .dvAva{flex:none;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font:900 italic 20px var(--fd);color:#fff;background:linear-gradient(150deg,var(--blue),var(--blue3));box-shadow:0 0 14px rgba(46,107,255,.5)}
+.drvCard .dvMid{flex:1;min-width:0}
+.drvCard .dvMid b{display:block;font:800 italic 14px var(--fd);letter-spacing:.04em}
+.drvCard .dvMid b i{font-style:italic;color:var(--blue2);font-size:11px}
+.drvCard .dvMid small{display:block;font:600 10.5px var(--ft);letter-spacing:.05em;color:var(--dim);margin-top:2px}
+.drvCard .dvPrice{flex:none;font:900 italic 12px var(--fd);color:var(--gold);letter-spacing:.04em}
+.drvCard .dvPrice.no{color:#ff7b7b}
+.drvCard.eq{border-color:rgba(122,168,255,.85);box-shadow:0 0 18px rgba(46,107,255,.35) inset,0 0 12px rgba(46,107,255,.25)}
+.drvCard.eq .dvPrice{color:#8be5ff}
+.drvCard.lock{opacity:.82}
+.drvCard.lock .dvAva{background:linear-gradient(150deg,#3a4356,#1a2130);box-shadow:none}
+/* garage cards — blue showroom */
+[data-s="garage"] .carCard{background:linear-gradient(155deg,rgba(16,30,66,.94),rgba(8,12,24,.96));border:1px solid rgba(122,168,255,.32)}
+[data-s="garage"] .carCard.sel{border-color:rgba(122,168,255,.9);box-shadow:0 0 22px rgba(46,107,255,.35)}
+[data-s="garage"] .carCard .bar i::after{background:linear-gradient(90deg,var(--blue3),var(--blue) 60%,var(--blue2))}
 .mpEcho{min-height:30px;margin:2px 0 10px;font:900 italic 24px/1.2 var(--fd);letter-spacing:.4em;text-align:center;color:#2de2ff;text-shadow:0 0 14px rgba(45,226,255,.6)}
 
 /* ============ TOUCH CONTROLS ============ */
@@ -814,6 +839,8 @@ body.tilt #stick{display:none}
       <div class="pbody">
         <div id="carList"></div>
         <div class="lbl">PAINT</div><div class="row" id="swatches"></div>
+        <div class="lbl" style="margin-top:16px">DRIVER &middot; PICK YOUR RACER</div>
+        <div id="drvList"></div>
       </div>
     </section>
     <!-- MISSIONS -->
