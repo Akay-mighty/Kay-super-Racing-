@@ -143,8 +143,18 @@ const TRACKS = {
     city: 16, cityOff: [70, 320], cityH: 0.34, bills: 3, tunnel: false, lamps: false, grand: true, towers: false, palms: 90, trees: 0, umbrellas: 26, rocks: 0, traffic: [['keke', 3], ['danfo', 2]] },
   jungle: { id: 'jungle', name: 'JUNGLE RUN', cp: [[0,0,-260],[30,2,-40],[-30,4,140],[-160,6,240],[-320,7,220],[-420,5,80],[-380,3,-80],[-440,5,-240],[-320,4,-380],[-140,2,-420],[-20,0,-380],[0,1,-330]],
     ground: 0x1e3b24, road: ['#4b4237','#514840'], edge: ['#e8e2c8','#c9a03c'], wall: ['#6b5a3e','#7a6848'],
-    city: 0, cityOff: [0, 0], cityH: 1, bills: false, tunnel: false, lamps: false, grand: false, towers: false, palms: 0, trees: 150, umbrellas: 0, rocks: 40, traffic: [['keke', 2]] }
+    city: 0, cityOff: [0, 0], cityH: 1, bills: false, tunnel: false, lamps: false, grand: false, towers: false, palms: 0, trees: 150, umbrellas: 0, rocks: 40, traffic: [['keke', 2]] },
+  /* Kaduna: red laterite hills, acacia & baobab, long climb and a fast descent */
+  kaduna: { id: 'kaduna', name: 'KADUNA RIDGE', cp: [[0,2,-260],[0,3,0],[30,6,240],[110,12,430],[250,19,560],[430,25,630],[620,29,640],[790,31,560],[880,28,420],[880,23,260],[810,19,130],[680,15,100],[540,13,130],[420,12,165],[330,10,140],[285,8,60],[262,6,-70],[300,5,-250],[315,4,-380],[255,3,-475],[120,2,-495],[15,2,-420]],
+    ground: 0xffffff, terrain: { kind: 'red', amp: 46 }, road: ['#4a433e','#504943'], edge: ['#f3e6c8','#c4501c'], wall: ['#b08a5e','#9e7a52'],
+    city: 0, cityOff: [0, 0], cityH: 1, bills: false, tunnel: false, lamps: false, grand: true, towers: false, palms: 0, trees: 0, acacias: 80, baobabs: 16, umbrellas: 0, rocks: 70, traffic: [['keke', 3], ['danfo', 2]] },
+  /* Obudu: mountain climb (60 m up) with hairpins, pines and rock */
+  obudu: { id: 'obudu', name: 'OBUDU PEAK', cp: [[-150,2,0],[60,2.9,0],[240,4.9,0],[420,7.9,0],[488,9.2,18],[537,10.8,68],[555,12.4,135],[537,14.1,203],[488,15.9,252],[420,17.7,270],[240,22.8,270],[60,28.2,270],[-60,31.8,270],[-128,34,288],[-177,36.1,338],[-195,38.2,405],[-177,40.3,473],[-127,42.3,522],[-60,44.3,540],[120,49.2,540],[270,52.8,540],[420,55.9,540],[488,57.2,558],[537,58.4,608],[555,59.4,675],[537,60.3,743],[488,61,792],[420,61.5,810],[240,62,810],[60,59.2,810],[-60,55.2,810],[-210,48.1,770],[-320,39.6,660],[-360,30.5,510],[-400,19.9,330],[-450,12.8,200],[-423,8.4,100],[-350,4.9,27],[-250,2.7,0]],
+    ground: 0xffffff, terrain: { kind: 'green', amp: 120 }, road: ['#383c44','#3d4148'], edge: ['#f4f4f4','#3cc86a'], wall: ['#9aa89c','#8a998e'],
+    city: 0, cityOff: [0, 0], cityH: 1, bills: false, tunnel: false, lamps: false, grand: true, towers: false, palms: 0, trees: 260, umbrellas: 0, rocks: 90, traffic: [['keke', 2]] }
 };
+const tsx = id => (id && id !== 'city') ? '.' + id : ''; /* per-track record suffix; the city keeps the old keys */
+let tH = null; /* terrain height lookup for the current track (null = flat ground) */
 let world = null, curTrack = 'city';
 let pts, tan, right, curv, ds, roadStrip, ground, cityMat, padGroup, pads, padsNight;
 let neonGroup, neonLights = [];
@@ -164,6 +174,46 @@ function ensureTrack(id) {
   curTrack = tk.id;
   buildWorld(tk);
   mmRedraw();
+}
+/* hill terrain: follows the road height near the circuit, rolls into hills / mountains further out */
+function buildTerrain(tk) {
+  const red = tk.terrain.kind === 'red', amp = tk.terrain.amp, CELL = 24, MARGIN = 720;
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+  for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
+  x0 -= MARGIN; z0 -= MARGIN; x1 += MARGIN; z1 += MARGIN;
+  const nx = Math.ceil((x1 - x0) / CELL) + 1, nz = Math.ceil((z1 - z0) / CELL) + 1;
+  const hs = (i, j) => { const v = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return v - Math.floor(v); };
+  const vn = (x, z) => { const i = Math.floor(x), j = Math.floor(z), fx = x - i, fz = z - j, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz); return (hs(i, j) * (1 - u) + hs(i + 1, j) * u) * (1 - v) + (hs(i, j + 1) * (1 - u) + hs(i + 1, j + 1) * u) * v; };
+  const fbm = (x, z) => vn(x / 260, z / 260) * 0.55 + vn(x / 120, z / 120) * 0.28 + vn(x / 52, z / 52) * 0.13 + vn(x / 24, z / 24) * 0.04;
+  const H = new Float32Array(nx * nz), D = new Float32Array(nx * nz), pos = new Float32Array(nx * nz * 3), col = new Float32Array(nx * nz * 3);
+  const sm = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const P3 = pts.filter((_, i) => i % 2 === 0);
+  const palA = red ? [new THREE.Color(0xb5572e), new THREE.Color(0xa24a26), new THREE.Color(0xc7703c)] : [new THREE.Color(0x3f8a3f), new THREE.Color(0x2f6f35), new THREE.Color(0x4f9b46)];
+  const dry = new THREE.Color(red ? 0x9a8a47 : 0x8d9588), tc = new THREE.Color();
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const x = x0 + i * CELL, z = z0 + j * CELL;
+    let sw = 0, sy = 0, dm = 1e9;
+    for (const p of P3) { const dx = x - p.x, dz = z - p.z, d2 = dx * dx + dz * dz; if (d2 < dm) dm = d2; const w = 1 / Math.pow(d2 + 400, 1.5); sw += w; sy += w * p.y; }
+    const y0 = sy / sw, d = Math.sqrt(dm), s = sm(38, 270, d);
+    const hill = y0 + (fbm(x, z) * 2 - 0.86) * amp * (0.35 + 0.65 * sm(90, 600, d));
+    const h = (y0 - 2.4) * (1 - s) + hill * s;
+    const k = j * nx + i; H[k] = h; D[k] = d;
+    pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z;
+    const n = vn(x / 40, z / 40), c = palA[Math.floor(n * 2.99)];
+    tc.copy(c).lerp(dry, clamp((h - y0) / (amp * 0.9), 0, 1) * (red ? 0.55 : 0.85) * s + (red ? 0.22 : 0) * vn(x / 17, z / 17));
+    tc.multiplyScalar(0.86 + 0.28 * vn(x / 9, z / 9));
+    col[k * 3] = tc.r; col[k * 3 + 1] = tc.g; col[k * 3 + 2] = tc.b;
+  }
+  const idx = [];
+  for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, c = a + nx, e = c + 1; idx.push(a, c, b, b, c, e); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals();
+  tH = (x, z) => {
+    const fx = clamp((x - x0) / CELL, 0, nx - 1.001), fz = clamp((z - z0) / CELL, 0, nz - 1.001), i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j;
+    return (H[j * nx + i] * (1 - u) + H[j * nx + i + 1] * u) * (1 - v) + (H[(j + 1) * nx + i] * (1 - u) + H[(j + 1) * nx + i + 1] * u) * v;
+  };
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }));
+  m.receiveShadow = true; m.frustumCulled = false; return m;
 }
 function buildWorld(tk) {
   if (world) {
@@ -206,6 +256,8 @@ const C = s => new THREE.Color(s);
 
   ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshStandardMaterial({ color: tk.ground, roughness: tk.id === 'bridge' ? 0.28 : 1, metalness: tk.id === 'bridge' ? 0.25 : 0 }));
   ground.rotation.x = -Math.PI / 2; ground.position.y = -2; ground.receiveShadow = true; world.add(ground);
+  tH = null;
+  if (tk.terrain) { world.remove(ground); ground.geometry.dispose(); ground = buildTerrain(tk); world.add(ground); }
   /* beach: ocean sheet out to the east of the track */
   if (tk.id === 'beach') { const oc = new THREE.Mesh(new THREE.PlaneGeometry(3400, 3400), new THREE.MeshStandardMaterial({ color: 0x1b6a9e, roughness: 0.22, metalness: 0.15 })); oc.rotation.x = -Math.PI / 2; oc.position.set(2350, -0.7, 0); world.add(oc); }
 
@@ -217,7 +269,7 @@ const C = s => new THREE.Color(s);
   world.add(m);
 }
   { // pillars under elevated road
-  const list = []; for (let i = 0; i < N; i += 10) if (pts[i].y > 2) list.push(i);
+  const list = []; for (let i = 0; i < N; i += 10) if (pts[i].y > 2 && !tk.terrain) list.push(i);
   const m = new THREE.InstancedMesh(new THREE.CylinderGeometry(1.3, 1.8, 1, 10), new THREE.MeshStandardMaterial({ color: 0x9aa3ad }), list.length);
   list.forEach((i, n) => { const h = pts[i].y + 1.8; dummy.position.set(pts[i].x, -2 + h / 2, pts[i].z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, h, 1); dummy.updateMatrix(); m.setMatrixAt(n, dummy.matrix); });
   dummy.scale.set(1, 1, 1); world.add(m);
@@ -447,7 +499,8 @@ function buildProps(tk) {
   }
   const scatter = (n, off0, off1) => Array.from({ length: n }, () => {
     const k = (Math.random() * N) | 0, side = Math.random() < 0.5 ? -1 : 1;
-    return { p: pts[k].clone().addScaledVector(right[k], side * rand(off0, off1)) };
+    const p = pts[k].clone().addScaledVector(right[k], side * rand(off0, off1)); if (tH) p.y = tH(p.x, p.z);
+    return { p };
   });
   if (tk.palms) {
     const spots = scatter(tk.palms, WALL + 4, WALL + 70);
@@ -471,6 +524,20 @@ function buildProps(tk) {
       dummy.position.y += 2.2 * sc; dummy.updateMatrix(); leafB.setMatrixAt(n, dummy.matrix);
     });
     dummy.scale.setScalar(1); dummy.rotation.set(0, 0, 0); world.add(trunk, leafA, leafB);
+  }
+  if (tk.acacias) { /* flat-topped acacia */
+    const spots = scatter(tk.acacias, WALL + 6, WALL + 120);
+    const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.18, 0.32, 4.2, 6), new THREE.MeshStandardMaterial({ color: 0x4e3b28, roughness: 0.95 }), tk.acacias);
+    const crown = new THREE.InstancedMesh(new THREE.CylinderGeometry(3.8, 2.6, 1.0, 9), new THREE.MeshStandardMaterial({ color: 0x7d8a2c, roughness: 0.9 }), tk.acacias);
+    spots.forEach((s, n) => { const sc = rand(0.8, 1.5); dummy.position.set(s.p.x, s.p.y + 2.1 * sc, s.p.z); dummy.rotation.set(0, rand(0, 6.28), 0); dummy.scale.setScalar(sc); dummy.updateMatrix(); trunk.setMatrixAt(n, dummy.matrix); dummy.position.y += 2.4 * sc; dummy.updateMatrix(); crown.setMatrixAt(n, dummy.matrix); });
+    dummy.scale.setScalar(1); dummy.rotation.set(0, 0, 0); world.add(trunk, crown);
+  }
+  if (tk.baobabs) { /* fat-trunk baobab */
+    const spots = scatter(tk.baobabs, WALL + 14, WALL + 150);
+    const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(1.5, 2.2, 8, 9), new THREE.MeshStandardMaterial({ color: 0x7a6650, roughness: 1 }), tk.baobabs);
+    const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(4.2, 0), new THREE.MeshStandardMaterial({ color: 0x5b6b2a, roughness: 0.95, flatShading: true }), tk.baobabs);
+    spots.forEach((s, n) => { const sc = rand(0.9, 1.7); dummy.position.set(s.p.x, s.p.y + 4 * sc, s.p.z); dummy.rotation.set(0, rand(0, 6.28), 0); dummy.scale.setScalar(sc); dummy.updateMatrix(); trunk.setMatrixAt(n, dummy.matrix); dummy.position.y += 5.2 * sc; dummy.scale.set(sc * 1.1, sc * 0.7, sc * 1.1); dummy.updateMatrix(); crown.setMatrixAt(n, dummy.matrix); });
+    dummy.scale.setScalar(1); dummy.rotation.set(0, 0, 0); world.add(trunk, crown);
   }
   if (tk.umbrellas) {
     const spots = scatter(tk.umbrellas, WALL + 5, WALL + 26);
@@ -997,6 +1064,8 @@ const CUPS = [
   { name: 'BEACH SPRINT', type: 'race', env: 'day', laps: 3, diff: 2, track: 'beach' },
   { name: 'AIRFIELD DRIFT', type: 'arena', env: 'day', dur: 90, diff: 1, track: 'city' },
   { name: 'BRIDGE RUN', type: 'race', env: 'sunset', laps: 3, diff: 2, track: 'bridge' },
+  { name: 'KADUNA DUST', type: 'race', env: 'sunset', laps: 3, diff: 2, track: 'kaduna' },
+  { name: 'OBUDU CLIMB', type: 'race', env: 'dawn', laps: 2, diff: 2, track: 'obudu' },
   { name: 'NIGHT GRAND PRIX', type: 'race', env: 'night', laps: 3, diff: 2, track: 'city' }
 ];
 /* NIGHT CIRCUIT — special hard chapter: rain, neon, low grip, ×1.8 cash */
@@ -1170,7 +1239,7 @@ function syncSegs() {
   document.querySelectorAll('.seg').forEach(seg => seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', String(opt[seg.dataset.k]) === b.dataset.v)));
 }
 function renderArBest() { const b = store.get(`sr.best.arena.${opt.dur}`, null), el = $('arBest'); if (!el) return; el.style.display = b ? '' : 'none'; el.textContent = `BEST SCORE  ${b.toLocaleString()}`; }
-function renderBest() { const b = store.get(`sr.best.tt.${opt.laps}`, null), el = $('ttBest'); if (!el) return; el.style.display = b ? '' : 'none'; el.textContent = `BEST TIME  ${fmt(b)}`; }
+function renderBest() { const b = store.get(`sr.best.tt.${opt.laps}${tsx(opt.track)}`, null), el = $('ttBest'); if (!el) return; el.style.display = b ? '' : 'none'; el.textContent = `BEST TIME  ${fmt(b)}`; }
 function renderTour() {
   const r = T ? T.round : 0;
   let h = CUPS.map((c, i) => `<div class="rr${i === r ? ' me' : ''}"><b>${i + 1}</b><span>${c.name}</span><em>${c.type === 'arena' ? c.dur + 's · drift score' : c.laps + ' laps · ' + LEVELS[c.diff]}</em><i>${i < r ? '✔' : ''}</i></div>`).join('');
@@ -1634,7 +1703,7 @@ function finishRace() {
       cash = Math.round(base * (1 + (cfg.laps - 1) * 0.08) * [0.8, 1, 1.5][cfg.diff] * (cfg.mode === 'tour' ? 1.5 : 1));
       earnRows.push(['Race reward', cash]);
     } else {
-      const key = `sr.best.${cfg.mode}.${cfg.laps}`, prev = store.get(key, null);
+      const key = `sr.best.${cfg.mode}.${cfg.laps}${tsx(cfg.track)}`, prev = store.get(key, null);
       if (prev === null || raceT < prev) { cash = 5000; earnRows.push(['New best time', 5000]); }
     }
   } else { cash = Math.round(sc / 2); earnRows.push(['Drift score bonus', cash]); }
@@ -1666,11 +1735,11 @@ function finishRace() {
   /* ghost save + global board submission (Firebase, silent if offline) */
   const fgl = $('fglobal'); if (fgl) fgl.textContent = '';
   if (!arenaOn && cfg.mode !== 'tour' && !cfg.ai) {
-    const key = `sr.best.${cfg.mode}.${cfg.laps}`, prev = store.get(key, null), isBest = prev === null || raceT < prev;
+    const key = `sr.best.${cfg.mode}.${cfg.laps}${tsx(cfg.track)}`, prev = store.get(key, null), isBest = prev === null || raceT < prev;
     if (isBest) {
       const flat = GR.finish();
-      if (flat) store.set(`sr.ghost.${cfg.mode}.${cfg.laps}`, flat);
-      if (cloud.status === 'online' && flat) {
+      if (flat) store.set(`sr.ghost.${cfg.mode}.${cfg.laps}${tsx(cfg.track)}`, flat);
+      if (cloud.status === 'online' && flat && tsx(cfg.track) === '') {
         const cat = `${cfg.mode}${cfg.laps}`;
         if (fgl) fgl.textContent = '\u2601 SUBMITTING TO GLOBAL BOARD\u2026';
         cloud.uploadGhost(cat, driverName(), economy.selected(), curColor, flat).then(id => {
@@ -1716,7 +1785,7 @@ function finishRace() {
       const key = `sr.best.arena.${A.dur}`, prev = store.get(key, null);
       if (prev === null || sc > prev) { store.set(key, sc); sub += '  ·  NEW BEST!'; } else sub += `  ·  Best ${prev.toLocaleString()}`;
     } else {
-      const key = `sr.best.${cfg.mode}.${cfg.laps}`, prev = store.get(key, null);
+      const key = `sr.best.${cfg.mode}.${cfg.laps}${tsx(cfg.track)}`, prev = store.get(key, null);
       if (prev === null || raceT < prev) { store.set(key, raceT); sub += '  ·  NEW BEST!'; } else sub += `  ·  Best ${fmt(prev)}`;
     }
   }
@@ -1870,7 +1939,7 @@ function setupGhost() {
   if (ghostCar && ghostCar.group.parent) scene.remove(ghostCar.group);
   ghostCar = null;
   if (cfg.type === 'arena') return;
-  const rival = cfg.ghost, local = !rival && cfg.mode === 'tt' ? store.get(`sr.ghost.tt.${cfg.laps}`, null) : null;
+  const rival = cfg.ghost, local = !rival && cfg.mode === 'tt' ? store.get(`sr.ghost.tt.${cfg.laps}${tsx(cfg.track)}`, null) : null;
   const flat = rival || local;
   if (flat && flat.length >= 10) {
     const id = cfg.ghostCar || economy.selected();
@@ -2003,5 +2072,5 @@ rebuildCar(economy.selected());
 window.addEventListener('ksr-money', updateMoneyUI);
 updateMoneyUI();
 syncSegs(); applyQuality(); applyCtrl(false); gateBoot();
-if (TURBO) window.__DBG = { P, FL, keys, pts, tan, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData }; /* dev test hook */
+if (TURBO) window.__DBG = { get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData }; /* dev test hook */
 requestAnimationFrame(frame);
