@@ -274,6 +274,13 @@ button{font-family:var(--ft)}
 body.flying #altwrap{display:block}
 #driftHud{top:24%;left:0;right:0;text-align:center;font:800 italic 27px var(--fd);color:#ffb347;opacity:0;transition:opacity .2s;letter-spacing:.06em}
 #driftHud small{display:block;font:700 13px var(--ft);letter-spacing:.3em;color:#fff;opacity:.85}
+/* coins & power-up HUD (single-player items) */
+#coinHud{top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;padding:6px 14px;border-radius:20px;background:rgba(8,12,20,.62);border:1px solid rgba(255,209,102,.4);font:800 14px var(--fd);letter-spacing:.08em}
+#coinHud b{color:#ffd166}
+#coinHud i{font-style:normal;color:#9dff8a;font-weight:800}
+#puHud{bottom:calc(24px + env(safe-area-inset-bottom));left:max(20px,env(safe-area-inset-left));padding:8px 14px;border-radius:10px;background:rgba(8,12,20,.72);border:1px solid rgba(255,209,102,.65);color:#ffd166;font:800 italic 15px var(--fd);letter-spacing:.06em;box-shadow:0 0 18px rgba(255,209,102,.25)}
+#bFire{left:max(26px,env(safe-area-inset-left));bottom:calc(max(26px,env(safe-area-inset-bottom)) + 168px);width:66px;height:66px;font-size:12px;border-color:#ffd166;display:none}
+body.puitem #bFire{display:flex}
 #ainfo{display:none;top:16px;left:16px;background:var(--glass);border-left:4px solid var(--gold);padding:9px 18px 9px 14px;border-radius:0 6px 6px 0;min-width:180px;backdrop-filter:blur(8px)}
 body.arena #ainfo{display:block}body.arena #info,body.arena #mm{display:none}
 #ascore{font:900 italic 38px/1 var(--fd)}#acombo{font:700 13px var(--ft);letter-spacing:.16em;color:var(--gold);margin:3px 0}#atime{font:700 14px var(--ft);letter-spacing:.12em}
@@ -362,7 +369,7 @@ body.touch .tk{display:block}
 @keyframes cfFall{to{transform:translateY(115vh) rotate(720deg);opacity:.7}}
 
 /* ============ STATE VISIBILITY ============ */
-body.menu #info,body.menu #mm,body.menu #speedo,body.menu #altwrap,body.menu #touch,body.menu #pauseBtn,body.menu #fx,body.menu #toast,body.menu #count,body.menu #driftHud,body.menu #ainfo,body.menu #paintBtn,body.menu #paintBar{display:none!important}
+body.menu #info,body.menu #mm,body.menu #speedo,body.menu #altwrap,body.menu #touch,body.menu #pauseBtn,body.menu #fx,body.menu #toast,body.menu #count,body.menu #driftHud,body.menu #ainfo,body.menu #paintBtn,body.menu #paintBar,body.menu #coinHud,body.menu #puHud{display:none!important}
 body.done #touch,body.done #pauseBtn,body.done #paintBar,body.done #paintBtn{display:none!important}
 body.touch #info{transform:scale(.72);transform-origin:top left;top:max(10px,env(safe-area-inset-top));left:12px}
 body.touch #mm{left:auto;bottom:auto;right:12px;top:max(10px,env(safe-area-inset-top));width:100px;height:100px}
@@ -650,6 +657,8 @@ body.tilt #stick{display:none}
 </div>
 <div id="altwrap" class="hud"><div id="altlab">ALT</div><div id="altbar"></div></div>
 <div id="driftHud" class="hud"><span id="driftPts">DRIFT 0</span><small id="driftMult">x1</small></div>
+<div id="coinHud" class="hud" style="display:none"><b id="coinN">COINS 0</b><i id="gemN">GEMS 0</i></div>
+<div id="puHud" class="hud" style="display:none"></div>
 <div id="mpBoard" class="hud" style="display:none"></div>
 <div id="toast" class="hud">OVERTAKE</div>
 <div id="count" class="hud"><div class="lamps"><i id="l1"></i><i id="l2"></i><i id="l3"></i></div><span id="cd">3</span></div>
@@ -673,6 +682,7 @@ body.tilt #stick{display:none}
   <button class="tb" id="bDrift" data-a="drift" type="button">DRIFT</button>
   <button class="tb" id="bBoost" data-a="boost" type="button">NITRO</button>
   <button class="tb" id="bFly" data-a="fly" type="button">FLY</button>
+  <button class="tb" id="bFire" data-a="item" type="button">FIRE</button>
 </section>
 
 <div id="menu" class="hide">
@@ -717,6 +727,7 @@ body.tilt #stick{display:none}
       <div class="pbody">
         <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1" type="button">1</button><button data-v="3" type="button">3</button><button data-v="5" type="button">5</button></div>
         <div class="lbl">DIFFICULTY</div><div class="seg" data-k="diff"><button data-v="0" type="button">EASY</button><button data-v="1" type="button">NORMAL</button><button data-v="2" type="button">HARD</button></div>
+        <div class="lbl">TRACK</div><div class="seg" data-k="track"><button data-v="city" type="button">LAGOS CITY</button><button data-v="bridge" type="button">LAGOS BRIDGE</button><button data-v="beach" type="button">EKO BEACH</button><button data-v="jungle" type="button">JUNGLE RUN</button></div>
         <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day" type="button">NOON</button><button data-v="dawn" type="button">DAWN</button><button data-v="sunset" type="button">SUNSET</button><button data-v="night" type="button">NIGHT</button></div>
         <button class="act go" data-act="quick" type="button">START RACE</button>
       </div>
@@ -737,6 +748,7 @@ body.tilt #stick{display:none}
       <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>TIME TRIAL</h2><p>SOLO RUN &middot; BEAT YOUR BEST</p></div></div>
       <div class="pbody">
         <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1" type="button">1</button><button data-v="3" type="button">3</button><button data-v="5" type="button">5</button></div>
+        <div class="lbl">TRACK</div><div class="seg" data-k="track"><button data-v="city" type="button">LAGOS CITY</button><button data-v="bridge" type="button">LAGOS BRIDGE</button><button data-v="beach" type="button">EKO BEACH</button><button data-v="jungle" type="button">JUNGLE RUN</button></div>
         <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day" type="button">NOON</button><button data-v="dawn" type="button">DAWN</button><button data-v="sunset" type="button">SUNSET</button><button data-v="night" type="button">NIGHT</button></div>
         <div id="ttBest" class="bestchip" style="display:none"></div>
         <button class="act go" data-act="tt" type="button">START HOTLAP</button>
