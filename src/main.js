@@ -16,7 +16,8 @@ import { cloud } from './cloud.js';
 import { net } from './net.js';
 import { GhostRec, makeGhostCar } from './ghost.js';
 import { colorize } from './carcolor.js';
-import { DRIVERS, driverById } from './drivers.js';
+import { DRIVERS, driverById, drvTier } from './drivers.js';
+import { TATTOOS, tatById, tatThumb, buildDecals } from './tattoos.js';
 
 const $ = id => document.getElementById(id);
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -986,12 +987,73 @@ const carStats = id => {
 };
 const car = makeCar(curColor, carGeo(economy.selected()), getCar(economy.selected()).tint || null);
 let CS = carStats(economy.selected());
+/* PAINT CACHE — colorized geometry per (car, colour): garage arrows & colour swatches
+   become instant (no clone, no vertex recolour) after the first look at a combo */
+const paintCache = new Map();
+function paintedGeo(id, color) {
+  const c = getCar(id), tint = c.tint || null;
+  const key = id + '|' + color + '|' + (tint ? Object.keys(tint).map(k => k + ':' + tint[k]).join(',') : '');
+  let g = paintCache.get(key);
+  if (!g) {
+    g = carGeo(id).clone();
+    colorize(g, color);
+    if (tint) for (const [pid, hex] of Object.entries(tint)) tintPart(g, +pid, hex);
+    paintCache.set(key, g);
+    if (paintCache.size > 24) { const first = paintCache.keys().next().value; if (first !== key) paintCache.delete(first); }
+  }
+  return g;
+}
+/* TATTOOS — thin decal planes on the body of the given car group */
+const tatMap = () => store.get('ksr.tat', {});
+const tatFor = carId => tatMap()[carId] || 'none';
+const tatsOwned = () => { const o = store.get('ksr.tats', null); return Array.isArray(o) && o.length ? o : ['none', 'stripes']; };
+function applyTattoo(g, carId, tatId) {
+  if (g.userData.tatGrp) {
+    g.userData.tatGrp.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    g.remove(g.userData.tatGrp); g.userData.tatGrp = null;
+  }
+  const tid = tatId || tatFor(carId);
+  if (!tid || tid === 'none') return;
+  const body = (g.children || []).find(o => o.isMesh && o.geometry && o.geometry.attributes.partId); /* the actual painted body, wherever it sits */
+  if (!body) return;
+  if (!body.geometry.boundingBox) body.geometry.computeBoundingBox();
+  const grp = buildDecals(body.geometry.boundingBox, tid, body.geometry);
+  if (grp) { g.add(grp); g.userData.tatGrp = grp; }
+}
+applyTattoo(car, economy.selected()); /* boot: livery on the showroom car */
+function tatClick(id) {
+  const t = tatById(id), carId = economy.selected();
+  if (!tatsOwned().includes(id)) {
+    if (economy.money < t.price) { toast(`NEED $${(t.price - economy.money).toLocaleString()} MORE FOR ${t.name}`, '#ff7b7b'); beep(220, 0.2, 'square', 0.1); return; }
+    economy.spend(t.price); store.set('ksr.tats', [...tatsOwned(), id]);
+    sfxMission(); confetti(30); toast(`${t.name} UNLOCKED!`, '#7dff8a');
+  } else sfxPad();
+  const m = tatMap(); m[carId] = id; store.set('ksr.tat', m);
+  applyTattoo(car, carId); updateMoneyUI();
+  toast(`${t.name} ON THE ${getCar(carId).name}`, '#8be5ff');
+  renderTattoos(); renderGarage();
+}
+function renderTattoos() {
+  const list = $('tatList'); if (!list) return;
+  const carId = economy.selected(), owned = tatsOwned();
+  list.innerHTML = `<div class="lbl" style="margin:2px 0 8px">STICKERS FOR YOUR ${getCar(carId).name}</div>` + TATTOOS.map(t => {
+    const eq = tatFor(carId) === t.id, has = owned.includes(t.id);
+    return `<button type="button" class="tatCard${eq ? ' eq' : ''}" data-tat="${t.id}">
+      <img src="${tatThumb(t.id)}" alt="" draggable="false">
+      <span class="tatN">${t.name}</span>
+      <span class="tatS">${eq ? 'EQUIPPED' : has ? 'OWNED · TAP TO FIT' : '$' + t.price.toLocaleString()}</span>
+    </button>`;
+  }).join('');
+}
 function rebuildCar(id) {
-  const c = getCar(id), g = carGeo(id).clone();
-  const old = car.children[0]; if (old) { car.remove(old); }
-  colorize(g, curColor);
-  if (c.tint) for (const [pid, hex] of Object.entries(c.tint)) tintPart(g, +pid, hex);
-  const body = new THREE.Mesh(g, carMat); body.castShadow = true; car.add(body);
+  const c = getCar(id);
+  const old = (car.children || []).find(o => o.isMesh && o.geometry && o.geometry.attributes.partId); /* never yank a lamp by mistake */
+  if (old) car.remove(old);
+  const body = new THREE.Mesh(paintedGeo(id, curColor), carMat); body.castShadow = true;
+  car.add(body);
+  const bi = car.children.indexOf(body); /* keep the body FIRST — lamps/decals stay ordered behind it */
+  if (bi > 0) { car.children.splice(bi, 1); car.children.unshift(body); }
+  applyTattoo(car, id);
   CS = carStats(id);
   document.body.classList.toggle('canfly', !!c.stats.fly);
 }
@@ -1272,10 +1334,28 @@ function startRace(c) {
   if (!actx) initAudio(); if (actx && actx.state === 'suspended') actx.resume();
   if (c.title) toast(c.title, '#7df');
 }
+/* V9 dashboard: hero driver badge + live ladder preview on the main screen */
+function updateHeroBadge() {
+  const d = driverById(drvId()), av = $('hrAv'), nm = $('hrDrv'), pk = $('hrPerk');
+  if (av) av.textContent = d.name[0];
+  if (nm) nm.textContent = d.name;
+  if (pk) pk.textContent = d.title;
+}
+async function loadLadder() {
+  const box = $('ladderBox'); if (!box) return;
+  let entries = boardCache['race3'];
+  if (!entries) entries = await cloud.fetchBoard('race3');
+  if (!entries) { box.innerHTML = '<span class="ladRow"><b>—</b><span>CLOUD OFFLINE · LOCAL ONLY</span><i></i></span>'; return; }
+  boardCache['race3'] = entries;
+  const mine = driverName();
+  if (!entries.length) { box.innerHTML = '<span class="ladRow"><b>—</b><span>NO TIMES YET · BE FIRST!</span><i></i></span>'; return; }
+  box.innerHTML = entries.slice(0, 3).map((e, i) => `<span class="ladRow${e.name === mine ? ' me' : ''}"><b>${i + 1}</b><span>${esc(e.name)}</span><i>${fmt((e.val || 0) / 1000)}</i></span>`).join('');
+}
 function toMenu() {
   show('pause', false); show('finish', false); show('menu', true); $('count').style.display = 'none';
   resetWorld({ mode: 'menu', laps: 3, diff: 1, ai: 5, env: ['day', 'dawn', 'sunset', 'night'][(Math.random() * 4) | 0] });
   setState('menu'); showScreen('main'); audioUpdate(-1, false);
+  updateHeroBadge(); loadLadder();
 }
 /* showroom state while the splash / account gate play on top (menu DOM stays hidden) */
 function showroomOnly() {
@@ -1379,7 +1459,9 @@ function renderTour() {
   $('tourReset').style.display = T ? '' : 'none';
 }
 function paintPlayer(c) {
-  curColor = c; colorize(car.children[0].geometry, c); store.set('sr.color', c);
+  if (curColor === c) { document.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', +b.dataset.c === c)); return; }
+  curColor = c; store.set('sr.color', c);
+  rebuildCar(economy.selected()); /* cached paint → instant swap, no geometry recolour stall */
   document.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', +b.dataset.c === c));
 }
 function applyCtrl(user) {
@@ -1447,6 +1529,8 @@ document.addEventListener('click', e => {
   kbIdx = -1; document.querySelectorAll('.kfocus').forEach(b => b.classList.remove('kfocus'));
   const gt = e.target.closest('.gTab'); /* garage tabs */
   if (gt) { document.querySelectorAll('.gTab').forEach(b => b.classList.toggle('on', b === gt)); document.querySelectorAll('.gSec').forEach(x => x.classList.toggle('on', x.dataset.gt === gt.dataset.gt)); sfxPad(); renderGarage(); return; }
+  const tt = e.target.closest('[data-tat]'); /* tattoo card: buy once, fit per car */
+  if (tt && tt.dataset.tat) { tatClick(tt.dataset.tat); return; }
   const ga = e.target.closest('[data-garr]'); /* garage arrows: browse cars, preview in the showroom */
   if (ga) { gIdx = (gIdx + (+ga.dataset.garr) + CARS.length) % CARS.length; rebuildCar(CARS[gIdx].id); sfxPad(); renderGarage(); return; }
   const dv = e.target.closest('[data-drv]'); /* driver card: equip owned / buy locked (must run before other handlers) */
@@ -1959,12 +2043,12 @@ const statBar = (label, v) => `<div class="bar"><span>${label}</span><i style="-
 function renderDrivers() {
   const list = $('drvList'); if (!list) return;
   const owned = drvOwned(), cur = drvId();
-  list.innerHTML = DRIVERS.map(d => {
-    const has = owned.includes(d.id), eq = cur === d.id;
+  list.innerHTML = `<div class="lbl" style="margin:2px 0 8px">PICK YOUR RACER · THE MORE CASH THEY COST, THE HARDER THE PERK</div>` + DRIVERS.map(d => {
+    const has = owned.includes(d.id), eq = cur === d.id, tier = drvTier(d.price);
     const price = has ? (eq ? 'EQUIPPED' : 'TAP TO EQUIP') : '$' + d.price.toLocaleString();
     return `<button type="button" class="drvCard${eq ? ' eq' : ''}${!has ? ' lock' : ''}" data-drv="${d.id}">
       <span class="dvAva">${d.name[0]}</span>
-      <span class="dvMid"><b>${d.name} <i>· ${d.title}</i></b><small>${d.desc}</small></span>
+      <span class="dvMid"><b>${d.name} <i>· ${d.title}</i><em class="dvTier ${tier.cls}">${tier.lab}</em></b><small>${d.desc}</small></span>
       <span class="dvPrice${!has && economy.money < d.price ? ' no' : ''}">${price}</span>
     </button>`;
   }).join('');
@@ -2010,6 +2094,7 @@ function renderGarage() {
     }).join('')}</div>`;
   }
   renderDrivers();
+  if (document.querySelector('.gSec[data-gt="tat"]')) renderTattoos();
 }
 function garageClick(id) {
   const c = getCar(id), owned = economy.has(id);
@@ -2235,6 +2320,7 @@ net.init({
   THREE, scene, toast, driverName,
   mkCar: (id, color) => makeCar(color, carGeo(id), getCar(id).tint || null),
   carId: () => economy.selected(), carColor: () => curColor,
+  carTat: () => tatFor(economy.selected()), applyTattoo: (g, id, tat) => applyTattoo(g, id, tat),
   optEnv: () => opt.env, optLaps: () => opt.laps,
   netGo(room) { startRace({ mode: 'mp', laps: room.laps || 3, env: room.env || 'day', ai: 0, diff: 2, title: `ROOM ${net.code} · ${net.players.length} DRIVERS` }); },
   inRace: () => state === 'race' || state === 'count' || state === 'finished',
@@ -2271,5 +2357,5 @@ rebuildCar(economy.selected());
 window.addEventListener('ksr-money', updateMoneyUI);
 updateMoneyUI();
 syncSegs(); applyQuality(); applyCtrl(false); gateBoot();
-if (TURBO) window.__DBG = { get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData }; /* dev test hook */
+if (TURBO) window.__DBG = { get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car }; /* dev test hook */
 requestAnimationFrame(frame);

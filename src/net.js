@@ -20,10 +20,11 @@ const N = {
   deps: null, cars: new Map(), clock0: Date.now() - performance.now()
 };
 
-/* ---------- remote car rendering (interpolated ghost cars) ---------- */
+/* ---------- remote car rendering (snapshot-buffer interpolation) ---------- */
 function makeRemoteCar(p) {
   const d = N.deps;
   const g = d.mkCar(p.car || 'cruiser', p.color || 0x66ddff);
+  if (p.tat && p.tat !== 'none' && d.applyTattoo) d.applyTattoo(g, p.car || 'cruiser', p.tat); /* rival's livery */
   /* floating name tag */
   const cv = document.createElement('canvas'); cv.width = 512; cv.height = 96;
   const c2 = cv.getContext('2d');
@@ -37,67 +38,62 @@ function makeRemoteCar(p) {
   const bub = new d.THREE.Mesh(new d.THREE.SphereGeometry(2.7, 18, 12), new d.THREE.MeshBasicMaterial({ color: 0x66ddff, transparent: true, opacity: 0.3, blending: d.THREE.AdditiveBlending, depthWrite: false, side: d.THREE.DoubleSide, toneMapped: false }));
   bub.visible = false; g.add(bub);
   g.visible = false; g.traverse(o => { o.frustumCulled = false; }); d.scene.add(g);
-  return { g, tag, bub, cur: null, prev: null, vf: 0, vh: 0, placed: false, lastIt: 0 };
+  return { g, tag, bub, buf: [], vext: null, placed: false, lastIt: 0 };
 }
 
-/* every snapshot derives a signed forward speed (vf) and turn rate (vh) so
-   ghosts DEAD-RECKON along an exact circular arc between packets; the
-   renderer exp-smooths toward that predicted target, so remote cars glide
-   continuously instead of freeze -> jump -> slide back every 400ms.
-   linear tangent extrapolation diverges on corners (the car turns away
-   from the tangent) — arcing with the measured turn rate stays on the road. */
-const VMAX = 130, WMAX = 3, LAG_S = 14, SNAP2 = 10000; /* m/s · rad/s · smoothing 1/s · 100u snap */
+/* SNAPSHOT-BUFFER INTERPOLATION — the same trick that makes AI racers buttery:
+   keep the last N received snapshots, render the car on a short clock delay
+   (RENDER_DELAY) interpolating between the two samples that bracket the
+   delayed "now". Position, height and heading all glide continuously —
+   there is no chase-target, so nothing can jump, skip or slide back when
+   the next packet lands (Firestore jitter and burst delivery are absorbed
+   by the buffer). If packets starve we coast on the last measured velocity,
+   decaying to a stop, so a lagging rival never teleports or flies away. */
+const BUFN = 12, RENDER_DELAY = 420, VCAP = 135, STARVE = 0.85, TELE2 = 10000;
 function moveRemote(uid, st, now) {
-  const r = N.cars.get(uid); if (!r) return;
-  if (r.cur) {
-    const raw = (now - r.cur.at) / 1000;
-    if (raw >= 0.15 && st.x !== undefined && r.cur.x !== undefined) {
-      const dt = Math.max(0.15, raw);
-      const h = st.h !== undefined ? st.h : (r.cur.h || 0);
-      const vf = ((st.x - r.cur.x) * Math.sin(h) + (st.z - r.cur.z) * Math.cos(h)) / dt; /* signed speed along facing */
-      r.vf = vf < -VMAX ? -VMAX : vf > VMAX ? VMAX : vf;
-      let dh = (st.h !== undefined && r.cur.h !== undefined) ? st.h - r.cur.h : 0;
-      while (dh > Math.PI) dh -= 2 * Math.PI; while (dh < -Math.PI) dh += 2 * Math.PI;
-      r.vh = dh / dt < -WMAX ? -WMAX : dh / dt > WMAX ? WMAX : dh / dt;
-    } /* burst-delivered snapshots (<150ms apart) keep the last good prediction */
-  } else { r.vf = 0; r.vh = 0; }
-  r.prev = r.cur; r.cur = { ...st, at: now };
+  const r = N.cars.get(uid); if (!r || st.x === undefined) return;
+  r.buf.push({ rt: now, x: st.x, y: st.y || 0, z: st.z, h: st.h || 0 });
+  if (r.buf.length > BUFN) r.buf.shift();
   r.g.visible = true;
 }
 
 function resetGhosts() { /* fresh placement on every race start — no stale slides */
-  for (const [, r] of N.cars) { r.cur = null; r.prev = null; r.vf = 0; r.vh = 0; r.placed = false; r.g.visible = false; }
+  for (const [, r] of N.cars) { r.buf = []; r.vext = null; r.placed = false; r.g.visible = false; }
 }
 
-/* project the dead-reckoned spot: arc when turning, straight line otherwise */
-function predict(r, age) {
-  const h0 = r.cur.h || 0, s = r.vf || 0, w = r.vh || 0;
-  if (Math.abs(w) < 0.02 || Math.abs(s) < 0.1) return [r.cur.x + Math.sin(h0) * s * age, r.cur.z + Math.cos(h0) * s * age];
-  const R = s / w;
-  return [r.cur.x + R * (Math.cos(h0) - Math.cos(h0 + w * age)), r.cur.z + R * (Math.sin(h0 + w * age) - Math.sin(h0))];
-}
+const lerpAngle = (a, b, f) => { let dh = b - a; while (dh > Math.PI) dh -= 2 * Math.PI; while (dh < -Math.PI) dh += 2 * Math.PI; return a + dh * f; };
 
 function stepRemoteCars(dt) {
   const d = N.deps, now = performance.now();
   for (const [, r] of N.cars) {
-    if (!r.cur || r.cur.x === undefined) continue;
-    /* dead-reckoned target: last real sample carried forward along its arc ·
-       age-capped so a lagging ghost coasts to a stop instead of flying off */
-    const age = Math.min(1.2, Math.max(0, (now - r.cur.at) / 1000));
-    const pr = predict(r, age), tx = pr[0], tz = pr[1];
-    const ty = r.cur.y || 0, th = (r.cur.h || 0) + (r.vh || 0) * age;
-    if (!r.placed) { r.g.position.set(tx, ty, tz); r.g.rotation.y = th; r.placed = true; }
-    else {
-      const dx = tx - r.g.position.x, dz = tz - r.g.position.z;
-      if (dx * dx + dz * dz > SNAP2) { /* genuine teleport (respawn / join) — snap to the REAL received spot */
-        r.g.position.set(r.cur.x, ty, r.cur.z); r.g.rotation.y = r.cur.h || 0; r.vf = 0; r.vh = 0;
-      } else { /* frame-rate-independent smoothing — never jumps backwards, never freezes */
-        const k = 1 - Math.exp(-dt * LAG_S);
-        r.g.position.x += dx * k; r.g.position.z += dz * k; r.g.position.y += (ty - r.g.position.y) * k;
-        let dh = th - r.g.rotation.y; while (dh > Math.PI) dh -= 2 * Math.PI; while (dh < -Math.PI) dh += 2 * Math.PI;
-        r.g.rotation.y += dh * Math.min(1, dt * 12);
+    const b = r.buf; if (!b.length) continue;
+    const rt = now - RENDER_DELAY;
+    /* newest sample at or before the delayed render clock */
+    let i = b.length - 1;
+    while (i > 0 && b[i].rt > rt) i--;
+    const A = b[i];
+    const B = b[i + 1]; /* future sample (may be undefined → starving) */
+    if (B) {
+      const dxT = B.x - A.x, dzT = B.z - A.z;
+      if (dxT * dxT + dzT * dzT > TELE2) { /* genuine teleport (respawn / rejoin) — snap hard */
+        r.g.position.set(B.x, B.y, B.z); r.g.rotation.y = B.h; r.vext = null;
+      } else {
+        const span = Math.max(1, B.rt - A.rt), f = Math.min(1, Math.max(0, (rt - A.rt) / span));
+        r.g.position.set(A.x + dxT * f, A.y + (B.y - A.y) * f, A.z + dzT * f);
+        const h = lerpAngle(A.h, B.h, f); r.g.rotation.y = h;
+        r.vext = { vx: dxT / (span / 1000), vz: dzT / (span / 1000), h, at: now };
       }
+    } else {
+      /* starved: coast from the newest sample with the last measured velocity,
+         decaying so the ghost glides to a halt instead of flying off the map */
+      const age = Math.min(STARVE, (rt - A.rt) / 1000);
+      const v = r.vext, dec = Math.exp(-age * 1.7);
+      if (v && age > 0) {
+        r.g.position.set(A.x + Math.max(-VCAP, Math.min(VCAP, v.vx)) * age * dec, A.y, A.z + Math.max(-VCAP, Math.min(VCAP, v.vz)) * age * dec);
+        r.g.rotation.y = v.h;
+      } else { r.g.position.set(A.x, A.y, A.z); r.g.rotation.y = A.h; }
     }
+    r.placed = true;
     r.g.visible = N.started && d.inRace();
     if (r.g.userData.spin) r.g.userData.spin(dt);
   }
@@ -250,7 +246,7 @@ export const net = {
     return true;
   },
   myName() { return N.deps.driverName(); },
-  myState() { return { name: this.myName(), car: N.deps.carId(), color: N.deps.carColor() }; },
+  myState() { return { name: this.myName(), car: N.deps.carId(), color: N.deps.carColor(), tat: N.deps.carTat ? N.deps.carTat() : 'none' }; },
   uid() { return N.uid; },
   remotes() { const o = []; for (const [uid, r] of N.cars) if (r.placed && r.g.visible) { const p = N.players.find(q => q.uid === uid); o.push({ uid, x: r.g.position.x, z: r.g.position.z, name: p && p.name }); } return o; },
   /* live race order: finished drivers first (by time), then by track progress */
