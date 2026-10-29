@@ -646,6 +646,25 @@ function stepTraffic(dt, racing) {
     m.position.set(g.p.x, g.p.y + 0.02, g.p.z);
     m.rotation.set(-Math.atan2(g.t.y, Math.hypot(g.t.x, g.t.z)) * (t.dir > 0 ? 1 : -1), Math.atan2(g.t.x, g.t.z) + (t.dir < 0 ? Math.PI : 0), 0);
   });
+  if (racing) for (const a of AIs) { /* AI racers get hit by traffic too — it is not only you */
+    if (!a.mesh.visible) continue;
+    const am = a.mesh.position, ag = sample(a.s, a.lat);
+    for (const t of TRAF) {
+      const m = t.mesh, dx = am.x - m.position.x, dz = am.z - m.position.z;
+      if (dx * dx + dz * dz > 40) continue;
+      const yaw = Math.atan2(ag.t.x, ag.t.z);
+      ab.x = am.x; ab.z = am.z; ab.vx = ag.t.x * a.speed; ab.vz = ag.t.z * a.speed; ab.cos = Math.cos(yaw); ab.sin = Math.sin(yaw); ab.angularVel = 0;
+      cb.x = m.position.x; cb.z = m.position.z; cb.cos = Math.cos(m.rotation.y); cb.sin = Math.sin(m.rotation.y);
+      cb.vx = Math.sin(m.rotation.y) * t.speed; cb.vz = Math.cos(m.rotation.y) * t.speed; cb.angularVel = 0;
+      if (vehicleContact(ab, cb, ct)) {
+        const cl = resolveVehicleContact(ab, cb, ct) || 0;
+        a.lat += clamp((ct.nx * ag.r.x + ct.nz * ag.r.z) * ct.depth * 0.9, -2.5, 2.5);
+        a.speed = clamp(ab.vx * ag.t.x + ab.vz * ag.t.z, 18, a.hard ? 150 : 95);
+        if (cl > 9 && a.spinT <= 0) { a.spinT = 0.7; }
+        puff(am, V3(0, 0.6, 0), 0.9);
+      }
+    }
+  }
   if (!racing || P.finished) return;
   for (const t of TRAF) {
     const m = t.mesh, dx = P.pos.x - m.position.x, dz = P.pos.z - m.position.z;
@@ -711,7 +730,7 @@ function resetPickups() {
   Rockets.forEach(r => { if (r.mesh.parent) r.mesh.parent.remove(r.mesh); }); Rockets.length = 0;
   const itOn = itemsOn();
   if (coinMesh) coinMesh.visible = itOn; if (gemMesh) gemMesh.visible = itOn;
-  pubMeshes.forEach(m => { m.visible = itOn; m.userData.cd = 0; });
+  pubMeshes.forEach(m => { m.visible = itOn; m.userData.cd = 0; m.userData.aiCd = []; });
   const ch = $('coinHud'); if (ch) ch.style.display = 'none';
   const ph = $('puHud'); if (ph) ph.style.display = 'none';
 }
@@ -797,6 +816,14 @@ function stepPickups(dt, racing) {
   pubMeshes.forEach(m => {
     const u = m.userData;
     m.rotation.y += dt * 1.7; m.position.y = u.y0 + Math.sin(t * 2 + u.k) * 0.24;
+    /* AI racers grab boxes too (each racer has its own respawn timer; the player's box stays) */
+    const ac = u.aiCd || (u.aiCd = []);
+    AIs.forEach((a, n) => {
+      if (ac[n] > 0) ac[n] -= dt;
+      if (!racing || !itemsOn() || !a.mesh.visible || a.item || a.spinT > 0 || ac[n] > 0) return;
+      const dx = a.mesh.position.x - m.position.x, dz = a.mesh.position.z - m.position.z;
+      if (dx * dx + dz * dz < 8) { a.item = aiRollItem(); ac[n] = 8; a.itemT = rand(1.2, 3.5); }
+    });
     if (u.cd > 0) { u.cd -= dt; if (u.cd <= 0) m.visible = itemsOn(); return; }
     if (!racing || P.finished || PU.item || !itemsOn()) return;
     const dx = P.pos.x - m.position.x, dz = P.pos.z - m.position.z;
@@ -811,22 +838,41 @@ function stepPickups(dt, racing) {
   stepRockets(dt, racing);
   stepOils(dt, racing);
 }
+const aiShieldGeo = new THREE.SphereGeometry(2.7, 16, 10);
+function aiBlock(a) { /* AI shield absorbs one hit */
+  if (!(a.shield > 0)) return false;
+  a.shield = 0; if (a.shieldMesh) a.shieldMesh.visible = false;
+  toast(a.name + "'S SHIELD BLOCKED IT", '#8df'); return true;
+}
+function aiRollItem() { const r = Math.random(); return r < 0.34 ? 'rocket' : r < 0.58 ? 'shield' : r < 0.78 ? 'oil' : 'nitro'; }
 /* rivals shoot back: rockets at you when they are behind, oil when you are right on their tail */
 function aiShoot(a, dt) {
   if (!itemsOn() || cfg.type === 'arena' || P.finished || !a.mesh.visible || a.spinT > 0) return;
+  if (a.shield > 0) { a.shield -= dt; }
+  if (a.shieldMesh) { a.shieldMesh.visible = a.shield > 0; if (a.shield > 0) a.shieldMesh.material.opacity = 0.26 + Math.sin(performance.now() * 0.007) * 0.09; }
+  if (!a.item) return;
+  if (a.itemT > 0) { a.itemT -= dt; return; }
   const gap = P.prog - a.prog; /* >0: player is ahead of this AI */
-  a.fireCd -= dt; a.oilCd2 -= dt;
-  if (a.fireCd <= 0 && gap > 6 && gap < 100 && !FL.on) {
-    a.fireCd = [rand(18, 26), rand(11, 16), rand(7, 11)][cfg.diff] || 12;
-    const m = mkRocketMesh(new THREE.Color(0.9, 1.4, 2.8), 0xff3b3b); scene.add(m);
-    Rockets.push({ mesh: m, s: (a.s + 4) % N, lat: a.lat, life: 3.6, tgt: null, ai: a, speed: Math.max(125, a.speed + 55) });
-    toast('INCOMING! ' + a.name, '#ff6b6b'); sfxWhoosh();
-  }
-  if (a.hard && a.oilCd2 <= 0 && gap < -3 && gap > -26 && Oils.length < 6) { /* player is right behind this AI */
-    a.oilCd2 = rand(9, 15);
-    const mesh = new THREE.Mesh(new THREE.CircleGeometry(2.3, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x0a0a0c, transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
-    const bk = sample(a.s - 3, a.lat); mesh.position.set(bk.p.x, bk.p.y + 0.09, bk.p.z); world.add(mesh);
-    Oils.push({ mesh, x: bk.p.x, z: bk.p.z, life: 12, arm: 1.2, ai: a });
+  if (a.item === 'rocket') {
+    if (gap > 6 && gap < 100 && !FL.on) {
+      a.item = null;
+      const m = mkRocketMesh(new THREE.Color(0.9, 1.4, 2.8), 0xff3b3b); scene.add(m);
+      Rockets.push({ mesh: m, s: (a.s + 4) % N, lat: a.lat, life: 3.6, tgt: null, ai: a, speed: Math.max(125, a.speed + 55) });
+      toast('INCOMING! ' + a.name, '#ff6b6b'); sfxWhoosh();
+    }
+  } else if (a.item === 'oil') {
+    if (gap < -3 && gap > -26 && Oils.length < 6) { /* player is right behind this AI */
+      a.item = null;
+      const mesh = new THREE.Mesh(new THREE.CircleGeometry(2.3, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x0a0a0c, transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+      const bk = sample(a.s - 3, a.lat); mesh.position.set(bk.p.x, bk.p.y + 0.09, bk.p.z); world.add(mesh);
+      Oils.push({ mesh, x: bk.p.x, z: bk.p.z, life: 12, arm: 1.2, ai: a });
+    }
+  } else if (a.item === 'shield') {
+    a.item = null; a.shield = 6;
+    if (!a.shieldMesh) { a.shieldMesh = new THREE.Mesh(aiShieldGeo, new THREE.MeshBasicMaterial({ color: 0x66ddff, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false })); a.mesh.add(a.shieldMesh); }
+    a.shieldMesh.visible = true;
+  } else if (a.item === 'nitro') {
+    a.item = null; a.boostT = rand(1.6, 2.4);
   }
 }
 function stepRockets(dt, racing) {
@@ -841,7 +887,7 @@ function stepRockets(dt, racing) {
       r.mesh.position.set(g.p.x, g.p.y + 0.8, g.p.z); r.mesh.rotation.y = Math.atan2(g.t.x, g.t.z);
       puff(r.mesh.position, V3(0, 0.5, 0), 0.8);
       const hit = racing && Math.abs(gap) <= step + 5 / ds; /* reached the target this frame (works at any frame rate) */
-      if (hit) { a.spinT = 2.0; a.speed *= 0.1; a.lat += rand(-2, 2); toast('SEEKER HIT ' + a.name + '!', '#ff5ad8'); }
+      if (hit) { if (!aiBlock(a)) { a.spinT = 2.0; a.speed *= 0.1; a.lat += rand(-2, 2); toast('SEEKER HIT ' + a.name + '!', '#ff5ad8'); } }
       if (hit || r.life <= 0) { boomFX(r.mesh.position, hit ? 14 : 4); scene.remove(r.mesh); Rockets.splice(i, 1); }
       continue;
     }
@@ -867,7 +913,7 @@ function stepRockets(dt, racing) {
         }
       }
     } else if (racing) {
-      for (const a of AIs) { if (!a.mesh.visible) continue; const dx = a.mesh.position.x - r.mesh.position.x, dz = a.mesh.position.z - r.mesh.position.z; if (dx * dx + dz * dz < 20) { a.spinT = 1.15; a.speed *= 0.2; a.lat += rand(-1.5, 1.5); hit = true; toast('ROCKET HIT!', '#ff9a52'); break; } }
+      for (const a of AIs) { if (!a.mesh.visible) continue; const dx = a.mesh.position.x - r.mesh.position.x, dz = a.mesh.position.z - r.mesh.position.z; if (dx * dx + dz * dz < 20) { if (aiBlock(a)) { hit = true; break; } a.spinT = 1.15; a.speed *= 0.2; a.lat += rand(-1.5, 1.5); hit = true; toast('ROCKET HIT!', '#ff9a52'); break; } }
       if (!hit && r.tgt && r.tgt.ghost) { /* visual confirmation only — the victim's own screen does the real spin */
         const gh = net.remotes().find(o => o.uid === r.tgt.ghost);
         if (gh) { const dx = gh.x - r.mesh.position.x, dz = gh.z - r.mesh.position.z; if (dx * dx + dz * dz < 20) { hit = true; toast('DIRECT HIT · ' + (gh.name || 'RIVAL') + '!', '#ff9a52'); } }
@@ -884,7 +930,7 @@ function stepOils(dt, racing) {
     o.mesh.material.opacity = o.life < 2 ? Math.max(0, o.life / 2) * 0.85 : 0.85;
     if (o.life <= 0) { if (o.mesh.parent) o.mesh.parent.remove(o.mesh); o.mesh.geometry.dispose(); o.mesh.material.dispose(); Oils.splice(i, 1); continue; }
     if (!racing || P.finished) continue;
-    AIs.forEach(a => { if (o.ai === a || !a.mesh.visible || a.spinT > 0 || a.oilCd > 0) return; const dx = a.mesh.position.x - o.x, dz = a.mesh.position.z - o.z; if (dx * dx + dz * dz < 5.8) { a.spinT = 0.95; a.oilCd = 5; a.speed *= 0.55; } });
+    AIs.forEach(a => { if (o.ai === a || !a.mesh.visible || a.spinT > 0 || a.oilCd > 0) return; const dx = a.mesh.position.x - o.x, dz = a.mesh.position.z - o.z; if (dx * dx + dz * dz < 5.8) { if (aiBlock(a)) { a.oilCd = 3; return; } a.spinT = 0.95; a.oilCd = 5; a.speed *= 0.55; } });
     TRAF.forEach(t => { if (t.stun > 0) return; const dx = t.mesh.position.x - o.x, dz = t.mesh.position.z - o.z; if (dx * dx + dz * dz < 5.8) t.stun = 1.6; });
     if (P_oilCd > 0) P_oilCd -= dt;
     else if (PU.shield <= 0 && FL.alt < 2) { const dx = P.pos.x - o.x, dz = P.pos.z - o.z; if (dx * dx + dz * dz < 5.4) { P.spin += rand(4.5, 6.5) * (drv().spin || 1); P.vel.multiplyScalar(0.8); P_oilCd = 3.5; shake = Math.max(shake, 0.5); toast('OIL SLICK!', '#ffd166'); sfxThud(); } }
@@ -1204,7 +1250,7 @@ function resetWorld(c) {
   if (arenaOn) { g = { p: V3(0, 0, -150) }; P.pos.set(0, 0, -150); P.h = 0; P.idx = 0; }
   else { const slot = c.ai + (c.netSlot || 0); g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
   P.vel.set(0, 0, 0); P.spin = 0; P.crosses = 0; P.nitro = 1; P.fuel = flyCap(); P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0;
-  AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = c.diff >= 2 ? CS.top * rand(0.89, 0.96) - k * 0.7 : (rand(62, 71) - k * 0.4) * DIFF[c.diff] * (0.74 + CS.top / 132 * 0.28); a.hard = c.diff >= 2; a.boostT = 0; a.boostCd = rand(3, 7); a.fireCd = rand(6, 11) + k * 1.8 + [22, 10, 2][c.diff] ; a.oilCd2 = rand(6, 12); });
+  AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = c.diff >= 2 ? CS.top * rand(0.89, 0.96) - k * 0.7 : (rand(62, 71) - k * 0.4) * DIFF[c.diff] * (0.74 + CS.top / 132 * 0.28); a.hard = c.diff >= 2; a.boostT = 0; a.boostCd = rand(3, 7); a.fireCd = rand(6, 11) + k * 1.8 + [22, 10, 2][c.diff] ; a.oilCd2 = rand(6, 12); a.item = null; a.itemT = 0; a.shield = 0; if (a.shieldMesh) a.shieldMesh.visible = false; });
   smoke.forEach(o => { o.life = 0; o.s.visible = false; });
   car.flames.forEach(f => { f.visible = false; });
   Object.assign(A, { score: 0, comboT: 0, hold: 0, mult: 1, maxMult: 1, cones: 0, dur: c.dur || 90, t: c.dur || 90, hit: 0 });
@@ -1577,8 +1623,15 @@ function stepAI(dt, racing) {
       const gap = P.prog - a.prog;
       const rb = a.hard ? clamp(gap / 150 * 0.08, -0.05, 0.12) : clamp(gap / 150 * 0.06, -0.06, 0.1);
       let boostK = 1;
-      if (a.hard) { /* hard AI uses nitro bursts too */
-        if (a.boostT > 0) { a.boostT -= dt; boostK = 1.09; } else { a.boostCd -= dt; if (a.boostCd <= 0) { a.boostT = rand(1.0, 1.8); a.boostCd = rand(8, 13); } }
+      if (a.boostT > 0) { a.boostT -= dt; boostK = 1.09; } /* nitro box / burst */
+      else if (a.hard) { a.boostCd -= dt; if (a.boostCd <= 0) { a.boostT = rand(1.0, 1.8); a.boostCd = rand(8, 13); } }
+      /* traffic ahead: harder AIs swerve earlier, easy ones often hit it */
+      if (TRAF.length && cfg.type !== 'arena') {
+        const look = [8, 13, 19][cfg.diff] || 12;
+        for (const t of TRAF) {
+          let d = (t.s - a.s + N) % N; if (d > N / 2) d -= N; d *= ds;
+          if (d > 0 && d < look && Math.abs(t.lat - a.lat) < 3.4) { a.latT = clamp(a.lat + (t.lat <= a.lat ? 1 : -1) * 4.5, -7.5, 7.5); a.timer = 1.1; break; }
+        }
       }
       const tgt = a.base * (1 - clamp(curv[i0] * (a.hard ? 1.05 : 1.6), 0, a.hard ? 0.24 : 0.36)) * (1 + rb) * boostK;
       a.speed += (tgt - a.speed) * Math.min(1, dt * (a.hard ? 2.2 : 1.2));
