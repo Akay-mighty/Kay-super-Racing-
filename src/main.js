@@ -1343,7 +1343,7 @@ function showScreen(n) {
   if (n === 'multi') renderMp();
   if (n === 'tt') renderBest();
   if (n === 'arena') renderArBest();
-  if (n === 'garage') { previewId = null; renderGarage(); rebuildCar(economy.selected()); }
+  if (n === 'garage') { previewId = null; gIdx = Math.max(0, CARS.findIndex(c => c.id === economy.selected())); renderGarage(); rebuildCar(economy.selected()); }
   if (n === 'missions') renderMissions();
   if (n === 'online') renderBoard();
   if (n === 'main') renderDaily();
@@ -1445,6 +1445,10 @@ function act(a) {
 }
 document.addEventListener('click', e => {
   kbIdx = -1; document.querySelectorAll('.kfocus').forEach(b => b.classList.remove('kfocus'));
+  const gt = e.target.closest('.gTab'); /* garage tabs */
+  if (gt) { document.querySelectorAll('.gTab').forEach(b => b.classList.toggle('on', b === gt)); document.querySelectorAll('.gSec').forEach(x => x.classList.toggle('on', x.dataset.gt === gt.dataset.gt)); sfxPad(); renderGarage(); return; }
+  const ga = e.target.closest('[data-garr]'); /* garage arrows: browse cars, preview in the showroom */
+  if (ga) { gIdx = (gIdx + (+ga.dataset.garr) + CARS.length) % CARS.length; rebuildCar(CARS[gIdx].id); sfxPad(); renderGarage(); return; }
   const dv = e.target.closest('[data-drv]'); /* driver card: equip owned / buy locked (must run before other handlers) */
   if (dv && dv.dataset.drv) { driverClick(dv.dataset.drv); return; }
   const up = e.target.closest('.upBtn'); /* upgrade chip: buy the next level (must run before carCard pick) */
@@ -1458,7 +1462,7 @@ document.addEventListener('click', e => {
     }
     renderGarage(); return;
   }
-  const card = e.target.closest('.carCard'); if (card && card.dataset.car) { garageClick(card.dataset.car); return; }
+  const card = e.target.closest('[data-car]'); if (card && card.dataset.car) { garageClick(card.dataset.car); return; }
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.go) showScreen(b.dataset.go);
   else if (b.dataset.act) act(b.dataset.act);
@@ -1977,36 +1981,39 @@ function driverClick(id) {
     CS = carStats(economy.selected()); sfxMission(); confetti(35); toast(`${d.name} HIRED! ${d.desc}`, '#7dff8a'); renderDrivers(); renderGarage();
   } else { toast(`NEED $${(d.price - economy.money).toLocaleString()} MORE FOR ${d.name}`, '#ff7b7b'); beep(220, 0.2, 'square', 0.1); }
 }
-let previewId = null;
+let previewId = null, gIdx = 0;
+const dashBar = (label, v) => { const n = Math.round(clamp(v, 0, 1) * 10); return `<div class="stRow"><b>${label}</b><div class="dash">${Array.from({ length: 10 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</div></div>`; };
 function renderGarage() {
   const list = $('carList'); if (!list) return;
-  const keep = list.scrollLeft;
-  list.innerHTML = CARS.map(c => {
-    const owned = economy.has(c.id), sel = economy.selected() === c.id, afford = economy.money >= c.price;
-    const eff = carStats(c.id);
-    const tags = [c.stats.fly ? '<span class="tag fly">FLYING \u2708</span>' : '', owned ? '<span class="tag own">OWNED</span>' : (c.tag && !(c.stats.fly && /FLYING/i.test(c.tag)) ? `<span class="tag">${c.tag}</span>` : ''), sel ? '<span class="tag sel">SELECTED</span>' : ''].join(' ');
-    const price = owned ? (sel ? 'SELECTED' : 'OWNED') : '$' + c.price.toLocaleString();
-    const cta = sel ? 'SELECTED' : owned ? 'TAP TO SELECT' : (previewId === c.id ? (afford ? 'TAP AGAIN TO BUY $' + c.price.toLocaleString() : 'NEED $' + (c.price - economy.money).toLocaleString() + ' MORE') : 'TAP TO PREVIEW');
-    const upRow = owned ? `<div class="upRow">${[['en', 'ENGINE'], ['ty', 'TYRES'], ['ni', 'NITRO']].concat(c.stats.fly ? [['fl', 'FLIGHT']] : []).map(([k, lab]) => {
+  if (gIdx < 0 || gIdx >= CARS.length) gIdx = Math.max(0, CARS.findIndex(c => c.id === economy.selected()));
+  const c = CARS[gIdx], owned = economy.has(c.id), sel = economy.selected() === c.id, afford = economy.money >= c.price, eff = carStats(c.id);
+  const tags = [c.stats.fly ? '<span class="tag fly">FLYING \u2708</span>' : '', owned ? '<span class="tag own">OWNED</span>' : (c.tag && !(c.stats.fly && /FLYING/i.test(c.tag)) ? `<span class="tag">${c.tag}</span>` : ''), sel ? '<span class="tag sel">SELECTED</span>' : ''].join(' ');
+  const cta = sel ? 'SELECTED' : owned ? 'SELECT' : afford ? 'BUY $' + c.price.toLocaleString() : 'NEED $' + (c.price - economy.money).toLocaleString() + ' MORE';
+  list.innerHTML = `<div class="gNav"><button class="gArr" data-garr="-1" type="button" aria-label="Previous car">&#9664;</button>
+    <div class="carCard${sel ? ' sel' : ''}">
+      <div class="top"><span>${c.name}</span> ${tags}${owned ? '' : `<span class="price ${afford ? '' : 'no'}">$${c.price.toLocaleString()}</span>`}</div>
+      <div class="desc">${c.desc}</div>
+      ${owned ? '' : '<div class="gLock">\ud83d\udd12</div>'}
+      ${dashBar('TOP SPEED', eff.top / 136)}${dashBar('ACCELERATION', eff.accel / 72)}${dashBar('HANDLING', (eff.steer - 1.5) / 0.85)}${dashBar('NITRO', 0.45 + 0.11 * (eff.ni || 0))}${c.stats.fly ? dashBar('FLIGHT', (8 + 4 * (eff.fl || 0)) / 28) : ''}
+      <button class="gCta${sel ? ' sel' : (!owned && !afford ? ' no' : '')}" data-car="${c.id}" type="button">${cta}</button>
+    </div>
+    <button class="gArr" data-garr="1" type="button" aria-label="Next car">&#9654;</button></div>
+    <div class="gCount">${gIdx + 1} / ${CARS.length}</div>`;
+  /* upgrade tab: 4 tiles for the car you are looking at */
+  const up = $('upPanel');
+  if (up) {
+    if (!owned) up.innerHTML = '<div class="upNote">OWN THIS CAR TO UPGRADE IT</div>';
+    else up.innerHTML = `<div class="lbl" style="margin-top:2px">${c.name} \u00b7 UPGRADES</div><div class="upGrid">${[['en', 'ENGINE'], ['ty', 'TYRES'], ['ni', 'NITRO']].concat(c.stats.fly ? [['fl', 'FLIGHT']] : []).map(([k, lab]) => {
       const lv = economy.upLevel(c.id, k), max = lv >= 5, cost = max ? 0 : economy.upCost(k, lv);
       const pips = Array.from({ length: 5 }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');
-      return `<button type="button" class="upBtn${max ? ' max' : ''}${!max && economy.money < cost ? ' cant' : ''}" data-up="${c.id}:${k}" aria-label="Upgrade ${lab}">
-        <span class="upLab">${lab}</span><span class="upPips">${pips}</span><small>${max ? 'MAX' : '$' + cost.toLocaleString()}</small></button>`;
-    }).join('')}</div>` : '';
-    return `<div class="carCard${sel ? ' sel' : ''}${!owned && !afford ? ' locked' : ''}${!owned && afford && previewId === c.id ? ' cta-buy' : ''}${!owned && !afford && previewId === c.id ? ' cta-no' : ''}" data-car="${c.id}" data-cta="${cta}">
-      <div class="top"><span>${c.name}</span> ${tags}<span class="price ${owned ? 'own' : afford ? '' : 'no'}">${price}</span></div>
-      <div class="desc">${c.desc}</div>
-      <div class="bars">${statBar('SPEED', eff.top / 136)}${statBar('ACCEL', eff.accel / 72)}${statBar('GRIP', (eff.steer - 1.5) / 0.85)}${statBar('NITRO', 0.45 + 0.11 * (eff.ni || 0))}${c.stats.fly ? statBar('FLY ' + (8 + 4 * (eff.fl || 0)) + 's', (8 + 4 * (eff.fl || 0)) / 28) : ''}</div>
-      ${upRow}
-    </div>`;
-  }).join('');
-  list.scrollLeft = keep;
+      return `<button type="button" class="upBtn upTile${max ? ' max' : ''}${!max && economy.money < cost ? ' cant' : ''}" data-up="${c.id}:${k}" aria-label="Upgrade ${lab}"><span class="upLab">${lab}</span><span class="lv">LV ${lv}</span><span class="upPips">${pips}</span><small>${max ? 'MAX' : '$' + cost.toLocaleString()}</small></button>`;
+    }).join('')}</div>`;
+  }
   renderDrivers();
 }
 function garageClick(id) {
   const c = getCar(id), owned = economy.has(id);
-  if (owned) { previewId = null; applyPlayerCar(id); rebuildCar(id); toast(`${c.name} SELECTED`, '#7df'); sfxPad(); renderGarage(); return; }
-  if (previewId !== id) { previewId = id; rebuildCar(id); sfxPad(); renderGarage(); return; } /* first tap on an unowned car = preview it in the showroom */
+  if (owned) { if (economy.selected() === id) return; previewId = null; applyPlayerCar(id); rebuildCar(id); toast(`${c.name} SELECTED`, '#7df'); sfxPad(); renderGarage(); return; }
   if (economy.money >= c.price) {
     previewId = null;
     economy.buy(id, c.price); applyPlayerCar(id); rebuildCar(id); sfxMission(); confetti(45);
