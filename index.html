@@ -313,6 +313,39 @@ body.arena #paintBtn{display:flex}
 .t-neon b{background:linear-gradient(90deg,#2de2ff,#ff2dd8 60%,#ff9a2f);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
 .t-neon span{color:#9fd9ef}
 .tile.locked{filter:grayscale(.75) brightness(.55)}
+/* ADVENTURE: blue free-roam tile (matches the KSR blue logo) */
+.t-adv{background:linear-gradient(135deg,#071c3c,#0b3a6e 55%,#0d57a8);border:1px solid rgba(90,170,255,.55);box-shadow:0 0 20px rgba(46,107,255,.3),inset 0 0 26px rgba(90,170,255,.16)}
+.t-adv b{color:#9fd4ff;text-shadow:0 0 16px rgba(90,170,255,.65)}
+.t-adv span{color:#a8cdee}
+/* ADVENTURE HUD */
+#advHud{display:none;top:calc(14px + env(safe-area-inset-top));left:16px;width:196px;padding:9px 12px 10px;border-radius:0 8px 8px 0;background:var(--glass);border-left:4px solid #2f6bff;backdrop-filter:blur(8px)}
+body.adv #advHud{display:block}
+body.adv #info{display:none}
+#advHud .aRow{display:flex;justify-content:space-between;font:700 10px var(--ft);letter-spacing:.16em;color:#9fb6d6;margin:3px 0 4px}
+#heatBar{height:9px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden}
+#heatBar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#ffd166,#ff7a1a 55%,#ff3b3b);transition:width .25s}
+#advStars{display:flex;gap:5px;margin-top:6px}
+#advStars i{flex:1;height:7px;border-radius:4px;background:rgba(255,255,255,.12)}
+#advStars i.on{background:#ff4d4d;box-shadow:0 0 9px rgba(255,77,77,.75)}
+#bustWrap{margin-top:4px}
+#bustBar{height:7px;border-radius:4px;background:rgba(255,77,77,.2);overflow:hidden}
+#bustBar i{display:block;height:100%;width:0%;background:#ff4d4d;box-shadow:0 0 8px rgba(255,77,77,.8)}
+#advNav{display:none;top:calc(max(10px,env(safe-area-inset-top)) + 58px);left:50%;transform:translateX(-50%);align-items:center;gap:8px;padding:5px 12px;border-radius:16px;background:rgba(8,12,20,.62);border:1px solid rgba(90,170,255,.4);font:800 13px var(--fd);letter-spacing:.06em;color:#cfe3ff}
+#advArr{display:inline-block;font-size:15px;color:#5db8ff;transition:transform .12s linear;text-shadow:0 0 10px rgba(90,170,255,.8)}
+#advPrompt{display:none;flex-direction:column;align-items:center;gap:5px;bottom:calc(max(30px,env(safe-area-inset-bottom)) + 196px);left:50%;transform:translateX(-50%);width:min(340px,88vw);padding:13px 16px 14px;border-radius:14px;background:rgba(7,11,20,.88);border:1px solid rgba(90,170,255,.5);backdrop-filter:blur(10px);box-shadow:0 8px 40px rgba(0,0,0,.5),0 0 24px rgba(46,107,255,.2);animation:advPulse 1.6s ease-in-out infinite}
+@keyframes advPulse{0%,100%{box-shadow:0 8px 40px rgba(0,0,0,.5),0 0 18px rgba(46,107,255,.18)}50%{box-shadow:0 8px 40px rgba(0,0,0,.5),0 0 30px rgba(46,107,255,.4)}}
+#apTitle{font:900 italic 21px var(--fd);letter-spacing:.05em;border-bottom:2px solid;padding:0 10px 4px}
+#apSub,#apRew{font:700 11px var(--ft);letter-spacing:.14em;color:#cfe3ff}
+#apRew{color:#ffd166}
+#advPrompt button{pointer-events:auto;margin-top:5px;width:100%;padding:11px;border-radius:8px;border:1px solid rgba(90,170,255,.7);background:linear-gradient(120deg,#0d57a8,#2f8fff);color:#fff;font:800 15px var(--ft);letter-spacing:.18em;cursor:pointer;box-shadow:0 4px 18px rgba(46,107,255,.45)}
+#advPrompt button:active{transform:scale(.97);filter:brightness(1.2)}
+#advExit{display:none;top:calc(max(10px,env(safe-area-inset-top)) + 58px);right:max(12px,env(safe-area-inset-right));width:auto;height:34px;padding:0 13px;border-radius:6px;border:1px solid rgba(255,123,123,.55);background:rgba(20,10,12,.6);color:#ff9a9a;font:800 11px var(--ft);letter-spacing:.18em;pointer-events:auto;cursor:pointer;backdrop-filter:blur(8px)}
+#advQuit{display:none}
+body.adv #advExit{display:block}
+body.adv #advQuit{display:block}
+body.adv #pauseRetry{display:none}
+body.menu #advHud,body.menu #advNav,body.menu #advPrompt,body.menu #advExit{display:none!important}
+body.touch #advHud{transform:scale(.85);transform-origin:top left}
 #ncIntro{position:fixed;inset:0;z-index:7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at center,rgba(6,10,26,.86),rgba(2,3,8,.96));opacity:0;pointer-events:none;transition:opacity .45s}
 #ncIntro.show{opacity:1}
 #ncIntro h1{font:900 italic clamp(40px,10vw,92px)/1 var(--fd);letter-spacing:.05em;background:linear-gradient(90deg,#2de2ff,#ff2dd8 55%,#ff9a2f);-webkit-background-clip:text;background-clip:text;color:transparent;animation:ncFlick 1.7s steps(1) infinite;filter:drop-shadow(0 0 30px rgba(45,226,255,.45))}
@@ -859,6 +892,16 @@ body{font-family:var(--ft)}
 <div id="driftHud" class="hud"><span id="driftPts">DRIFT 0</span><small id="driftMult">x1</small></div>
 <div id="coinHud" class="hud" style="display:none"><b id="coinN">COINS 0</b><i id="gemN">GEMS 0</i></div>
 <div id="puHud" class="hud" style="display:none"></div>
+<div id="advHud" class="hud">
+  <div class="aRow"><span>HEAT</span><span id="advFree">FREE 0:00</span></div>
+  <div id="heatBar"><i></i></div>
+  <div id="advStars"><i></i><i></i><i></i></div>
+  <div class="aRow" style="margin-top:5px"><span id="advNext">NEXT RACE 0:05</span></div>
+  <div id="bustWrap" style="display:none"><div class="aRow"><span>BUSTED IN&hellip;</span></div><div id="bustBar"><i></i></div></div>
+</div>
+<div id="advNav" class="hud"><span id="advArr">&#10148;</span><b id="advDist">0m</b></div>
+<div id="advPrompt" class="hud" style="display:none"><b id="apTitle">STREET RACE</b><span id="apSub"></span><span id="apRew"></span><button type="button" data-act="advJoin">JOIN RACE</button></div>
+<button id="advExit" class="hud" type="button" data-act="advExit">EXIT</button>
 <div id="mpBoard" class="hud" style="display:none"></div>
 <div id="toast" class="hud">OVERTAKE</div>
 <div id="count" class="hud"><div class="lamps"><i id="l1"></i><i id="l2"></i><i id="l3"></i></div><span id="cd">3</span></div>
@@ -924,6 +967,7 @@ body{font-family:var(--ft)}
         <div class="tileGrid">
           <button class="tile t-red" data-go="tour" data-ic="&#127942;" type="button"><b>TOURNAMENT</b><span>5 EVENTS &middot; TAKE THE CROWN</span></button>
           <button class="tile t-neon" id="nightTile" data-go="night" data-act="nightTile" data-ic="&#127747;" type="button"><b>NIGHT CIRCUIT</b><span id="nightSub">HARD · RAIN · NEON · ×1.8 CASH</span></button>
+          <button class="tile t-adv" data-go="adv" data-ic="&#128506;" type="button"><b>ADVENTURE</b><span>FREE ROAM &middot; COPS &middot; RACE MARKERS</span></button>
           <button class="tile t-pur" data-go="arena" data-ic="&#128168;" type="button"><b>DRIFT ARENA</b><span>SLIDE &middot; SMASH &middot; SCORE</span></button>
           <button class="tile t-cy" data-go="tt" data-ic="&#9201;&#65039;" type="button"><b>TIME TRIAL</b><span>SOLO &middot; BEAT YOUR GHOST</span></button>
         </div>
@@ -989,6 +1033,15 @@ body{font-family:var(--ft)}
         <div id="ntList"></div>
         <button class="act go" id="ntGo" data-act="ntGo" type="button">ENTER THE NIGHT</button>
         <button class="act ghost" id="ntReset" data-act="ntReset" type="button">RESET CHAPTER</button>
+      </div>
+    </section>
+    <!-- ADVENTURE -->
+    <section class="screen" data-s="adv">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>ADVENTURE</h2><p>FREE ROAM &middot; FIND RACES &middot; DODGE COPS</p></div></div>
+      <div class="pbody">
+        <div class="lbl">TIME OF DAY</div><div class="seg" data-k="advEnv"><button data-v="day" type="button">NOON</button><button data-v="dawn" type="button">DAWN</button><button data-v="sunset" type="button">SUNSET</button><button data-v="night" type="button">NIGHT</button><button data-v="nightRain" id="advNc" type="button" style="display:none">NIGHT CITY</button></div>
+        <div class="lbl" style="text-transform:none;letter-spacing:.03em;font-weight:600;margin-top:6px">Drive the open city. Glowing markers are street races — drive into one and hit JOIN RACE. Speeding, crashing and drifting near traffic raise your HEAT: cops will chase. Get caught and you pay a fine. Fly to escape or reach markers faster. The longer you stay free, the bigger the races that call you.</div>
+        <button class="act go" data-act="advGo" type="button">ENTER THE CITY</button>
       </div>
     </section>
     <!-- MULTIPLAYER -->
@@ -1087,7 +1140,7 @@ body{font-family:var(--ft)}
 </div>
 
 <div id="pause" class="ov hide"><div class="ovwrap"><h1>PAUSED</h1>
-  <button class="act go" data-act="resume" type="button">RESUME</button><button class="act ghost" data-act="retry" type="button">RESTART</button><button class="act ghost" data-act="menu" type="button">QUIT TO MENU</button>
+  <button class="act go" data-act="resume" type="button">RESUME</button><button class="act ghost" id="pauseRetry" data-act="retry" type="button">RESTART</button><button class="act ghost" id="advQuit" data-act="advExit" type="button">EXIT ADVENTURE</button><button class="act ghost" data-act="menu" type="button">QUIT TO MENU</button>
 </div></div>
 
 <div id="finish" class="ov hide"><div class="ovwrap"><h1 id="fh">FINISH</h1><p id="fp"></p><div id="fres"></div><div id="fearn"></div><div id="fmis"></div><div id="fglobal" class="lbl"></div>
