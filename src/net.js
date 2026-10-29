@@ -33,8 +33,11 @@ function makeRemoteCar(p) {
   c2.fillText(String(p.name || 'RIVAL').slice(0, 12), 256, 66);
   const tag = new d.THREE.Sprite(new d.THREE.SpriteMaterial({ map: new d.THREE.CanvasTexture(cv), transparent: true, depthWrite: false, toneMapped: false }));
   tag.scale.set(7, 1.31, 1); tag.position.y = 3.4; g.add(tag);
+  /* shield bubble (synced power-ups): shows while the rival's shield is live */
+  const bub = new d.THREE.Mesh(new d.THREE.SphereGeometry(2.7, 18, 12), new d.THREE.MeshBasicMaterial({ color: 0x66ddff, transparent: true, opacity: 0.3, blending: d.THREE.AdditiveBlending, depthWrite: false, side: d.THREE.DoubleSide, toneMapped: false }));
+  bub.visible = false; g.add(bub);
   g.visible = false; g.traverse(o => { o.frustumCulled = false; }); d.scene.add(g);
-  return { g, tag, cur: null, prev: null, vf: 0, vh: 0, placed: false };
+  return { g, tag, bub, cur: null, prev: null, vf: 0, vh: 0, placed: false, lastIt: 0 };
 }
 
 /* every snapshot derives a signed forward speed (vf) and turn rate (vh) so
@@ -164,7 +167,14 @@ export const net = {
         seen.add(p.uid);
         if (p.uid === N.uid) continue;
         if (!N.cars.has(p.uid)) N.cars.set(p.uid, makeRemoteCar(p));
+        const r = N.cars.get(p.uid);
         if (p.state && p.state.x !== undefined) moveRemote(p.uid, p.state, performance.now());
+        /* synced power-ups: fire each rival's rocket/oil exactly once (ts dedupe), mirror their shield */
+        if (r) {
+          const it = p.state && p.state.it;
+          if (it && it.ts && r.lastIt !== it.ts) { r.lastIt = it.ts; if (N.deps.onRemoteItem) N.deps.onRemoteItem(p.uid, it, p.name); }
+          if (r.bub) r.bub.visible = !!(p.state && p.state.sh > 0);
+        }
       }
       for (const [uid, r] of N.cars) if (!seen.has(uid)) { N.deps.scene.remove(r.g); N.cars.delete(uid); }
       renderLobby();
@@ -205,7 +215,10 @@ export const net = {
     N.pushT -= dt;
     if (N.pushT > 0 || finished) return;
     N.pushT = racing ? 0.33 : 2.5;
-    this.push({ x: P.pos.x, z: P.pos.z, y: P.pos.y, h: P.h, ts: Date.now(), prog: P.prog, fin: !!P.finished, tms: Math.round(raceT * 1000) });
+    const d = N.deps;
+    const st = { x: P.pos.x, z: P.pos.z, y: P.pos.y, h: P.h, ts: Date.now(), prog: P.prog, fin: !!P.finished, tms: Math.round(raceT * 1000) };
+    if (racing && d.itemEvt) { const it = d.itemEvt(); if (it) st.it = it; if (d.shieldS) st.sh = Math.max(0, Math.ceil(d.shieldS())); } /* synced power-ups ride the existing write — zero extra cost */
+    this.push(st);
   },
 
   onFinish(tms, prog) { /* write final result once */
@@ -239,7 +252,7 @@ export const net = {
   myName() { return N.deps.driverName(); },
   myState() { return { name: this.myName(), car: N.deps.carId(), color: N.deps.carColor() }; },
   uid() { return N.uid; },
-  remotes() { const o = []; for (const [uid, r] of N.cars) if (r.placed && r.g.visible) o.push({ uid, x: r.g.position.x, z: r.g.position.z }); return o; },
+  remotes() { const o = []; for (const [uid, r] of N.cars) if (r.placed && r.g.visible) { const p = N.players.find(q => q.uid === uid); o.push({ uid, x: r.g.position.x, z: r.g.position.z, name: p && p.name }); } return o; },
   /* live race order: finished drivers first (by time), then by track progress */
   standings(me) {
     const rows = [{ uid: N.uid, name: 'YOU', me: true, prog: me.prog, fin: !!me.fin, tms: me.tms || 0 }];

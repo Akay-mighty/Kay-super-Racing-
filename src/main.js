@@ -16,6 +16,7 @@ import { cloud } from './cloud.js';
 import { net } from './net.js';
 import { GhostRec, makeGhostCar } from './ghost.js';
 import { colorize } from './carcolor.js';
+import { DRIVERS, driverById } from './drivers.js';
 
 const $ = id => document.getElementById(id);
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -134,10 +135,10 @@ const trackStart = scene.children.length;
 const TRACKS = {
   city: { id: 'city', name: 'LAGOS CITY', cp: [[0,0,-300],[0,0,0],[10,0,250],[120,6,450],[330,14,540],[560,22,500],[700,24,350],[690,18,120],[560,10,-60],[560,4,-260],[640,0,-440],[540,0,-600],[320,0,-640],[140,0,-560],[40,0,-460]],
     ground: 0x4d5864, road: ['#34363c','#3a3c42'], edge: ['#e8e8ea','#d42a2a'], wall: ['#c9ccd2','#b8bcc4'],
-    city: 460, cityOff: [45, 380], cityH: 1, bills: true, tunnel: true, lamps: true, grand: true, towers: false, palms: 0, trees: 0, umbrellas: 0, rocks: 0, traffic: [] },
+    city: 460, cityOff: [45, 380], cityH: 1, bills: true, tunnel: true, lamps: true, grand: true, towers: false, palms: 0, trees: 0, umbrellas: 0, rocks: 0, traffic: [['taxi', 9], ['danfo', 6], ['keke', 6], ['van', 5]] },
   bridge: { id: 'bridge', name: 'LAGOS BRIDGE', cp: [[0,0,-300],[0,4,-80],[0,10,120],[0,13,320],[60,13,470],[240,13,540],[430,12,520],[580,11,400],[640,11,220],[600,11,60],[620,9,-120],[540,6,-320],[380,2,-480],[180,0,-560],[40,0,-450]],
     ground: 0x0d3a55, road: ['#3c3f46','#41444b'], edge: ['#e8e8ea','#d42a2a'], wall: ['#d9dde3','#c2c7cf'],
-    city: 80, cityOff: [230, 520], cityH: 1.9, bills: true, tunnel: false, lamps: true, grand: true, towers: true, palms: 0, trees: 0, umbrellas: 0, rocks: 0, traffic: [['danfo', 6], ['keke', 4]] },
+    city: 80, cityOff: [230, 520], cityH: 1.9, bills: true, tunnel: false, lamps: true, grand: true, towers: true, palms: 0, trees: 0, umbrellas: 0, rocks: 0, traffic: [['danfo', 6], ['keke', 4], ['taxi', 5]] },
   beach: { id: 'beach', name: 'EKO BEACH', cp: [[0,0,-320],[0,0,-80],[40,2,140],[160,3,330],[330,4,430],[520,3,400],[640,2,260],[700,3,80],[660,4,-90],[560,2,-240],[600,5,-420],[440,3,-560],[240,0,-620],[60,0,-520]],
     ground: 0xd9c28c, road: ['#4a4a4e','#50505a'], edge: ['#f2f2f0','#2a9d5c'], wall: ['#f5e9d0','#e6d5ae'],
     city: 16, cityOff: [70, 320], cityH: 0.34, bills: 3, tunnel: false, lamps: false, grand: true, towers: false, palms: 90, trees: 0, umbrellas: 26, rocks: 0, traffic: [['keke', 3], ['danfo', 2]] },
@@ -164,10 +165,11 @@ const TRAF = [];
 let coinMesh = null, gemMesh = null, coinData = [], gemData = [], pubMeshes = [];
 const Oils = [], Rockets = [];
 const PU = { item: null, shield: 0, magnet: 0 };
+let mpEvt = null; /* last fired item event, piggybacked on the mp state push (synced power-ups, zero extra writes) */
 const PU_NAMES = { rocket: 'ROCKET', shield: 'SHIELD', oil: 'OIL SLICK', magnet: 'MAGNET', nitro: 'NITRO' };
 const allPads = () => cfg.env === 'nightRain' ? pads.concat(padsNight) : pads; /* module scope — stepPlayer reads it */
 let raceCoins = 0, raceGems = 0, P_oilCd = 0, coinSpin = 0;
-const itemsOn = () => cfg.mode !== 'mp' && cfg.type !== 'arena';
+const itemsOn = () => cfg.type !== 'arena'; /* power-ups & coins ON in multiplayer too (per-player boxes, synced rockets) */
 function ensureTrack(id) {
   const tk = TRACKS[id] || TRACKS.city;
   if (curTrack === tk.id && world) return;
@@ -559,6 +561,11 @@ function buildProps(tk) {
   }
 }
 
+/* ---------- drivers: equipped perk (see drivers.js) ---------- */
+const drvOwned = () => { const o = store.get('ksr.drv', ['kay', 'amina']); return Array.isArray(o) ? o : ['kay', 'amina']; };
+const drvId = () => store.get('ksr.driver', 'kay');
+const drv = () => driverById(drvId()).perk;
+
 /* ---------- track traffic: danfo buses & keke tricycles (Lagos flavour) ---------- */
 function mkDanfo() {
   const g = new THREE.Group();
@@ -582,12 +589,39 @@ function mkKeke() {
   [[0, 1.2], [-0.62, -0.9], [0.62, -0.9]].forEach(([x, z]) => { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.18, 10), dk); w.rotation.z = Math.PI / 2; w.position.set(x, 0.3, z); g.add(w); });
   return g;
 }
+/* Lagos yellow cab: the slop-city workhorse — sleek, quick, everywhere */
+function mkTaxi() {
+  const g = new THREE.Group();
+  const y = new THREE.MeshStandardMaterial({ color: 0xf7c531, roughness: 0.42, metalness: 0.25 });
+  const dk = new THREE.MeshStandardMaterial({ color: 0x101318, roughness: 0.6 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x0e2233, roughness: 0.15, metalness: 0.6 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.62, 4.4), y); body.position.y = 0.72; body.castShadow = true; g.add(body);
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(1.82, 0.3, 1.25), y); hood.position.set(0, 1.06, 1.55); g.add(hood);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.55, 2.2), glass); cabin.position.set(0, 1.32, -0.2); g.add(cabin);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.74, 0.16, 2.24), y); roof.position.set(0, 1.62, -0.2); g.add(roof);
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.24, 0.34), new THREE.MeshBasicMaterial({ color: 0xfff3c0, toneMapped: false })); sign.position.set(0, 1.8, 0.62); g.add(sign);
+  [[-0.98, 1.45], [0.98, 1.45], [-0.98, -1.45], [0.98, -1.45]].forEach(([x, z]) => { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.26, 10), dk); w.rotation.z = Math.PI / 2; w.position.set(x, 0.36, z); g.add(w); });
+  return g;
+}
+/* white delivery van — slow, wide, and always in your lane */
+function mkVan() {
+  const g = new THREE.Group();
+  const w = new THREE.MeshStandardMaterial({ color: 0xe8eaee, roughness: 0.55, metalness: 0.1 });
+  const dk = new THREE.MeshStandardMaterial({ color: 0x11141a, roughness: 0.6 });
+  const glass = new THREE.MeshStandardMaterial({ color: 0x0e2233, roughness: 0.2, metalness: 0.5 });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.9, 4.9), w); box.position.y = 1.35; box.castShadow = true; g.add(box);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.9, 0.9), w); nose.position.set(0, 0.95, 2.7); g.add(nose);
+  const wind = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.62, 0.1), glass); wind.position.set(0, 1.32, 2.48); g.add(wind);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.24, 0.3, 4.94), new THREE.MeshStandardMaterial({ color: 0x2456b0, roughness: 0.5 })); stripe.position.y = 0.95; g.add(stripe);
+  [[-1.08, 1.55], [1.08, 1.55], [-1.08, -1.6], [1.08, -1.6]].forEach(([x, z]) => { const wl = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.28, 10), dk); wl.rotation.z = Math.PI / 2; wl.position.set(x, 0.4, z); g.add(wl); });
+  return g;
+}
 function buildTraffic(tk) {
   TRAF.forEach(t => { if (t.mesh.parent) t.mesh.parent.remove(t.mesh); });
   TRAF.length = 0;
   (tk.traffic || []).forEach(([kind, cnt]) => {
     for (let i = 0; i < cnt; i++) {
-      const mesh = kind === 'danfo' ? mkDanfo() : mkKeke();
+      const mesh = kind === 'danfo' ? mkDanfo() : kind === 'taxi' ? mkTaxi() : kind === 'van' ? mkVan() : mkKeke();
       world.add(mesh);
       TRAF.push({ mesh, kind, s: 0, lat: 0, speed: 0, dir: 1, stun: 0, base: 0 });
     }
@@ -599,7 +633,7 @@ function resetTraffic() {
     t.s = ((i + 0.6) * N / Math.max(1, TRAF.length)) % N;
     t.dir = i % 2 ? -1 : 1;
     t.lat = (i % 2 ? -1 : 1) * (2.6 + (i % 3) * 2.1);
-    t.base = t.kind === 'danfo' ? rand(10, 14) : rand(8, 11);
+    t.base = t.kind === 'danfo' ? rand(10, 14) : t.kind === 'taxi' ? rand(12, 16) : t.kind === 'van' ? rand(9, 12) : rand(8, 11);
     t.speed = t.base; t.stun = 0;
   });
 }
@@ -662,7 +696,7 @@ function rebuildPickups() {
 }
 const rollItem = () => { const r = Math.random(); return r < 0.30 ? 'rocket' : r < 0.52 ? 'shield' : r < 0.70 ? 'oil' : r < 0.90 ? 'magnet' : 'nitro'; };
 function resetPickups() {
-  raceCoins = 0; raceGems = 0; P_oilCd = 0;
+  raceCoins = 0; raceGems = 0; P_oilCd = 0; mpEvt = null;
   PU.item = null; PU.shield = 0; PU.magnet = 0;
   if (shieldBall) shieldBall.visible = false;
   document.body.classList.remove('puitem');
@@ -683,16 +717,23 @@ function usePowerup() {
   else if (it === 'oil') { dropOil(); toast('OIL DROPPED', '#8df'); }
   else if (it === 'magnet') { PU.magnet = 7; toast('COIN MAGNET \u00b7 7s', '#ffd166'); sfxPad(); }
 }
-function fireRocket() {
+const mkRocketMesh = (cBody, cFlame) => {
   const m = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.6, 8).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.0, 0.25), toneMapped: false }));
-  const flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0xff9a2f, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-  flame.scale.set(1.6, 1.6, 1); flame.position.z = -1.2;
-  m.add(body, flame); scene.add(m);
+  m.add(new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.6, 8).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: cBody, toneMapped: false })));
+  const fl = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: cFlame, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  fl.scale.set(1.6, 1.6, 1); fl.position.z = -1.2; m.add(fl);
+  return m;
+};
+function fireRocket() {
+  const m = mkRocketMesh(new THREE.Color(2.6, 1.0, 0.25), 0xff9a2f); scene.add(m);
   let tgt = null, bd = 1e9;
   AIs.forEach(a => { if (!a.mesh.visible) return; const d = ((a.s - P.idx) % N + N) % N; if (d > 2 && d < 400 && d < bd) { bd = d; tgt = { o: a }; } });
+  if (!tgt && net.active) { /* multiplayer: home on the nearest human rival's live ghost */
+    net.remotes().forEach(o => { const dx = o.x - P.pos.x, dz = o.z - P.pos.z, d2 = dx * dx + dz * dz; if (d2 < bd && d2 < 160000) { bd = d2; tgt = { ghost: o.uid }; } });
+  }
   if (!tgt) TRAF.forEach(t => { const d = ((t.s - P.idx) % N + N) % N; if (d > 2 && d < 400 && d < bd) { bd = d; tgt = { o: t, traf: true }; } });
   Rockets.push({ mesh: m, s: (P.idx + 4) % N, lat: clamp(P.lat || 0, -(W - 1), W - 1), life: 3.4, tgt, speed: 135 });
+  mpEvt = { k: 'r', s: P.idx, lat: clamp(P.lat || 0, -(W - 1), W - 1), ts: Date.now() }; /* rivals spawn this rocket on their own screen */
   sfxWhoosh(); shake = Math.max(shake, 0.3);
 }
 function dropOil() {
@@ -701,6 +742,7 @@ function dropOil() {
   mesh.position.set(back.x, pts[P.idx].y + 0.09, back.z);
   world.add(mesh);
   Oils.push({ mesh, x: back.x, z: back.z, life: 14, arm: 1.2 });
+  mpEvt = { k: 'o', s: P.idx, lat: clamp(P.lat || 0, -(W - 1), W - 1), ts: Date.now() };
 }
 function boomFX(p, n = 8) { for (let i = 0; i < n; i++) puff(p, V3(rand(-6, 6), rand(1, 5), rand(-6, 6)), 1.6); sfxThud(); shake = Math.max(shake, 0.45); }
 function stepPickups(dt, racing) {
@@ -759,10 +801,7 @@ function aiShoot(a, dt) {
   a.fireCd -= dt; a.oilCd2 -= dt;
   if (a.fireCd <= 0 && gap > 6 && gap < 100 && !FL.on) {
     a.fireCd = [rand(16, 24), rand(9, 14), rand(4.5, 7.5)][cfg.diff] || 12;
-    const m = new THREE.Group();
-    m.add(new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.6, 8).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.9, 1.4, 2.8), toneMapped: false })));
-    const fl = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0xff3b3b, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-    fl.scale.set(1.6, 1.6, 1); fl.position.z = -1.2; m.add(fl); scene.add(m);
+    const m = mkRocketMesh(new THREE.Color(0.9, 1.4, 2.8), 0xff3b3b); scene.add(m);
     Rockets.push({ mesh: m, s: (a.s + 4) % N, lat: a.lat, life: 3.6, tgt: null, ai: a, speed: Math.max(125, a.speed + 55) });
     toast('INCOMING! ' + a.name, '#ff6b6b'); sfxWhoosh();
   }
@@ -777,7 +816,11 @@ function stepRockets(dt, racing) {
   for (let i = Rockets.length - 1; i >= 0; i--) {
     const r = Rockets[i];
     r.life -= dt; r.s = (r.s + r.speed * dt / ds) % N;
-    if (r.tgt) r.lat += (clamp(r.tgt.o.lat || 0, -(W - 1), W - 1) - r.lat) * Math.min(1, dt * 3.5);
+    if (r.tgt && r.tgt.o) r.lat += (clamp(r.tgt.o.lat || 0, -(W - 1), W - 1) - r.lat) * Math.min(1, dt * 3.5);
+    if (r.tgt && r.tgt.ghost) { /* multiplayer: steer toward the rival's LIVE ghost position */
+      const gh = net.remotes().find(o => o.uid === r.tgt.ghost);
+      if (gh) { const g0 = sample(r.s, 0), rr = right[r.s | 0] || right[0]; const lat = clamp((gh.x - g0.p.x) * rr.x + (gh.z - g0.p.z) * rr.z, -(W - 1), W - 1); r.lat += (lat - r.lat) * Math.min(1, dt * 3.2); }
+    }
     const g = sample(r.s, r.lat);
     r.mesh.position.set(g.p.x, g.p.y + 0.65, g.p.z);
     r.mesh.rotation.y = Math.atan2(g.t.x, g.t.z);
@@ -790,11 +833,15 @@ function stepRockets(dt, racing) {
         if (dx * dx + dz * dz < 9) {
           hit = true;
           if (PU.shield > 0) { PU.shield = 0; if (shieldBall) shieldBall.visible = false; toast('SHIELD BLOCKED IT!', '#8df'); }
-          else { P.spin += (Math.random() < 0.5 ? -1 : 1) * rand(5, 7); P.vel.multiplyScalar(0.45); shake = Math.max(shake, 0.9); toast('HIT BY ' + r.ai.name + '!', '#ff6b6b'); }
+          else { P.spin += (Math.random() < 0.5 ? -1 : 1) * rand(5, 7) * (drv().spin || 1); P.vel.multiplyScalar(0.45); shake = Math.max(shake, 0.9); toast('HIT BY ' + r.ai.name + '!', '#ff6b6b'); }
         }
       }
     } else if (racing) {
       for (const a of AIs) { if (!a.mesh.visible) continue; const dx = a.mesh.position.x - r.mesh.position.x, dz = a.mesh.position.z - r.mesh.position.z; if (dx * dx + dz * dz < 20) { a.spinT = 1.15; a.speed *= 0.2; a.lat += rand(-1.5, 1.5); hit = true; toast('ROCKET HIT!', '#ff9a52'); break; } }
+      if (!hit && r.tgt && r.tgt.ghost) { /* visual confirmation only — the victim's own screen does the real spin */
+        const gh = net.remotes().find(o => o.uid === r.tgt.ghost);
+        if (gh) { const dx = gh.x - r.mesh.position.x, dz = gh.z - r.mesh.position.z; if (dx * dx + dz * dz < 20) { hit = true; toast('DIRECT HIT · ' + (gh.name || 'RIVAL') + '!', '#ff9a52'); } }
+      }
       if (!hit) for (const t of TRAF) { const dx = t.mesh.position.x - r.mesh.position.x, dz = t.mesh.position.z - r.mesh.position.z; if (dx * dx + dz * dz < 18) { t.stun = 2.2; hit = true; toast('ROADBLOCK CLEARED!', '#ff9a52'); break; } }
     }
     if (hit || r.life <= 0) { boomFX(r.mesh.position, hit ? 10 : 4); scene.remove(r.mesh); Rockets.splice(i, 1); }
@@ -810,7 +857,7 @@ function stepOils(dt, racing) {
     AIs.forEach(a => { if (o.ai === a || !a.mesh.visible || a.spinT > 0 || a.oilCd > 0) return; const dx = a.mesh.position.x - o.x, dz = a.mesh.position.z - o.z; if (dx * dx + dz * dz < 5.8) { a.spinT = 0.95; a.oilCd = 5; a.speed *= 0.55; } });
     TRAF.forEach(t => { if (t.stun > 0) return; const dx = t.mesh.position.x - o.x, dz = t.mesh.position.z - o.z; if (dx * dx + dz * dz < 5.8) t.stun = 1.6; });
     if (P_oilCd > 0) P_oilCd -= dt;
-    else if (PU.shield <= 0 && FL.alt < 2) { const dx = P.pos.x - o.x, dz = P.pos.z - o.z; if (dx * dx + dz * dz < 5.4) { P.spin += rand(4.5, 6.5); P.vel.multiplyScalar(0.8); P_oilCd = 3.5; shake = Math.max(shake, 0.5); toast('OIL SLICK!', '#ffd166'); sfxThud(); } }
+    else if (PU.shield <= 0 && FL.alt < 2) { const dx = P.pos.x - o.x, dz = P.pos.z - o.z; if (dx * dx + dz * dz < 5.4) { P.spin += rand(4.5, 6.5) * (drv().spin || 1); P.vel.multiplyScalar(0.8); P_oilCd = 3.5; shake = Math.max(shake, 0.5); toast('OIL SLICK!', '#ffd166'); sfxThud(); } }
   }
 }
 /* boot the default city circuit */
@@ -854,6 +901,11 @@ const carStats = id => {
   s.steer = Math.round(s.steer * (1 + 0.035 * ty) * 100) / 100;
   s.drift = Math.round(s.drift * (1 + 0.05 * ty) * 100) / 100;
   s.ni = economy.upLevel(id, 'ni');
+  if (id === economy.sel) { /* the equipped driver's perk rides on YOUR selected car only (display + physics stay in agreement) */
+    const p = drv();
+    s.top = Math.round(s.top * (p.top || 1) * 10) / 10;
+    s.steer = Math.round(s.steer * (p.steer || 1) * 100) / 100;
+  }
   return s;
 };
 const car = makeCar(curColor, carGeo(economy.selected()), getCar(economy.selected()).tint || null);
@@ -1315,6 +1367,8 @@ function act(a) {
 }
 document.addEventListener('click', e => {
   kbIdx = -1; document.querySelectorAll('.kfocus').forEach(b => b.classList.remove('kfocus'));
+  const dv = e.target.closest('[data-drv]'); /* driver card: equip owned / buy locked (must run before other handlers) */
+  if (dv && dv.dataset.drv) { driverClick(dv.dataset.drv); return; }
   const up = e.target.closest('.upBtn'); /* upgrade chip: buy the next level (must run before carCard pick) */
   if (up && up.dataset.up) {
     const [cid, k] = up.dataset.up.split(':');
@@ -1397,12 +1451,12 @@ function stepPlayer(dt, racing) {
   P.vel.lerp(nf.multiplyScalar(fwd >= 0 ? sp2 : -sp2), 1 - Math.exp(-grip * dt));
   const slip = P.vel.dot(V3(-Math.cos(P.h), 0, Math.sin(P.h)));
   if (FL.on) { /* nitro drained by thrusters above */ }
-  else if (boosting) P.nitro = Math.max(0, P.nitro - 0.26 * (1 - 0.06 * NIV) * dt); else P.nitro = Math.min(1, P.nitro + (0.025 + (k.drift && sp > 30 ? 0.09 : 0)) * (1 + 0.10 * NIV) * dt);
+  else if (boosting) P.nitro = Math.max(0, P.nitro - 0.26 * (1 - 0.06 * NIV) * (drv().niBurn || 1) * dt); else P.nitro = Math.min(1, P.nitro + (0.025 + (k.drift && sp > 30 ? 0.09 : 0)) * (1 + 0.10 * NIV) * (drv().niRef || 1) * dt);
   if (cfg.type !== 'arena') {
     const drifting = can && !FL.on && Math.abs(slip) > 4.5 && sp > 18;
     if (drifting) { RD.hold = 1.1; RD.comboT += dt; } else { RD.hold -= dt; if (RD.hold <= 0) RD.comboT = 0; }
     RD.mult = 1 + Math.min(4, Math.floor(RD.comboT / 1.8)); RD.maxMult = Math.max(RD.maxMult, RD.mult);
-    if (drifting) RD.pts += Math.abs(slip) * sp * 0.5 * RD.mult * dt;
+    if (drifting) RD.pts += Math.abs(slip) * sp * 0.5 * RD.mult * (drv().drift || 1) * dt;
   }
   P.pos.addScaledVector(P.vel, dt);
 
@@ -1709,7 +1763,7 @@ function finishRace() {
   } else { cash = Math.round(sc / 2); earnRows.push(['Drift score bonus', cash]); }
   const db = arenaOn ? 0 : Math.round(RD.pts / 10);
   if (db > 0) { cash += db; earnRows.push(['Drift bonus', db]); }
-  const cc = raceCoins * 60, gc = raceGems * 750;
+  const cc = Math.round(raceCoins * 60 * (drv().cash || 1)), gc = Math.round(raceGems * 750 * (drv().cash || 1));
   if (cc) { cash += cc; earnRows.push(['Coins collected \u00d7' + raceCoins, cc]); }
   if (gc) { cash += gc; earnRows.push(['Gems collected \u00d7' + raceGems, gc]); }
   const fb = Math.round(FL.time * (cfg.env === 'nightRain' ? 180 : 100));
@@ -1804,6 +1858,32 @@ function updateMoneyUI() {
   updateNightUI();
 }
 const statBar = (label, v) => `<div class="bar"><span>${label}</span><i style="--w:${Math.round(clamp(v, 0, 1) * 100)}%"></i></div>`;
+/* driver picker: two free racers, the rest cost race cash */
+function renderDrivers() {
+  const list = $('drvList'); if (!list) return;
+  const owned = drvOwned(), cur = drvId();
+  list.innerHTML = DRIVERS.map(d => {
+    const has = owned.includes(d.id), eq = cur === d.id;
+    const price = has ? (eq ? 'EQUIPPED' : 'TAP TO EQUIP') : '$' + d.price.toLocaleString();
+    return `<button type="button" class="drvCard${eq ? ' eq' : ''}${!has ? ' lock' : ''}" data-drv="${d.id}">
+      <span class="dvAva">${d.name[0]}</span>
+      <span class="dvMid"><b>${d.name} <i>· ${d.title}</i></b><small>${d.desc}</small></span>
+      <span class="dvPrice${!has && economy.money < d.price ? ' no' : ''}">${price}</span>
+    </button>`;
+  }).join('');
+}
+function driverClick(id) {
+  const d = driverById(id), owned = drvOwned();
+  if (owned.includes(id)) {
+    if (drvId() === id) return;
+    store.set('ksr.driver', id); CS = carStats(economy.selected()); /* perk applies the moment you equip */
+    toast(`${d.name} EQUIPPED · ${d.desc}`, '#8be5ff'); sfxPad(); renderDrivers(); renderGarage(); return;
+  }
+  if (economy.money >= d.price) {
+    economy.spend(d.price); store.set('ksr.drv', [...owned, id]); store.set('ksr.driver', id);
+    CS = carStats(economy.selected()); sfxMission(); confetti(35); toast(`${d.name} HIRED! ${d.desc}`, '#7dff8a'); renderDrivers(); renderGarage();
+  } else { toast(`NEED $${(d.price - economy.money).toLocaleString()} MORE FOR ${d.name}`, '#ff7b7b'); beep(220, 0.2, 'square', 0.1); }
+}
 let previewId = null;
 function renderGarage() {
   const list = $('carList'); if (!list) return;
@@ -1816,16 +1896,19 @@ function renderGarage() {
     const cta = sel ? 'SELECTED' : owned ? 'TAP TO SELECT' : (previewId === c.id ? (afford ? 'TAP AGAIN TO BUY $' + c.price.toLocaleString() : 'NEED $' + (c.price - economy.money).toLocaleString() + ' MORE') : 'TAP TO PREVIEW');
     const upRow = owned ? `<div class="upRow">${[['en', 'ENGINE'], ['ty', 'TYRES'], ['ni', 'NITRO']].map(([k, lab]) => {
       const lv = economy.upLevel(c.id, k), max = lv >= 5, cost = max ? 0 : economy.upCost(k, lv);
-      return `<button type="button" class="upBtn${max ? ' max' : ''}${!max && economy.money < cost ? ' cant' : ''}" data-up="${c.id}:${k}" aria-label="Upgrade ${lab}">${lab}<b>${max ? 'MAX' : 'Lv ' + lv}</b><small>${max ? '\u00b7\u00b7\u00b7' : '$' + cost.toLocaleString()}</small></button>`;
+      const pips = Array.from({ length: 5 }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');
+      return `<button type="button" class="upBtn${max ? ' max' : ''}${!max && economy.money < cost ? ' cant' : ''}" data-up="${c.id}:${k}" aria-label="Upgrade ${lab}">
+        <span class="upLab">${lab}</span><span class="upPips">${pips}</span><small>${max ? 'MAX' : '$' + cost.toLocaleString()}</small></button>`;
     }).join('')}</div>` : '';
     return `<div class="carCard${sel ? ' sel' : ''}${!owned && !afford ? ' locked' : ''}${!owned && afford && previewId === c.id ? ' cta-buy' : ''}${!owned && !afford && previewId === c.id ? ' cta-no' : ''}" data-car="${c.id}" data-cta="${cta}">
       <div class="top"><span>${c.name}</span> ${tags}<span class="price ${owned ? 'own' : afford ? '' : 'no'}">${price}</span></div>
       <div class="desc">${c.desc}</div>
-      <div class="bars">${statBar('SPEED', eff.top / 136)}${statBar('ACCEL', eff.accel / 72)}${statBar('GRIP', (eff.steer - 1.5) / 0.85)}</div>
+      <div class="bars">${statBar('SPEED', eff.top / 136)}${statBar('ACCEL', eff.accel / 72)}${statBar('GRIP', (eff.steer - 1.5) / 0.85)}${statBar('NITRO', 0.45 + 0.11 * (eff.ni || 0))}</div>
       ${upRow}
     </div>`;
   }).join('');
   list.scrollLeft = keep;
+  renderDrivers();
 }
 function garageClick(id) {
   const c = getCar(id), owned = economy.has(id);
@@ -2055,6 +2138,22 @@ net.init({
   optEnv: () => opt.env, optLaps: () => opt.laps,
   netGo(room) { startRace({ mode: 'mp', laps: room.laps || 3, env: room.env || 'day', ai: 0, diff: 2, title: `ROOM ${net.code} · ${net.players.length} DRIVERS` }); },
   inRace: () => state === 'race' || state === 'count' || state === 'finished',
+  itemEvt: () => (itemsOn() && cfg.mode === 'mp' ? mpEvt : null),
+  shieldS: () => PU.shield,
+  onRemoteItem(uid, it, name) { /* a rival fired something: spawn it locally — same start, same speed, same homing, so both screens agree */
+    if (!it || state !== 'race' || !itemsOn()) return;
+    if (it.k === 'r') {
+      const m = mkRocketMesh(new THREE.Color(0.9, 1.4, 2.8), 0xff3b3b); scene.add(m);
+      Rockets.push({ mesh: m, s: ((it.s || 0) + 4) % N, lat: clamp(it.lat || 0, -(W - 1), W - 1), life: 3.6, tgt: null, ai: { name: name || 'RIVAL' }, speed: 135 });
+      toast('INCOMING · ' + (name || 'RIVAL'), '#ff6b6b'); sfxWhoosh();
+    } else if (it.k === 'o') {
+      const bk = sample(it.s || 0, clamp(it.lat || 0, -(W - 1), W - 1));
+      const mesh = new THREE.Mesh(new THREE.CircleGeometry(2.3, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x0a0a0c, transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+      mesh.position.set(bk.p.x, bk.p.y + 0.09, bk.p.z); world.add(mesh);
+      Oils.push({ mesh, x: bk.p.x, z: bk.p.z, life: 12, arm: 1.2 });
+      toast('OIL DOWN · ' + (name || 'RIVAL'), '#ffd166');
+    }
+  },
   onLobby: () => renderMp()
 });
 const mpIn = $('mpCodeIn');
