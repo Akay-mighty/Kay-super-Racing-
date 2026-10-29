@@ -685,6 +685,27 @@ function stepPickups(dt, racing) {
   stepRockets(dt, racing);
   stepOils(dt, racing);
 }
+/* rivals shoot back: rockets at you when they are behind, oil when you are right on their tail */
+function aiShoot(a, dt) {
+  if (!itemsOn() || cfg.type === 'arena' || P.finished || !a.mesh.visible || a.spinT > 0) return;
+  const gap = P.prog - a.prog; /* >0: player is ahead of this AI */
+  a.fireCd -= dt; a.oilCd2 -= dt;
+  if (a.fireCd <= 0 && gap > 6 && gap < 100 && !FL.on) {
+    a.fireCd = [rand(16, 24), rand(9, 14), rand(4.5, 7.5)][cfg.diff] || 12;
+    const m = new THREE.Group();
+    m.add(new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.6, 8).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.9, 1.4, 2.8), toneMapped: false })));
+    const fl = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0xff3b3b, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    fl.scale.set(1.6, 1.6, 1); fl.position.z = -1.2; m.add(fl); scene.add(m);
+    Rockets.push({ mesh: m, s: (a.s + 4) % N, lat: a.lat, life: 3.6, tgt: null, ai: a, speed: Math.max(125, a.speed + 55) });
+    toast('INCOMING! ' + a.name, '#ff6b6b'); sfxWhoosh();
+  }
+  if (a.hard && a.oilCd2 <= 0 && gap < -3 && gap > -26 && Oils.length < 6) { /* player is right behind this AI */
+    a.oilCd2 = rand(9, 15);
+    const mesh = new THREE.Mesh(new THREE.CircleGeometry(2.3, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x0a0a0c, transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    const bk = sample(a.s - 3, a.lat); mesh.position.set(bk.p.x, bk.p.y + 0.09, bk.p.z); world.add(mesh);
+    Oils.push({ mesh, x: bk.p.x, z: bk.p.z, life: 12, arm: 1.2, ai: a });
+  }
+}
 function stepRockets(dt, racing) {
   for (let i = Rockets.length - 1; i >= 0; i--) {
     const r = Rockets[i];
@@ -695,7 +716,17 @@ function stepRockets(dt, racing) {
     r.mesh.rotation.y = Math.atan2(g.t.x, g.t.z);
     if (Math.random() < 0.5) puff(r.mesh.position, V3(0, 0.5, 0), 0.55);
     let hit = false;
-    if (racing) {
+    if (r.ai) { /* an AI rocket: homes on the player's lane */
+      r.lat += (clamp(P.lat || 0, -(W - 1), W - 1) - r.lat) * Math.min(1, dt * 2.6);
+      if (racing && !P.finished && FL.alt < 3) {
+        const dx = car.position.x - r.mesh.position.x, dz = car.position.z - r.mesh.position.z;
+        if (dx * dx + dz * dz < 9) {
+          hit = true;
+          if (PU.shield > 0) { PU.shield = 0; if (shieldBall) shieldBall.visible = false; toast('SHIELD BLOCKED IT!', '#8df'); }
+          else { P.spin += (Math.random() < 0.5 ? -1 : 1) * rand(5, 7); P.vel.multiplyScalar(0.45); shake = Math.max(shake, 0.9); toast('HIT BY ' + r.ai.name + '!', '#ff6b6b'); }
+        }
+      }
+    } else if (racing) {
       for (const a of AIs) { if (!a.mesh.visible) continue; const dx = a.mesh.position.x - r.mesh.position.x, dz = a.mesh.position.z - r.mesh.position.z; if (dx * dx + dz * dz < 20) { a.spinT = 1.15; a.speed *= 0.2; a.lat += rand(-1.5, 1.5); hit = true; toast('ROCKET HIT!', '#ff9a52'); break; } }
       if (!hit) for (const t of TRAF) { const dx = t.mesh.position.x - r.mesh.position.x, dz = t.mesh.position.z - r.mesh.position.z; if (dx * dx + dz * dz < 18) { t.stun = 2.2; hit = true; toast('ROADBLOCK CLEARED!', '#ff9a52'); break; } }
     }
@@ -709,7 +740,7 @@ function stepOils(dt, racing) {
     o.mesh.material.opacity = o.life < 2 ? Math.max(0, o.life / 2) * 0.85 : 0.85;
     if (o.life <= 0) { if (o.mesh.parent) o.mesh.parent.remove(o.mesh); o.mesh.geometry.dispose(); o.mesh.material.dispose(); Oils.splice(i, 1); continue; }
     if (!racing || P.finished) continue;
-    AIs.forEach(a => { if (!a.mesh.visible || a.spinT > 0 || a.oilCd > 0) return; const dx = a.mesh.position.x - o.x, dz = a.mesh.position.z - o.z; if (dx * dx + dz * dz < 5.8) { a.spinT = 0.95; a.oilCd = 5; a.speed *= 0.55; } });
+    AIs.forEach(a => { if (o.ai === a || !a.mesh.visible || a.spinT > 0 || a.oilCd > 0) return; const dx = a.mesh.position.x - o.x, dz = a.mesh.position.z - o.z; if (dx * dx + dz * dz < 5.8) { a.spinT = 0.95; a.oilCd = 5; a.speed *= 0.55; } });
     TRAF.forEach(t => { if (t.stun > 0) return; const dx = t.mesh.position.x - o.x, dz = t.mesh.position.z - o.z; if (dx * dx + dz * dz < 5.8) t.stun = 1.6; });
     if (P_oilCd > 0) P_oilCd -= dt;
     else if (PU.shield <= 0 && FL.alt < 2) { const dx = P.pos.x - o.x, dz = P.pos.z - o.z; if (dx * dx + dz * dz < 5.4) { P.spin += rand(4.5, 6.5); P.vel.multiplyScalar(0.8); P_oilCd = 3.5; shake = Math.max(shake, 0.5); toast('OIL SLICK!', '#ffd166'); sfxThud(); } }
@@ -888,7 +919,7 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
 /* gamepad */
 const gp = { steer: 0, up: 0, down: 0, boost: 0, drift: 0, fly: false, item: false };
-let padFlyPrev = false, flyKeyPrev = false, padItemPrev = false;
+let flyWant = 0, padFlyPrev = false, flyKeyPrev = false, padItemPrev = false;
 function pollPad() {
   const gps = navigator.getGamepads ? navigator.getGamepads() : [];
   let dev = null; for (const g of gps) if (g && g.connected) { dev = g; break; }
@@ -962,10 +993,10 @@ const toast = (txt, col = '#7dff8a') => { const e = $('toast'); e.textContent = 
 let state = 'menu', cdT = 3, raceT = 0, shake = 0, camYaw = P.h, lastRank = 6, ovCool = 0, goT = 0, prevState = 'race', menuT = 0, prevCrosses = 0, lapStart = 0, bestLap = Infinity;
 const DIFF = [0.9, 1, 1.07], PTS = [10, 8, 6, 4, 2, 1], LEVELS = ['Easy', 'Normal', 'Hard'];
 const CUPS = [
-  { name: 'CITY DAWN', type: 'race', env: 'dawn', laps: 2, diff: 0, track: 'city' },
-  { name: 'BEACH SPRINT', type: 'race', env: 'day', laps: 3, diff: 1, track: 'beach' },
+  { name: 'CITY DAWN', type: 'race', env: 'dawn', laps: 2, diff: 1, track: 'city' },
+  { name: 'BEACH SPRINT', type: 'race', env: 'day', laps: 3, diff: 2, track: 'beach' },
   { name: 'AIRFIELD DRIFT', type: 'arena', env: 'day', dur: 90, diff: 1, track: 'city' },
-  { name: 'BRIDGE RUN', type: 'race', env: 'sunset', laps: 3, diff: 1, track: 'bridge' },
+  { name: 'BRIDGE RUN', type: 'race', env: 'sunset', laps: 3, diff: 2, track: 'bridge' },
   { name: 'NIGHT GRAND PRIX', type: 'race', env: 'night', laps: 3, diff: 2, track: 'city' }
 ];
 /* NIGHT CIRCUIT — special hard chapter: rain, neon, low grip, ×1.8 cash */
@@ -1021,11 +1052,11 @@ function resetWorld(c) {
   if (arenaOn) { g = { p: V3(0, 0, -150) }; P.pos.set(0, 0, -150); P.h = 0; P.idx = 0; }
   else { const slot = c.ai + (c.netSlot || 0); g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
   P.vel.set(0, 0, 0); P.spin = 0; P.crosses = 0; P.nitro = 1; P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0;
-  AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = (rand(62, 71) - k * 0.4) * DIFF[c.diff] * (0.74 + CS.top / 132 * 0.28); });
+  AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = c.diff >= 2 ? CS.top * rand(0.98, 1.06) - k * 0.6 : (rand(62, 71) - k * 0.4) * DIFF[c.diff] * (0.74 + CS.top / 132 * 0.28); a.hard = c.diff >= 2; a.boostT = 0; a.boostCd = rand(3, 7); a.fireCd = rand(4, 9) + k * 1.5 + [22, 9, 0][c.diff] ; a.oilCd2 = rand(6, 12); });
   smoke.forEach(o => { o.life = 0; o.s.visible = false; });
   car.flames.forEach(f => { f.visible = false; });
   Object.assign(A, { score: 0, comboT: 0, hold: 0, mult: 1, maxMult: 1, cones: 0, dur: c.dur || 90, t: c.dur || 90, hit: 0 });
-  Object.assign(FL, { on: false, alt: 0, tgt: 0, land: false, time: 0 }); document.body.classList.remove('flying');
+  Object.assign(FL, { on: false, alt: 0, tgt: 0, land: false, time: 0 }); flyWant = 0; document.body.classList.remove('flying');
   Object.assign(RD, { pts: 0, hold: 0, comboT: 0, mult: 1, maxMult: 1, pads: 0 });
   GR.reset();
   pads.forEach(p => { p.userData.cd = 0; p.userData.flash = 0; });
@@ -1251,8 +1282,14 @@ function stepPlayer(dt, racing) {
   const flyEdge = (keys.KeyF && !flyKeyPrev) || padFlyEdge || touch.fly === 1; flyKeyPrev = !!keys.KeyF; touch.fly = 0;
   if (CS.fly && can && cfg.type !== 'arena') {
     if (flyEdge) {
-      if (!FL.on && fwd > 26) { FL.on = true; FL.alt = 0.01; FL.tgt = 20; FL.land = false; sfxWhoosh(); toast('FLIGHT MODE \u2708', '#8df'); }
-      else if (FL.on && !FL.land) { FL.land = true; toast('LANDING', '#8df'); }
+      if (!FL.on) flyWant = 0.8; /* remember the tap, so it still works a moment later */
+      else if (!FL.land) { FL.land = true; toast('LANDING', '#8df'); }
+    }
+    if (!FL.on && flyWant > 0) {
+      flyWant -= dt;
+      if (P.nitro < 0.06) { if (flyWant <= 0) toast('NEED NITRO TO FLY', '#ff8a6b'); }
+      else if (fwd > 8) { flyWant = 0; FL.on = true; FL.alt = 0.8; FL.tgt = 20; FL.land = false; P.vel.addScaledVector(f, 6); sfxWhoosh(); toast('FLIGHT MODE \u2708', '#8df'); }
+      else if (flyWant <= 0) toast('GO FASTER TO TAKE OFF', '#ff8a6b');
     }
     if (FL.on && !FL.land && k.down) FL.tgt = Math.max(3, FL.tgt - 22 * dt); /* hold brake to descend */
     /* Night Circuit: storm gusts make flying dangerous (but ×1.8 flight pay) */
@@ -1268,7 +1305,7 @@ function stepPlayer(dt, racing) {
     FL.alt += clamp(FL.tgt - FL.alt, -17 * dt, 11 * dt);
     P.nitro = Math.max(0, P.nitro - (cfg.env === 'nightRain' ? 0.095 : 0.075) * dt); /* thrusters burn nitro */
     FL.time += dt;
-    if (FL.alt <= 0.35 || P.nitro <= 0.001) { FL.on = false; FL.land = false; FL.alt = 0; document.body.classList.remove('flying'); sfxThud(); shake = Math.max(shake, 0.18); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 1.6); }
+    if ((FL.land && FL.alt <= 0.35) || P.nitro <= 0.001) { FL.on = false; FL.land = false; FL.alt = 0; document.body.classList.remove('flying'); sfxThud(); shake = Math.max(shake, 0.18); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 1.6); }
   }
   const gas = k.up || FL.on;
   const boosting = can && k.boost && P.nitro > 0.02 && gas;
@@ -1380,9 +1417,15 @@ function stepAI(dt, racing) {
   AIs.forEach((a, n) => {
     if (racing) {
       const i0 = ((Math.floor(a.s) % N) + N) % N;
-      const rb = clamp((P.prog - a.prog) / 150 * 0.06, -0.06, 0.1);
-      const tgt = a.base * (1 - clamp(curv[i0] * 1.6, 0, 0.36)) * (1 + rb);
-      a.speed += (tgt - a.speed) * Math.min(1, dt * 1.2);
+      const gap = P.prog - a.prog;
+      const rb = a.hard ? clamp(gap / 120 * 0.12, -0.04, 0.22) : clamp(gap / 150 * 0.06, -0.06, 0.1);
+      let boostK = 1;
+      if (a.hard) { /* hard AI uses nitro bursts too */
+        if (a.boostT > 0) { a.boostT -= dt; boostK = 1.16; } else { a.boostCd -= dt; if (a.boostCd <= 0) { a.boostT = rand(1.2, 2.2); a.boostCd = rand(5, 9); } }
+      }
+      const tgt = a.base * (1 - clamp(curv[i0] * (a.hard ? 1.05 : 1.6), 0, a.hard ? 0.24 : 0.36)) * (1 + rb) * boostK;
+      a.speed += (tgt - a.speed) * Math.min(1, dt * (a.hard ? 2.2 : 1.2));
+      aiShoot(a, dt);
       if (a.spinT > 0) { a.speed *= Math.exp(-2.2 * dt); a.lat += Math.sin(a.spinT * 16) * dt * 6; }
       a.s += a.speed * dt / ds;
       a.timer -= dt; if (a.timer <= 0) { a.timer = rand(2.5, 6); a.latT = rand(-7.5, 7.5); }
@@ -1406,7 +1449,7 @@ function stepAI(dt, racing) {
         P.pos.x += ct.nx * ct.depth * 0.6; P.pos.z += ct.nz * ct.depth * 0.6;
         a.lat -= (ct.nx * g.r.x + ct.nz * g.r.z) * ct.depth * 0.4;
         P.vel.set(pb.vx, 0, pb.vz); P.spin = clamp(pb.angularVel, -2.5, 2.5);
-        a.speed = clamp(ab.vx * g.t.x + ab.vz * g.t.z, 25, 95); a.lat += clamp((ab.vx * g.r.x + ab.vz * g.r.z) * 0.06, -2, 2);
+        a.speed = clamp(ab.vx * g.t.x + ab.vz * g.t.z, 25, a.hard ? 150 : 95); a.lat += clamp((ab.vx * g.r.x + ab.vz * g.r.z) * 0.06, -2, 2);
         shake = Math.max(shake, clamp(closing / 14, 0.15, 1));
       }
     }
@@ -1588,7 +1631,7 @@ function finishRace() {
   if (!arenaOn) {
     if (cfg.ai) {
       const base = [15000, 10000, 7000, 4000][Math.min(place - 1, 3)];
-      cash = Math.round(base * (1 + (cfg.laps - 1) * 0.08) * [0.8, 1, 1.25][cfg.diff] * (cfg.mode === 'tour' ? 1.5 : 1));
+      cash = Math.round(base * (1 + (cfg.laps - 1) * 0.08) * [0.8, 1, 1.5][cfg.diff] * (cfg.mode === 'tour' ? 1.5 : 1));
       earnRows.push(['Race reward', cash]);
     } else {
       const key = `sr.best.${cfg.mode}.${cfg.laps}`, prev = store.get(key, null);
