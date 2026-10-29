@@ -610,6 +610,7 @@ body.tilt #stick{display:none}
 #tiltHud[hidden]{display:none}
 #tiltHud i{position:absolute;left:50%;top:9px;width:26px;height:26px;margin-left:-13px;border-radius:50%;background:var(--cy);box-shadow:0 0 14px var(--cy);transition:transform .05s linear}
 #tiltHud span{position:absolute;left:0;right:0;bottom:4px;text-align:center;font:800 9px var(--fd);letter-spacing:.18em;color:#9fb0c8}
+.seg[data-k=track]{display:grid;grid-template-columns:repeat(3,1fr)}.seg[data-k=track] button{min-width:0;padding:12px 4px;font-size:12.5px}
 </style>
 </head>
 <body>
@@ -727,7 +728,7 @@ body.tilt #stick{display:none}
       <div class="pbody">
         <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1" type="button">1</button><button data-v="3" type="button">3</button><button data-v="5" type="button">5</button></div>
         <div class="lbl">DIFFICULTY</div><div class="seg" data-k="diff"><button data-v="0" type="button">EASY</button><button data-v="1" type="button">NORMAL</button><button data-v="2" type="button">HARD</button></div>
-        <div class="lbl">TRACK</div><div class="seg" data-k="track"><button data-v="city" type="button">LAGOS CITY</button><button data-v="bridge" type="button">LAGOS BRIDGE</button><button data-v="beach" type="button">EKO BEACH</button><button data-v="jungle" type="button">JUNGLE RUN</button></div>
+        <div class="lbl">TRACK</div><div class="seg" data-k="track"><button data-v="city" type="button">LAGOS CITY</button><button data-v="bridge" type="button">LAGOS BRIDGE</button><button data-v="beach" type="button">EKO BEACH</button><button data-v="jungle" type="button">JUNGLE RUN</button><button data-v="kaduna" type="button">KADUNA RIDGE</button><button data-v="obudu" type="button">OBUDU PEAK</button></div>
         <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day" type="button">NOON</button><button data-v="dawn" type="button">DAWN</button><button data-v="sunset" type="button">SUNSET</button><button data-v="night" type="button">NIGHT</button></div>
         <button class="act go" data-act="quick" type="button">START RACE</button>
       </div>
@@ -748,7 +749,7 @@ body.tilt #stick{display:none}
       <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>TIME TRIAL</h2><p>SOLO RUN &middot; BEAT YOUR BEST</p></div></div>
       <div class="pbody">
         <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1" type="button">1</button><button data-v="3" type="button">3</button><button data-v="5" type="button">5</button></div>
-        <div class="lbl">TRACK</div><div class="seg" data-k="track"><button data-v="city" type="button">LAGOS CITY</button><button data-v="bridge" type="button">LAGOS BRIDGE</button><button data-v="beach" type="button">EKO BEACH</button><button data-v="jungle" type="button">JUNGLE RUN</button></div>
+        <div class="lbl">TRACK</div><div class="seg" data-k="track"><button data-v="city" type="button">LAGOS CITY</button><button data-v="bridge" type="button">LAGOS BRIDGE</button><button data-v="beach" type="button">EKO BEACH</button><button data-v="jungle" type="button">JUNGLE RUN</button><button data-v="kaduna" type="button">KADUNA RIDGE</button><button data-v="obudu" type="button">OBUDU PEAK</button></div>
         <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day" type="button">NOON</button><button data-v="dawn" type="button">DAWN</button><button data-v="sunset" type="button">SUNSET</button><button data-v="night" type="button">NIGHT</button></div>
         <div id="ttBest" class="bestchip" style="display:none"></div>
         <button class="act go" data-act="tt" type="button">START HOTLAP</button>
