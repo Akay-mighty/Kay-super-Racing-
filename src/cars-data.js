@@ -73,6 +73,16 @@ export const CARS = [
     stats: { top: 128, accel: 66, steer: 2.20, drift: 1.80, fly: false }
   },
   {
+    id: 'zephyr', name: 'ZEPHYR V12', price: 1500000, tag: '1200 HP',
+    desc: 'Twin-turbo V12 hypercar. Low, wide and brutally fast, with a blue-flame exhaust.',
+    spec: cloneSport(s => {
+      s.name = 'zephyr'; s.halfWidth = s.halfWidth.map(([z, v]) => [z, v * 1.12]); s.wheelX *= 1.12;
+      s.cabin.roofY = s.cabin.roofY.map(([z, v]) => [z, v * 0.8]); s.cabin.cowl = 0.62; s.cabin.roofFront = -0.05; s.cabin.deck = -1.25;
+      s.edge = s.edge.map(([z, v]) => [z, v * 0.92]); s.wheelRadius = 0.4; s.archFlare = 0.09; s.chrome = false;
+    }),
+    stats: { top: 138, accel: 74, steer: 2.2, drift: 1.8, fly: false }
+  },
+  {
     id: 'ghost', name: 'GHOST X PROTO', price: 1000000, tag: 'FLYING \u2708 KING', fly: true,
     desc: 'The endgame. Fastest car in the game AND it flies.',
     spec: cloneSport(s => {

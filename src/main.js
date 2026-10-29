@@ -153,7 +153,12 @@ const TRACKS = {
   /* Obudu: mountain climb (60 m up) with hairpins, pines and rock */
   obudu: { id: 'obudu', name: 'OBUDU PEAK', cp: [[-150,2,0],[60,2.9,0],[240,4.9,0],[420,7.9,0],[488,9.2,18],[537,10.8,68],[555,12.4,135],[537,14.1,203],[488,15.9,252],[420,17.7,270],[240,22.8,270],[60,28.2,270],[-60,31.8,270],[-128,34,288],[-177,36.1,338],[-195,38.2,405],[-177,40.3,473],[-127,42.3,522],[-60,44.3,540],[120,49.2,540],[270,52.8,540],[420,55.9,540],[488,57.2,558],[537,58.4,608],[555,59.4,675],[537,60.3,743],[488,61,792],[420,61.5,810],[240,62,810],[60,59.2,810],[-60,55.2,810],[-210,48.1,770],[-320,39.6,660],[-360,30.5,510],[-400,19.9,330],[-450,12.8,200],[-423,8.4,100],[-350,4.9,27],[-250,2.7,0]],
     ground: 0xffffff, terrain: { kind: 'green', amp: 120 }, road: ['#383c44','#3d4148'], edge: ['#f4f4f4','#3cc86a'], wall: ['#9aa89c','#8a998e'],
-    city: 0, cityOff: [0, 0], cityH: 1, bills: false, tunnel: false, lamps: false, grand: true, towers: false, palms: 0, trees: 260, umbrellas: 0, rocks: 90, traffic: [['keke', 2]] }
+    city: 0, cityOff: [0, 0], cityH: 1, bills: false, tunnel: false, lamps: false, grand: true, towers: false, palms: 0, trees: 260, umbrellas: 0, rocks: 90, traffic: [['keke', 2]] },
+  /* Sky Mega Ramp: a 5.8 km elevated super-highway over farmland, a long orange climb, a launch jump and a tower top */
+  mega: { id: 'mega', name: 'SKY MEGA RAMP', cp: [[0,40,0],[150,40,0],[300,40.4,0],[450,45.8,0],[600,55.8,0],[750,68,0],[900,80.2,0],[1050,90.2,0],[1200,95.6,0],[1350,96,0],[1500,96,0],[1650,94,0],[1800,85.5,0],[1950,74.2,0],[2100,64.3,0],[2250,60,0],[2325,60,20.1],[2379.9,60,75],[2400,60,150],[2379.9,60,225],[2325,60,279.9],[2250,60,300],[2100,59.8,300],[1950,59.2,300],[1800,58.2,300],[1650,57,300],[1500,55.5,300],[1350,53.9,300],[1200,52.1,300],[1050,50.3,300],[900,48.5,300],[750,46.7,300],[600,45,300],[450,43.5,300],[300,42.2,300],[150,41.1,300],[0,40.4,300],[-150,40,300],[-275,40,279.9],[-329.9,40,225],[-350,40,150],[-329.9,40,75],[-275,40,20.1],[-200,40,0]],
+    ground: 0xffffff, terrain: { kind: 'valley', amp: 38 }, road: ['#3b3e44','#40434a'], edge: ['#ffffff','#ff7a1a'], wall: ['#ff8a2a','#e8650f'],
+    paint: [[30, 150, ['#f0661a', '#f77a2a']]], jumps: [150], tower: { idx: 168, w: 74, d: 74 },
+    city: 0, cityOff: [0, 0], cityH: 1, bills: false, tunnel: false, lamps: true, grand: true, towers: false, palms: 0, trees: 0, umbrellas: 0, rocks: 0, traffic: [['danfo', 3]] }
 };
 const tsx = id => (id && id !== 'city') ? '.' + id : ''; /* per-track record suffix; the city keeps the old keys */
 let tH = null; /* terrain height lookup for the current track (null = flat ground) */
@@ -180,7 +185,7 @@ function ensureTrack(id) {
 }
 /* hill terrain: follows the road height near the circuit, rolls into hills / mountains further out */
 function buildTerrain(tk) {
-  const red = tk.terrain.kind === 'red', amp = tk.terrain.amp, CELL = 24, MARGIN = 720;
+  const valley = tk.terrain.kind === 'valley', red = tk.terrain.kind === 'red', amp = tk.terrain.amp, CELL = valley ? 40 : 24, MARGIN = valley ? 900 : 720;
   let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
   for (const p of pts) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); }
   x0 -= MARGIN; z0 -= MARGIN; x1 += MARGIN; z1 += MARGIN;
@@ -195,6 +200,13 @@ function buildTerrain(tk) {
   const dry = new THREE.Color(red ? 0x9a8a47 : 0x8d9588), tc = new THREE.Color();
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
     const x = x0 + i * CELL, z = z0 + j * CELL;
+    if (valley) { /* farmland far below the highway, patchwork fields */
+      const k = j * nx + i, n = vn(x / 150, z / 150), bin = Math.min(4, Math.floor(n * 5)), h = -36 + fbm(x, z) * amp;
+      H[k] = h; D[k] = 999; pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z;
+      tc.setHex([0x5f9a3c, 0x86a845, 0xcdb85a, 0x9c6b3a, 0x4d8a43][bin]);
+      tc.multiplyScalar((((Math.floor(z / 22) + bin) & 1) ? 0.9 : 1.06) * (0.92 + 0.16 * vn(x / 11, z / 11)));
+      col[k * 3] = tc.r; col[k * 3 + 1] = tc.g; col[k * 3 + 2] = tc.b; continue;
+    }
     let sw = 0, sy = 0, dm = 1e9;
     for (const p of P3) { const dx = x - p.x, dz = z - p.z, d2 = dx * dx + dz * dz; if (d2 < dm) dm = d2; const w = 1 / Math.pow(d2 + 400, 1.5); sw += w; sy += w * p.y; }
     const y0 = sy / sw, d = Math.sqrt(dm), s = sm(38, 270, d);
@@ -249,7 +261,8 @@ function strip(oa, ya, ob, yb, col, shadow = true) {
 }
 const C = s => new THREE.Color(s);
   const asph = tk.road.map(c => C(c)), rw = tk.edge.map(c => C(c)), wallC = tk.wall.map(c => C(c));
-  roadStrip = strip(-W, 0, W, 0, i => asph[(i >> 3) & 1]);
+  const paintC = (tk.paint || []).map(([a, b, cs]) => [a, b, cs.map(c => C(c))]);
+  roadStrip = strip(-W, 0, W, 0, i => { const pr = paintC.find(p => i >= p[0] && i <= p[1]); return pr ? pr[2][(i >> 3) & 1] : asph[(i >> 3) & 1]; });
   strip(W, 0.08, W + 2.6, 0.08, i => rw[i & 1]);
   strip(-W - 2.6, 0.08, -W, 0.08, i => rw[i & 1]);
   strip(WALL, 0, WALL, 1.5, i => wallC[(i >> 2) & 1]);
@@ -272,9 +285,10 @@ const C = s => new THREE.Color(s);
   world.add(m);
 }
   { // pillars under elevated road
-  const list = []; for (let i = 0; i < N; i += 10) if (pts[i].y > 2 && !tk.terrain) list.push(i);
+  const valleyT = tk.terrain && tk.terrain.kind === 'valley';
+  const list = []; for (let i = 0; i < N; i += valleyT ? 6 : 10) if (pts[i].y > 2 && (!tk.terrain || valleyT)) list.push(i);
   const m = new THREE.InstancedMesh(new THREE.CylinderGeometry(1.3, 1.8, 1, 10), new THREE.MeshStandardMaterial({ color: 0x9aa3ad }), list.length);
-  list.forEach((i, n) => { const h = pts[i].y + 1.8; dummy.position.set(pts[i].x, -2 + h / 2, pts[i].z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, h, 1); dummy.updateMatrix(); m.setMatrixAt(n, dummy.matrix); });
+  list.forEach((i, n) => { const base = valleyT ? tH(pts[i].x, pts[i].z) - 1 : -2, h = pts[i].y - 0.2 - base; dummy.position.set(pts[i].x, base + h / 2, pts[i].z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, h, 1); dummy.updateMatrix(); m.setMatrixAt(n, dummy.matrix); });
   dummy.scale.set(1, 1, 1); world.add(m);
 }
 
@@ -527,6 +541,13 @@ function buildProps(tk) {
       dummy.position.y += 2.2 * sc; dummy.updateMatrix(); leafB.setMatrixAt(n, dummy.matrix);
     });
     dummy.scale.setScalar(1); dummy.rotation.set(0, 0, 0); world.add(trunk, leafA, leafB);
+  }
+  if (tk.tower && tH) { /* glass tower under the plateau — the road runs across its roof */
+    const tw = tk.tower, c = pts[tw.idx], base = tH(c.x, c.z) - 2, top = c.y - 1.2, hh = top - base;
+    const win = canvasTex(64, 64, g => { g.fillStyle = '#1d3350'; g.fillRect(0, 0, 64, 64); g.fillStyle = '#5f86b3'; for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) g.fillRect(a * 16 + 2, b * 16 + 3, 12, 9); });
+    win.wrapS = win.wrapT = THREE.RepeatWrapping; win.repeat.set(tw.w / 9, hh / 11);
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(tw.w, hh, tw.d), new THREE.MeshStandardMaterial({ map: win, metalness: 0.5, roughness: 0.3 }));
+    tower.position.set(c.x, base + hh / 2, c.z); tower.rotation.y = Math.atan2(tan[tw.idx].x, tan[tw.idx].z); tower.castShadow = true; world.add(tower);
   }
   if (tk.acacias) { /* flat-topped acacia */
     const spots = scatter(tk.acacias, WALL + 6, WALL + 120);
@@ -1093,7 +1114,7 @@ function setEnv(k) {
   document.body.classList.toggle('nc', wet);
 }
 const flyCap = () => 8 + 4 * (CS.fl || 0); /* flight tank in seconds: 8s base, +4s per FLIGHT upgrade level */
-const P = { fuel: 8, spin: 0, pos: V3(), vel: V3(), h: 0, idx: 0, crosses: 0, nitro: 1, prog: 0, finished: false, rank: 6 };
+const P = { jy: 0, jv: 0, fuel: 8, spin: 0, pos: V3(), vel: V3(), h: 0, idx: 0, crosses: 0, nitro: 1, prog: 0, finished: false, rank: 6 };
 {
   const g = sample(-6 * 2.4, 4);
   P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = ((Math.round(N - 14.4)) % N);
@@ -1257,6 +1278,7 @@ const CUPS = [
   { name: 'BRIDGE RUN', type: 'race', env: 'sunset', laps: 3, diff: 2, track: 'bridge' },
   { name: 'KADUNA DUST', type: 'race', env: 'sunset', laps: 3, diff: 2, track: 'kaduna' },
   { name: 'OBUDU CLIMB', type: 'race', env: 'dawn', laps: 2, diff: 2, track: 'obudu' },
+  { name: 'SKY MEGA RAMP', type: 'race', env: 'day', laps: 2, diff: 2, track: 'mega' },
   { name: 'NIGHT GRAND PRIX', type: 'race', env: 'night', laps: 3, diff: 2, track: 'city' }
 ];
 /* NIGHT CIRCUIT — special hard chapter: rain, neon, low grip, ×1.8 cash */
@@ -1311,7 +1333,7 @@ function resetWorld(c) {
   let g;
   if (arenaOn) { g = { p: V3(0, 0, -150) }; P.pos.set(0, 0, -150); P.h = 0; P.idx = 0; }
   else { const slot = c.ai + (c.netSlot || 0); g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
-  P.vel.set(0, 0, 0); P.spin = 0; P.crosses = 0; P.nitro = 1; P.fuel = flyCap(); P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0;
+  P.vel.set(0, 0, 0); P.jy = 0; P.jv = 0; P.spin = 0; P.crosses = 0; P.nitro = 1; P.fuel = flyCap(); P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0;
   AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = c.diff >= 2 ? CS.top * rand(0.89, 0.96) - k * 0.7 : (rand(62, 71) - k * 0.4) * DIFF[c.diff] * (0.74 + CS.top / 132 * 0.28); a.hard = c.diff >= 2; a.boostT = 0; a.boostCd = rand(3, 7); a.fireCd = rand(6, 11) + k * 1.8 + [22, 10, 2][c.diff] ; a.oilCd2 = rand(6, 12); a.item = null; a.itemT = 0; a.shield = 0; if (a.shieldMesh) a.shieldMesh.visible = false; });
   smoke.forEach(o => { o.life = 0; o.s.visible = false; });
   car.flames.forEach(f => { f.visible = false; });
@@ -1641,6 +1663,9 @@ function stepPlayer(dt, racing) {
   let best = P.idx, bd = 1e18;
   for (let o = -14; o <= 14; o++) { const j = (P.idx + o + N) % N, dx = P.pos.x - pts[j].x, dz = P.pos.z - pts[j].z, d = dx * dx + dz * dz; if (d < bd) { bd = d; best = j; } }
   if (P.idx > N * 0.75 && best < N * 0.25) P.crosses++; else if (P.idx < N * 0.25 && best > N * 0.75) P.crosses--;
+  /* ramp launch: crossing a jump marker at speed throws the car into the air */
+  const jmp = (TRACKS[curTrack] || {}).jumps;
+  if (jmp && can && !FL.on && P.jy <= 0) for (const J of jmp) if (P.idx < J && best >= J && best - P.idx < 12 && fwd > 38) { P.jv = clamp(fwd * 0.22, 9, 30); P.jy = 0.01; toast('AIR TIME!', '#ffb347'); sfxWhoosh(); }
   P.idx = best;
   const r = right[best], t = tan[best], rx = P.pos.x - pts[best].x, rz = P.pos.z - pts[best].z;
   const d = rx * r.x + rz * r.z, lim = WALL - 1.1, ad = Math.abs(d), sg = Math.sign(d);
@@ -1664,9 +1689,10 @@ function stepPlayer(dt, racing) {
   }
 
   /* mesh */
-  car.position.set(P.pos.x, y + 0.04 + FL.alt, P.pos.z);
+  if (P.jy > 0) { P.jy += P.jv * dt; P.jv -= 30 * dt; if (P.jy <= 0) { P.jy = 0; P.jv = 0; shake = Math.max(shake, 0.7); sfxThud(); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 2.2); toast('LANDED', '#8df'); } }
+  car.position.set(P.pos.x, y + 0.04 + FL.alt + P.jy, P.pos.z);
   car.rotation.y = P.h;
-  car.rotation.x = pitch + (FL.on ? clamp((FL.tgt - FL.alt) * 0.014, -0.12, 0.16) - 0.05 : 0);
+  car.rotation.x = pitch - (P.jy > 0 ? clamp(P.jv * 0.011, -0.3, 0.3) : 0) + (FL.on ? clamp((FL.tgt - FL.alt) * 0.014, -0.12, 0.16) - 0.05 : 0);
   car.rotation.z = clamp(-slip * 0.012, -0.12, 0.12) + (FL.on ? -clamp((k.left ? 1 : 0) - (k.right ? 1 : 0) || gp.steer, -1, 1) * 0.14 : 0);
   car.flames.forEach(fl => { fl.visible = boosting || FL.on; if (boosting) { fl.scale.set(1, 0.9 + Math.random() * 0.7, 1); fl.material.opacity = 0.6 + Math.random() * 0.35; } else if (FL.on) { fl.scale.set(0.7, 0.7 + Math.random() * 0.5, 0.7); fl.material.opacity = 0.35 + Math.random() * 0.25; } });
   car.updateMatrixWorld();
