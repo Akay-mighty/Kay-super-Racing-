@@ -13,7 +13,9 @@ export const MISSIONS = [
   { id: 'rich',    name: 'TYCOON',            desc: 'Earn $250,000 in total',             event: 'earn',   target: 250000, reward: 25000 },
   { id: 'nightwin',   name: 'NEON CHAMPION',  desc: 'Win a Night Circuit race',                event: 'nightwin',   target: 1,     reward: 30000 },
   { id: 'nightdrift', name: 'RAIN DANCER',    desc: 'Score 20,000 drift pts in one Night race', event: 'nightdrift', target: 20000, reward: 22000 },
-  { id: 'nightfly',   name: 'STORM PILOT',    desc: 'Fly for 30s total in Night Circuit',      event: 'nightfly',   target: 30,    reward: 18000 }
+  { id: 'nightfly',   name: 'STORM PILOT',    desc: 'Fly for 30s total in Night Circuit',      event: 'nightfly',   target: 30,    reward: 18000 },
+  { id: 'coins25', name: 'COIN HUNTER',    desc: 'Grab 25 coins in one race',          event: 'coins',  target: 25,     reward: 9000 },
+  { id: 'gems3',   name: 'GEM SNIPER',     desc: 'Grab 3 gems in one race',            event: 'gems',   target: 3,      reward: 14000 }
 ];
 
 let prog = {}; // id -> { p, done }
