@@ -9,6 +9,7 @@ import { buildCarGeometry, SPORT } from './car-geometry.js';
 import { vehicleContact, resolveVehicleContact } from './vehicle-physics.js';
 import { touch, setControl } from './touch.js';
 import { createArena } from './arena.js';
+import { createAdventure } from './adventure.js';
 import { CARS, getCar, carGeo, tintPart } from './cars-data.js';
 import { economy } from './economy.js';
 import { missionsInit, missionEvent, missionState, missionsCompleted, MISSIONS } from './missions.js';
@@ -175,7 +176,7 @@ let mpEvt = null; /* last fired item event, piggybacked on the mp state push (sy
 const PU_NAMES = { seeker: 'SEEKER', rocket: 'ROCKET', shield: 'SHIELD', oil: 'OIL SLICK', magnet: 'MAGNET', nitro: 'NITRO' };
 const allPads = () => cfg.env === 'nightRain' ? pads.concat(padsNight) : pads; /* module scope — stepPlayer reads it */
 let raceCoins = 0, raceGems = 0, P_oilCd = 0, coinSpin = 0;
-const itemsOn = () => cfg.type !== 'arena'; /* power-ups & coins ON in multiplayer too (per-player boxes, synced rockets) */
+const itemsOn = () => cfg.type !== 'arena' && cfg.type !== 'adv'; /* power-ups & coins ON in multiplayer too (per-player boxes, synced rockets) */
 function ensureTrack(id) {
   const tk = TRACKS[id] || TRACKS.city;
   if (curTrack === tk.id && world) return;
@@ -660,7 +661,7 @@ function resetTraffic() {
   });
 }
 function stepTraffic(dt, racing) {
-  if (cfg.type === 'arena' || !TRAF.length) return;
+  if (cfg.type === 'arena' || cfg.type === 'adv' || !TRAF.length) return;
   TRAF.forEach(t => {
     if (t.stun > 0) t.stun -= dt;
     else t.s = (t.s + t.speed * t.dir * dt / ds + N * 2) % N;
@@ -1111,6 +1112,7 @@ function setEnv(k) {
   const TKC = TRACKS[curTrack] || TRACKS.city;
   if (ground) { ground.material.color.setHex(wet ? 0x11151c : TKC.ground); ground.material.roughness = wet ? 0.35 : (TKC.id === 'bridge' ? 0.28 : 1); ground.material.metalness = wet ? 0.45 : (TKC.id === 'bridge' ? 0.25 : 0); }
   if (cityMat) { cityMat.roughness = wet ? 0.22 : 0.45; cityMat.metalness = wet ? 0.5 : 0.2; }
+  if (adv) adv.setEnv(e, wet);
   document.body.classList.toggle('nc', wet);
 }
 const flyCap = () => 8 + 4 * (CS.fl || 0); /* flight tank in seconds: 8s base, +4s per FLIGHT upgrade level */
@@ -1189,7 +1191,7 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyR' && ['race', 'count', 'paused', 'finished'].includes(state) && !(cfg.mode === 'tour' && P.finished)) retry();
   if (e.code === 'Escape' || e.code === 'KeyP') { if (state === 'paused') resume(); else pause(); }
   if (e.code === 'KeyT') respawn();
-  if (e.code === 'KeyE' && !e.repeat) usePowerup();
+  if (e.code === 'KeyE' && !e.repeat) { if (cfg.type === 'adv' && state === 'race' && adv.S.near) act('advJoin'); else usePowerup(); }
   if (e.code === 'KeyM') muted = !muted;
   if (state === 'menu' && !e.repeat && document.activeElement !== $('dname')) menuKeys(e);
 });
@@ -1247,6 +1249,26 @@ const sfxPad = () => { beep(440, 0.06, 'sawtooth', 0.09); setTimeout(() => beep(
 const sfxMission = () => [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 0.14, 'triangle', 0.13), i * 110));
 const sfxThud = () => { if (!actx || muted || !noiseBuf) return; const t = actx.currentTime, s = actx.createBufferSource(); s.buffer = noiseBuf; const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 220; const g = actx.createGain(); g.gain.setValueAtTime(0.28, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.25); s.connect(f).connect(g).connect(actx.destination); s.start(t); s.stop(t + 0.3); };
 const sfxWhoosh = () => { if (!actx || muted || !noiseBuf) return; const t = actx.currentTime, s = actx.createBufferSource(); s.buffer = noiseBuf; const f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(1800, t + 0.9); const g = actx.createGain(); g.gain.setValueAtTime(0.001, t); g.gain.exponentialRampToValueAtTime(0.16, t + 0.25); g.gain.exponentialRampToValueAtTime(0.001, t + 1.1); s.connect(f).connect(g).connect(actx.destination); s.start(t); s.stop(t + 1.2); };
+
+/* ---------- ADVENTURE: free-roam open city (NFS / Forza Horizon style) ---------- */
+const adv = createAdventure(canvasTex, {
+  mkDanfo, mkKeke, mkTaxi, mkVan,
+  mkPolice: () => makeCar(0xf2f4f7, carGeo('titan'), getCar('titan').tint || null),
+  getTop: () => CS.top,
+  pPos: () => P.pos, pVel: () => P.vel,
+  economy, missionEvent,
+  beep: (f, d, t, v) => beep(f, d, t, v),
+  toast: (t, c) => toast(t, c),
+  thud: () => sfxThud(),
+  shake: v => { shake = Math.max(shake, v); },
+  puff: (p, k) => puff(p, V3(0, 0.6, 0), k),
+  trackName: id => (TRACKS[id] || TRACKS.city).name,
+  nitroAdd: n => { P.nitro = Math.min(1, P.nitro + n); },
+  onRam: (nx, nz, imp) => { P.vel.x += nx * imp; P.vel.z += nz * imp; shake = Math.max(shake, 0.45); sfxThud(); },
+  busted: amt => { if (amt > 0) economy.spend(amt); toast(amt > 0 ? `BUSTED!  -$${amt.toLocaleString()}` : 'BUSTED!', '#ff6b6b'); shake = 1; sfxThud(); },
+  escape: () => { economy.add(500); toast('LOST THE COPS!  +$500', '#7dff8a'); missionEvent('escape', 1); confetti(24); }
+});
+scene.add(adv.group);
 
 /* ---------- HUD helpers ---------- */
 const mm = $('mm'), mc = mm.getContext('2d');
@@ -1325,13 +1347,17 @@ function resetWorld(c) {
   c = Object.assign({ type: 'race' }, c); cfg = c; TOTAL = c.laps || 1;
   ensureTrack(c.track || 'city');
   setEnv(c.env); AIs = AI.slice(0, c.ai);
-  const arenaOn = c.type === 'arena';
-  world.visible = !arenaOn; arena.group.visible = arenaOn; arena.reset();
-  const nightOn = !arenaOn && c.env === 'nightRain';
+  const arenaOn = c.type === 'arena', advOn = c.type === 'adv';
+  world.visible = !arenaOn && !advOn; arena.group.visible = arenaOn; if (arenaOn) arena.reset();
+  adv.group.visible = advOn;
+  const nightOn = !arenaOn && !advOn && c.env === 'nightRain';
   neonGroup.visible = nightOn; padsNight.forEach(p => { p.visible = nightOn; });
-  document.body.classList.toggle('arena', arenaOn && c.mode !== 'menu'); $('paintBar').classList.remove('open');
+  document.body.classList.toggle('arena', arenaOn && c.mode !== 'menu');
+  document.body.classList.toggle('adv', advOn && c.mode !== 'menu');
+  $('paintBar').classList.remove('open');
   let g;
   if (arenaOn) { g = { p: V3(0, 0, -150) }; P.pos.set(0, 0, -150); P.h = 0; P.idx = 0; }
+  else if (advOn) { const sp = adv.enter(c.env, !!c.resume); g = { p: V3(sp.x, 0, sp.z) }; P.pos.set(sp.x, 0, sp.z); P.h = sp.h; P.idx = 0; }
   else { const slot = c.ai + (c.netSlot || 0); g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
   P.vel.set(0, 0, 0); P.jy = 0; P.jv = 0; P.spin = 0; P.crosses = 0; P.nitro = 1; P.fuel = flyCap(); P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0;
   AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = c.diff >= 2 ? CS.top * rand(0.89, 0.96) - k * 0.7 : (rand(62, 71) - k * 0.4) * DIFF[c.diff] * (0.74 + CS.top / 132 * 0.28); a.hard = c.diff >= 2; a.boostT = 0; a.boostCd = rand(3, 7); a.fireCd = rand(6, 11) + k * 1.8 + [22, 10, 2][c.diff] ; a.oilCd2 = rand(6, 12); a.item = null; a.itemT = 0; a.shield = 0; if (a.shieldMesh) a.shieldMesh.visible = false; });
@@ -1351,7 +1377,9 @@ let ncIntroT = 0;
 function startRace(c) {
   show('menu', false); show('pause', false); show('finish', false); if ($('fglobal')) $('fglobal').textContent = '';
   if (c.mode === 'mp' && c.netSlot === undefined) c.netSlot = net.mySlot;
-  resetWorld(c); setupGhost(); setState('count'); cdT = 3; $('cd').textContent = '3'; ['l1', 'l2', 'l3'].forEach(l => $(l).className = ''); $('count').style.display = 'flex';
+  resetWorld(c); setupGhost();
+  if (c.type === 'adv') { setState('race'); $('count').style.display = 'none'; } /* free-roam: no countdown */
+  else { setState('count'); cdT = 3; $('cd').textContent = '3'; ['l1', 'l2', 'l3'].forEach(l => $(l).className = ''); $('count').style.display = 'flex'; }
   if (c.env === 'nightRain') { const iv = $('ncIntro'); iv.classList.add('show'); clearTimeout(ncIntroT); ncIntroT = setTimeout(() => iv.classList.remove('show'), 2400); }
   if (!actx) initAudio(); if (actx && actx.state === 'suspended') actx.resume();
   if (c.title) toast(c.title, '#7df');
@@ -1417,7 +1445,9 @@ function resume() { if (state !== 'paused') return; show('pause', false); setSta
 function retry() { if (cfg.mode === 'mp') { toast('NO RESTARTS IN ONLINE RACES', '#ffd166'); return; } startRace(cfg); }
 function respawn() {
   if (state !== 'race' || P.finished) return;
-  if (cfg.type === 'arena') { P.pos.set(0, 0, -150); P.h = 0; } else { const g = sample(P.idx, 0); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); }
+  if (cfg.type === 'arena') { P.pos.set(0, 0, -150); P.h = 0; }
+  else if (cfg.type === 'adv') { const s = adv.nearestStreet(P.pos); P.pos.set(s.x, 0, s.z); }
+  else { const g = sample(P.idx, 0); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); }
   P.vel.set(0, 0, 0); P.spin = 0; camYaw = P.h; toast('RESPAWN', '#ffffff');
 }
 
@@ -1429,6 +1459,7 @@ const HINTS = {
   quick: 'SET OPTIONS \u00b7 START TO RACE', tour: '5 ROUNDS \u00b7 CHAMPION TAKES THE CROWN',
   night: 'NIGHT CIRCUIT · RAIN · NEON · ×1.8 CASH', multi: 'CREATE A ROOM · SHARE THE CODE · RACE LIVE',
   arena: 'DRIFT \u00b7 SMASH CONES \u00b7 BEAT THE CLOCK', tt: 'CLEAN LINES SET RECORDS',
+  adv: 'FREE ROAM · DRIVE TO RACE MARKERS · LOSE THE COPS',
   garage: 'CLICK A CAR TO BUY OR SELECT', missions: 'REWARDS PAID INSTANTLY',
   online: 'SET YOUR DRIVER NAME TO APPEAR HERE', settings: 'PROGRESS SAVES AUTOMATICALLY',
   how: 'GOOD LUCK OUT THERE'
@@ -1442,6 +1473,7 @@ function showScreen(n) {
   const fc = $('flyChip'); if (fc) { const fly = !!CS.fly; fc.style.display = fly ? '' : 'none'; if (fly) fc.textContent = `FLIGHT TANK  ${flyCap()}s  \u00b7  UPGRADE IN GARAGE`; }
   if (n === 'tour') renderTour();
   if (n === 'night') { updateNightUI(); }
+  if (n === 'adv') { const nb = $('advNc'); if (nb) nb.style.display = nightUnlocked() ? '' : 'none'; }
   if (n === 'multi') renderMp();
   if (n === 'tt') renderBest();
   if (n === 'arena') renderArBest();
@@ -1470,8 +1502,8 @@ function menuKeys(e) {
 function syncSegs() {
   document.querySelectorAll('.seg').forEach(seg => seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', String(opt[seg.dataset.k]) === b.dataset.v)));
 }
-function renderArBest() { const b = store.get(`sr.best.arena.${opt.dur}`, null), el = $('arBest'); if (!el) return; el.style.display = b ? '' : 'none'; el.textContent = `BEST SCORE  ${b.toLocaleString()}`; }
-function renderBest() { const b = store.get(`sr.best.tt.${opt.laps}${tsx(opt.track)}`, null), el = $('ttBest'); if (!el) return; el.style.display = b ? '' : 'none'; el.textContent = `BEST TIME  ${fmt(b)}`; }
+function renderArBest() { const b = store.get(`sr.best.arena.${opt.dur}`, null), el = $('arBest'); if (!el) return; el.style.display = b === null ? 'none' : ''; if (b !== null) el.textContent = `BEST SCORE  ${b.toLocaleString()}`; }
+function renderBest() { const b = store.get(`sr.best.tt.${opt.laps}${tsx(opt.track)}`, null), el = $('ttBest'); if (!el) return; el.style.display = b === null ? 'none' : ''; if (b !== null) el.textContent = `BEST TIME  ${fmt(b)}`; }
 function renderTour() {
   const r = T ? T.round : 0;
   let h = CUPS.map((c, i) => `<div class="rr${i === r ? ' me' : ''}"><b>${i + 1}</b><span>${c.name}</span><em>${c.type === 'arena' ? c.dur + 's · drift score' : c.laps + ' laps · ' + LEVELS[c.diff]}</em><i>${i < r ? '✔' : ''}</i></div>`).join('');
@@ -1504,7 +1536,16 @@ function applyQuality() {
   }
 }
 function act(a) {
-  if (a === 'quick') startRace({ mode: 'quick', laps: opt.laps, diff: opt.diff, ai: 5, env: opt.env, track: opt.track, title: TRACKS[opt.track] && opt.track !== 'city' ? TRACKS[opt.track].name : '' });
+  if (a === 'advGo') startRace({ mode: 'adv', type: 'adv', laps: 1, diff: 1, ai: 0, env: opt.advEnv || 'day', title: 'ADVENTURE' });
+  else if (a === 'advJoin') {
+    const n = adv.S.near; if (!n) return;
+    adv.saveReturn(n.x, n.z, P.h);
+    adv.raceStart();
+    startRace({ mode: 'quick', type: 'race', laps: n.laps, diff: n.diff, ai: 5, env: adv.S.env, track: n.track, fromAdv: true, cashMult: n.mult, title: `${n.name} · ${(TRACKS[n.track] || TRACKS.city).name}` });
+  }
+  else if (a === 'advBack') startRace({ mode: 'adv', type: 'adv', laps: 1, diff: 1, ai: 0, env: adv.S.env, resume: true, title: 'BACK TO ADVENTURE' });
+  else if (a === 'advExit') { adv.leave(); toMenu(); }
+  else if (a === 'quick') startRace({ mode: 'quick', laps: opt.laps, diff: opt.diff, ai: 5, env: opt.env, track: opt.track, title: TRACKS[opt.track] && opt.track !== 'city' ? TRACKS[opt.track].name : '' });
   else if (a === 'tt') startRace({ mode: 'tt', laps: opt.laps, diff: 1, ai: 0, env: opt.env, track: opt.track, title: TRACKS[opt.track] && opt.track !== 'city' ? TRACKS[opt.track].name : '' });
   else if (a === 'arena') startRace({ mode: 'arena', type: 'arena', laps: 1, diff: opt.diff, ai: 0, env: opt.env, dur: opt.dur, title: 'DRIFT ARENA' });
   else if (a === 'tourGo' || a === 'next') {
@@ -1575,7 +1616,7 @@ document.addEventListener('click', e => {
   else if (b.dataset.c) paintPlayer(+b.dataset.c);
   else if (b.dataset.v !== undefined && b.parentElement.classList.contains('seg')) {
     const k = b.parentElement.dataset.k; opt[k] = (k === 'laps' || k === 'diff' || k === 'dur') ? +b.dataset.v : b.dataset.v; store.set('sr.opt', opt); syncSegs();
-    if (k === 'env') setEnv(opt.env); if (k === 'laps') renderBest(); if (k === 'dur') renderArBest(); if (k === 'q') applyQuality(); if (k === 'snd') muted = opt.snd === 'off'; if (k === 'board') renderBoard(); if (k === 'ctrl') applyCtrl(true);
+    if (k === 'env') setEnv(opt.env); if (k === 'advEnv') { } if (k === 'laps') renderBest(); if (k === 'dur') renderArBest(); if (k === 'q') applyQuality(); if (k === 'snd') muted = opt.snd === 'off'; if (k === 'board') renderBoard(); if (k === 'ctrl') applyCtrl(true);
   }
 });
 $('pauseBtn').onclick = pause;
@@ -1620,14 +1661,15 @@ function stepPlayer(dt, racing) {
     if (FL.land && FL.alt <= 0.35) { FL.on = false; FL.land = false; FL.alt = 0; document.body.classList.remove('flying'); sfxThud(); shake = Math.max(shake, 0.18); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 1.6); }
   }
   const gas = k.up || FL.on;
-  const boosting = can && k.boost && P.nitro > 0.02 && gas;
+  const busted = cfg.type === 'adv' && adv.S.slow > 0; /* just got busted: top speed cut, no nitro */
+  const boosting = can && k.boost && P.nitro > 0.02 && gas && !busted;
   /* fire the held power-up: gamepad LB/RB edge or touch FIRE button (keyboard uses the keydown handler) */
   if ((gp.item && !padItemPrev) || touch.item === 1) usePowerup();
   padItemPrev = !!gp.item; touch.item = 0;
   const NIV = CS.ni || 0; /* nitro upgrade level: stronger boost, slower burn, faster refill */
   if (can) {
-    const air = FL.on;
-    const max = (boosting ? CS.top * (1.22 + 0.02 * NIV) : CS.top) * (air ? 1.1 : 1), a0 = (boosting ? CS.accel * 1.6 : CS.accel) * (air ? 0.85 : 1);
+    const air = FL.on, slowK = busted ? 0.55 : 1;
+    const max = (boosting ? CS.top * (1.22 + 0.02 * NIV) : CS.top) * (air ? 1.1 : 1) * slowK, a0 = (boosting ? CS.accel * 1.6 : CS.accel) * (air ? 0.85 : 1) * slowK;
     if (gas) P.vel.addScaledVector(f, a0 * clamp(1 - fwd / max, 0, 1) * dt);
     if (k.down && !air) P.vel.addScaledVector(f, -(fwd > 0 ? 58 : 22) * dt * (fwd > -14 ? 1 : 0));
     let steer = (k.left ? 1 : 0) - (k.right ? 1 : 0); if (!steer) steer = touch.steer; if (!steer) steer = gp.steer;
@@ -1642,7 +1684,7 @@ function stepPlayer(dt, racing) {
   if (!FL.on && CS.fly && can) P.fuel = Math.min(flyCap(), P.fuel + 0.35 * dt); /* tank slowly refills on the ground */
   if (FL.on) { /* flight burns the tank, not nitro */ }
   else if (boosting) P.nitro = Math.max(0, P.nitro - 0.26 * (1 - 0.06 * NIV) * (drv().niBurn || 1) * dt); else P.nitro = Math.min(1, P.nitro + (0.025 + (k.drift && sp > 30 ? 0.09 : 0)) * (1 + 0.10 * NIV) * (drv().niRef || 1) * dt);
-  if (cfg.type !== 'arena') {
+  if (cfg.type !== 'arena' && cfg.type !== 'adv') {
     const drifting = can && !FL.on && Math.abs(slip) > 4.5 && sp > 18;
     if (drifting) { RD.hold = 1.1; RD.comboT += dt; } else { RD.hold -= dt; if (RD.hold <= 0) RD.comboT = 0; }
     RD.mult = 1 + Math.min(4, Math.floor(RD.comboT / 1.8)); RD.maxMult = Math.max(RD.maxMult, RD.mult);
@@ -1659,6 +1701,20 @@ function stepPlayer(dt, racing) {
       if (vo > 0) { P.vel.x -= nx * vo * 1.3; P.vel.z -= nz * vo * 1.3; P.vel.multiplyScalar(1 - clamp(vo * 0.012, 0.01, 0.3)); shake = Math.max(shake, clamp(vo / 18, 0.1, 1)); }
     }
     if (state === 'race' || state === 'finished') arenaTick(dt, slip, sp, can);
+  } else if (cfg.type === 'adv') {
+    /* free-roam city: clamp to the world edge, collide with buildings (fly over the low ones) */
+    P.pos.x = clamp(P.pos.x, -adv.E, adv.E); P.pos.z = clamp(P.pos.z, -adv.E, adv.E);
+    const hit = adv.collide(P.pos, 1.9, FL.alt + P.jy);
+    if (hit.hit) {
+      const vo = P.vel.x * hit.nx + P.vel.z * hit.nz;
+      if (vo < 0) {
+        P.vel.x -= hit.nx * vo * 1.45; P.vel.z -= hit.nz * vo * 1.45;
+        P.vel.multiplyScalar(1 - clamp(-vo * 0.014, 0.02, 0.35));
+        shake = Math.max(shake, clamp(-vo / 18, 0.12, 0.95));
+        if (-vo > 9) { puff(car.localToWorld(V3(0, 0.6, 1.8)), P.vel, 1.2); if (-vo > 16) { adv.crash(-vo); sfxThud(); } }
+      }
+    }
+    y = 0; pitch = 0;
   } else {
   let best = P.idx, bd = 1e18;
   for (let o = -14; o <= 14; o++) { const j = (P.idx + o + N) % N, dx = P.pos.x - pts[j].x, dz = P.pos.z - pts[j].z, d = dx * dx + dz * dz; if (d < bd) { bd = d; best = j; } }
@@ -1700,7 +1756,7 @@ function stepPlayer(dt, racing) {
     if ((Math.abs(slip) > 5 && sp > 22) || (boosting && Math.random() < 0.5)) for (const sx of [-1, 1]) if (Math.random() < 0.8) puff(car.localToWorld(V3(sx * 1.05, 0.3, -1.6)), P.vel, boosting ? 0.8 : 1.2);
     if (Math.abs(slip) > 5 && sp > 22) [-1, 1].forEach((sx, i) => addSkid(car.localToWorld(V3(sx * 1.05, 0.3, -1.6)), i, car.position.y));
   }
-  return { boosting, sp: P.vel.length() };
+  return { boosting, sp: P.vel.length(), slip };
 }
 
 const pb = { x: 0, z: 0, vx: 0, vz: 0, cos: 1, sin: 0, halfW: 1.05, halfL: 2.2, mass: 1, angularVel: 0 };
@@ -1796,9 +1852,10 @@ function updateCamera(dt, boosting, sp) {
 
 function hud(dt, sp, boosting) {
   if (cfg.type === 'arena') { $('ascore').textContent = Math.floor(A.score).toLocaleString(); $('acombo').textContent = A.comboT > 0 ? `DRIFT  x${A.mult}` : 'DRIFT TO SCORE'; $('atime').textContent = fmt(Math.max(0, A.t)); }
+  if (cfg.type === 'adv') advUI(dt);
   const all = [{ p: P.prog, me: true }, ...AIs.map(a => ({ p: a.prog }))].sort((a, b) => b.p - a.p);
   const rank = all.findIndex(o => o.me) + 1;
-  if (state === 'race' && !P.finished && cfg.type !== 'arena' && cfg.mode !== 'mp') {
+  if (state === 'race' && !P.finished && cfg.type !== 'arena' && cfg.type !== 'adv' && cfg.mode !== 'mp') {
     ovCool -= dt;
     if (rank < lastRank && ovCool <= 0) { toast(`OVERTAKE  +${lastRank - rank}`); P.nitro = Math.min(1, P.nitro + 0.12); ovCool = 0.9; }
     lastRank = rank; P.rank = rank;
@@ -1831,11 +1888,48 @@ function hud(dt, sp, boosting) {
   const ph = $('puHud');
   if (ph) { const on = itemsOn() && !!PU.item && state === 'race'; ph.style.display = on ? 'block' : 'none'; if (on) ph.textContent = PU_NAMES[PU.item] + (mobile ? '' : ' \u00b7 PRESS E'); }
   if (toastT > 0 && (toastT -= dt) <= 0) $('toast').style.opacity = 0;
-  mc.clearRect(0, 0, mm.width, mm.height); mc.drawImage(mmBase, 0, 0);
-  AIs.forEach(a => { const [x, y] = mxy(a.mesh.position.x, a.mesh.position.z); mc.fillStyle = a.css; mc.beginPath(); mc.arc(x, y, 8, 0, 7); mc.fill(); mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke(); });
-  if (cfg.mode === 'mp') for (const o of net.remotes()) { const [rx, ry] = mxy(o.x, o.z); mc.fillStyle = o.uid === mpLeadId ? '#ffe14a' : '#ff7a1a'; mc.beginPath(); mc.arc(rx, ry, 8, 0, 7); mc.fill(); mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke(); }
-  const [px, py] = mxy(P.pos.x, P.pos.z); mc.fillStyle = '#fff'; mc.beginPath(); mc.arc(px, py, 10, 0, 7); mc.fill(); mc.strokeStyle = '#3cf'; mc.lineWidth = 4; mc.stroke();
+  if (cfg.type === 'adv') adv.drawMini(mc, mm.width, mm.height, P.pos, P.h);
+  else {
+    mc.clearRect(0, 0, mm.width, mm.height); mc.drawImage(mmBase, 0, 0);
+    AIs.forEach(a => { const [x, y] = mxy(a.mesh.position.x, a.mesh.position.z); mc.fillStyle = a.css; mc.beginPath(); mc.arc(x, y, 8, 0, 7); mc.fill(); mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke(); });
+    if (cfg.mode === 'mp') for (const o of net.remotes()) { const [rx, ry] = mxy(o.x, o.z); mc.fillStyle = o.uid === mpLeadId ? '#ffe14a' : '#ff7a1a'; mc.beginPath(); mc.arc(rx, ry, 8, 0, 7); mc.fill(); mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke(); }
+  }
+  if (cfg.type !== 'adv') { const [px, py] = mxy(P.pos.x, P.pos.z); mc.fillStyle = '#fff'; mc.beginPath(); mc.arc(px, py, 10, 0, 7); mc.fill(); mc.strokeStyle = '#3cf'; mc.lineWidth = 4; mc.stroke(); }
   if (ghostCar && ghostCar.active && ghostCar.group.visible) { const [gx, gy] = mxy(ghostCar.group.position.x, ghostCar.group.position.z); mc.strokeStyle = '#8df'; mc.lineWidth = 3; mc.beginPath(); mc.arc(gx, gy, 8, 0, 7); mc.stroke(); }
+}
+
+/* ---------- ADVENTURE HUD: heat, wanted stars, timers, race prompt, nav arrow ---------- */
+const fmt0 = t => `${Math.floor(Math.max(0, t) / 60)}:${String(Math.floor(Math.max(0, t) % 60)).padStart(2, '0')}`;
+function advUI(dt) {
+  const S = adv.S, hb = $('heatBar');
+  if (hb) hb.firstElementChild.style.width = Math.round(S.heat) + '%';
+  const stars = $('#advStars');
+  if (stars) [...stars.children].forEach((el, i) => el.classList.toggle('on', i < S.police));
+  const fr = $('advFree'); if (fr) fr.textContent = 'FREE ' + fmt0(S.freeT);
+  const nx = $('advNext'); if (nx) nx.textContent = S.near ? 'RACE MARKER AHEAD — E / TAP JOIN' : 'NEXT RACE ' + fmt0(S.nextIn);
+  const bw = $('bustWrap');
+  if (bw) {
+    if (S.bust > 0.05) { bw.style.display = 'block'; if ($('bustBar')) $('bustBar').firstElementChild.style.width = Math.round(clamp(S.bust / 3, 0, 1) * 100) + '%'; }
+    else bw.style.display = 'none';
+  }
+  const pr = $('advPrompt');
+  if (pr) {
+    if (S.near && state === 'race' && !P.finished) {
+      pr.style.display = 'flex';
+      const t = S.near, T = $('apTitle');
+      if (T) { T.textContent = t.name; T.style.color = t.css; T.style.borderColor = t.css; }
+      const sb = $('apSub'); if (sb) sb.textContent = t.sub;
+      const rw = $('apRew'); if (rw) rw.textContent = 'WIN BONUS ×' + t.mult.toFixed(1) + ' CASH';
+    } else pr.style.display = 'none';
+  }
+  const nv = $('advNav');
+  if (nv) {
+    if (S.navD > 4 && !S.near && state === 'race') {
+      nv.style.display = 'flex';
+      const ds2 = $('advDist'); if (ds2) ds2.textContent = Math.round(S.navD) + 'm';
+      const ar = $('advArr'); if (ar) ar.style.transform = `rotate(${S.navA}rad)`;
+    } else nv.style.display = 'none';
+  }
 }
 
 /* multiplayer: live "who is 1st" board + rank + lead-change toast */
@@ -1946,6 +2040,7 @@ function renderMp() {
 
 function finishRace() {
   if (cfg.mode === 'mp') { finishMp(); return; }
+  $('fNext').dataset.act = 'next'; $('fNext').textContent = 'NEXT RACE'; /* restore defaults (Adventure overrides below) */
   P.finished = true; setState('finished');
   if (FL.on) FL.land = true;
   const arenaOn = cfg.type === 'arena', sc = Math.floor(A.score);
@@ -1976,6 +2071,7 @@ function finishRace() {
   const fb = Math.round(FL.time * (cfg.env === 'nightRain' ? 180 : 100));
   if (fb > 0) { cash += fb; earnRows.push(['Flight time bonus' + (cfg.env === 'nightRain' ? ' ×1.8' : ''), fb]); }
   if (cfg.env === 'nightRain' && cash > 0) { const nb = Math.round(cash * 0.8); cash += nb; earnRows.push(['NIGHT CIRCUIT BONUS ×1.8', nb]); }
+  if (cfg.cashMult) { const ab = Math.round(cash * (cfg.cashMult - 1)); if (ab > 0) { cash += ab; earnRows.push(['Adventure bonus ×' + cfg.cashMult.toFixed(1), ab]); } }
   economy.add(cash);
   let misDone = missionEvent('finish', 1);
   if (!arenaOn && place <= 3) misDone = misDone.concat(missionEvent('podium', 1));
@@ -1987,6 +2083,7 @@ function finishRace() {
   misDone = misDone.concat(missionEvent('fly', FL.time));
   misDone = misDone.concat(missionEvent('own', economy.ownedCount()));
   misDone = misDone.concat(missionEvent('earn', cash));
+  if (cfg.fromAdv && !arenaOn && place === 1 && cfg.ai) misDone = misDone.concat(missionEvent('advwin', 1));
   if (cfg.env === 'nightRain') {
     misDone = misDone.concat(missionEvent('nightdrift', arenaOn ? sc : Math.floor(RD.pts)));
     misDone = misDone.concat(missionEvent('nightfly', FL.time));
@@ -2055,6 +2152,10 @@ function finishRace() {
   $('fmis').innerHTML = misDone.length ? '<div class="lbl">MISSIONS COMPLETE</div>' + misDone.map(m => `<div class="rr me"><span>\u2b50 ${m.name}</span><em style="color:#e8b800">+$${m.reward.toLocaleString()}</em></div>`).join('') : '';
   if ((place === 1 && cfg.ai) || misDone.length) { confetti(place === 1 ? 110 : 45); if (place === 1 && cfg.ai) sfxMission(); else sfxCoin(); }
   $('fNext').style.display = next ? '' : 'none'; $('fRetry').style.display = cfg.mode === 'tour' ? 'none' : '';
+  if (cfg.fromAdv) { /* straight back to the free-roam city */
+    $('fNext').textContent = 'BACK TO ADVENTURE'; $('fNext').dataset.act = 'advBack'; $('fNext').style.display = '';
+    $('fRetry').style.display = 'none';
+  }
   setTimeout(() => { if (state === 'finished') show('finish', true); }, 1200);
 }
 
@@ -2232,7 +2333,7 @@ function bootCloud() {
 function setupGhost() {
   if (ghostCar && ghostCar.group.parent) scene.remove(ghostCar.group);
   ghostCar = null;
-  if (cfg.type === 'arena') return;
+  if (cfg.type === 'arena' || cfg.type === 'adv') return;
   const rival = cfg.ghost, local = !rival && cfg.mode === 'tt' ? store.get(`sr.ghost.tt.${cfg.laps}${tsx(cfg.track)}`, null) : null;
   const flat = rival || local;
   if (flat && flat.length >= 10) {
@@ -2294,10 +2395,11 @@ function frameBody(now) {
   if (state === 'race') raceT += dt;
   const out = stepPlayer(dt, racing);
   stepAI(dt, racing);
-  if (state === 'race' && !P.finished && cfg.type !== 'arena') GR.tick(raceT, car.position, P.h);
+  if (cfg.type === 'adv' && state === 'race' && !P.finished) adv.tick(dt, { slip: out.slip, sp: out.sp, boosting: out.boosting, alt: FL.alt + P.jy, h: P.h });
+  if (state === 'race' && !P.finished && cfg.type !== 'arena' && cfg.type !== 'adv') GR.tick(raceT, car.position, P.h);
   if (ghostCar && ghostCar.active) ghostCar.update(scene, raceT);
   if (state === 'race' && cfg.type === 'arena') { A.t -= dt; if (A.t <= 0 && !P.finished) { A.t = 0; finishRace(); } }
-  if (state === 'race' && cfg.type !== 'arena') {
+  if (state === 'race' && cfg.type !== 'arena' && cfg.type !== 'adv') {
     if (P.crosses !== prevCrosses) {
       if (P.crosses > prevCrosses) { if (P.crosses >= 2) { const lt = raceT - lapStart; bestLap = Math.min(bestLap, lt); if (P.crosses <= TOTAL) toast(`LAP ${P.crosses - 1}   ${fmt(lt)}`, '#ffffff'); } lapStart = raceT; }
       prevCrosses = P.crosses;
@@ -2383,5 +2485,5 @@ rebuildCar(economy.selected());
 window.addEventListener('ksr-money', updateMoneyUI);
 updateMoneyUI();
 syncSegs(); applyQuality(); applyCtrl(false); gateBoot();
-if (TURBO) window.__DBG = { get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car }; /* dev test hook */
+if (TURBO) window.__DBG = { get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car, adv, act, startRace }; /* dev test hook */
 requestAnimationFrame(frame);

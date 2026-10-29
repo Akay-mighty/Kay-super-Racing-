@@ -15,11 +15,13 @@ export const MISSIONS = [
   { id: 'nightdrift', name: 'RAIN DANCER',    desc: 'Score 20,000 drift pts in one Night race', event: 'nightdrift', target: 20000, reward: 22000 },
   { id: 'nightfly',   name: 'STORM PILOT',    desc: 'Fly for 30s total in Night Circuit',      event: 'nightfly',   target: 30,    reward: 18000 },
   { id: 'coins25', name: 'COIN HUNTER',    desc: 'Grab 25 coins in one race',          event: 'coins',  target: 25,     reward: 9000 },
-  { id: 'gems3',   name: 'GEM SNIPER',     desc: 'Grab 3 gems in one race',            event: 'gems',   target: 3,      reward: 14000 }
+  { id: 'gems3',   name: 'GEM SNIPER',     desc: 'Grab 3 gems in one race',            event: 'gems',   target: 3,      reward: 14000 },
+  { id: 'escape3', name: 'COP DODGER',     desc: 'Lose the cops 3 times in Adventure', event: 'escape', target: 3,      reward: 15000 },
+  { id: 'advwin3', name: 'ROAD WARRIOR',   desc: 'Win 3 Adventure street races',       event: 'advwin', target: 3,      reward: 22000 }
 ];
 
 let prog = {}; // id -> { p, done }
-const ACC = { fly: true, earn: true, nightfly: true }; // event types that accumulate, others keep the max
+const ACC = { fly: true, earn: true, nightfly: true, escape: true, advwin: true }; // event types that accumulate, others keep the max
 
 export function missionsInit() {
   const saved = economy.getMissions() || {};
