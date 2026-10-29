@@ -35,11 +35,11 @@ export const economy = {
   /* ---------- upgrades: ENGINE (speed/accel) · TYRES (grip) · NITRO (boost) ----------
      per-car, 5 levels each. doubling prices keep the grind honest as the wallet grows. */
   upLevel(id, k) { const u = this.up[id]; return u ? (u[k] || 0) : 0; },
-  upCost(k, lvl) { return Math.round({ en: 6000, ty: 5000, ni: 5500 }[k] * Math.pow(2, lvl)); }, /* lvl 0..4 = price of the NEXT level */
+  upCost(k, lvl) { return Math.round({ en: 6000, ty: 5000, ni: 5500, fl: 7000 }[k] * Math.pow(2, lvl)); }, /* lvl 0..4 = price of the NEXT level */
   buyUp(id, k) {
     const lvl = this.upLevel(id, k);
     if (lvl >= 5 || !this.spend(this.upCost(k, lvl))) return false;
-    const u = this.up[id] || (this.up[id] = { en: 0, ty: 0, ni: 0 });
+    const u = this.up[id] || (this.up[id] = { en: 0, ty: 0, ni: 0, fl: 0 });
     u[k] = lvl + 1; this.save(); emit(); return true;
   },
 

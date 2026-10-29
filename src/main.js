@@ -166,7 +166,7 @@ let coinMesh = null, gemMesh = null, coinData = [], gemData = [], pubMeshes = []
 const Oils = [], Rockets = [];
 const PU = { item: null, shield: 0, magnet: 0 };
 let mpEvt = null; /* last fired item event, piggybacked on the mp state push (synced power-ups, zero extra writes) */
-const PU_NAMES = { rocket: 'ROCKET', shield: 'SHIELD', oil: 'OIL SLICK', magnet: 'MAGNET', nitro: 'NITRO' };
+const PU_NAMES = { seeker: 'SEEKER', rocket: 'ROCKET', shield: 'SHIELD', oil: 'OIL SLICK', magnet: 'MAGNET', nitro: 'NITRO' };
 const allPads = () => cfg.env === 'nightRain' ? pads.concat(padsNight) : pads; /* module scope — stepPlayer reads it */
 let raceCoins = 0, raceGems = 0, P_oilCd = 0, coinSpin = 0;
 const itemsOn = () => cfg.type !== 'arena'; /* power-ups & coins ON in multiplayer too (per-player boxes, synced rockets) */
@@ -694,7 +694,13 @@ function rebuildPickups() {
     world.add(m); pubMeshes.push(m);
   }
 }
-const rollItem = () => { const r = Math.random(); return r < 0.30 ? 'rocket' : r < 0.52 ? 'shield' : r < 0.70 ? 'oil' : r < 0.90 ? 'magnet' : 'nitro'; };
+const rollItem = () => {
+  const canSeek = AIs.some(a => a.mesh.visible) && (P.rank || 1) > 1; /* seeker needs a leader that is not you */
+  let r = Math.random();
+  if (canSeek && r < 0.2 + (P.rank > 3 ? 0.08 : 0)) return 'seeker';
+  r = Math.random();
+  return r < 0.30 ? 'rocket' : r < 0.52 ? 'shield' : r < 0.70 ? 'oil' : r < 0.90 ? 'magnet' : 'nitro';
+};
 function resetPickups() {
   raceCoins = 0; raceGems = 0; P_oilCd = 0; mpEvt = null;
   PU.item = null; PU.shield = 0; PU.magnet = 0;
@@ -712,7 +718,8 @@ function resetPickups() {
 function usePowerup() {
   if (state !== 'race' || !itemsOn() || !PU.item || P.finished) return;
   const it = PU.item; PU.item = null; document.body.classList.remove('puitem');
-  if (it === 'rocket') fireRocket();
+  if (it === 'seeker') { if (!fireSeeker()) { PU.item = it; document.body.classList.add('puitem'); } }
+  else if (it === 'rocket') fireRocket();
   else if (it === 'shield') { PU.shield = 6; if (shieldBall) shieldBall.visible = true; toast('SHIELD UP \u00b7 6s', '#8df'); sfxPad(); }
   else if (it === 'oil') { dropOil(); toast('OIL DROPPED', '#8df'); }
   else if (it === 'magnet') { PU.magnet = 7; toast('COIN MAGNET \u00b7 7s', '#ffd166'); sfxPad(); }
@@ -724,6 +731,16 @@ const mkRocketMesh = (cBody, cFlame) => {
   fl.scale.set(1.6, 1.6, 1); fl.position.z = -1.2; m.add(fl);
   return m;
 };
+/* SEEKER: locks onto whoever is in 1st place and flies to meet them wherever they are on the circuit */
+function fireSeeker() {
+  let lead = null;
+  AIs.forEach(a => { if (a.mesh.visible && (!lead || a.prog > lead.prog)) lead = a; });
+  if (!lead) { toast('NO TARGET', '#ff9a52'); return false; }
+  const m = mkRocketMesh(new THREE.Color(2.4, 0.3, 2.2), 0xff4de0); m.scale.setScalar(1.5); scene.add(m);
+  Rockets.push({ mesh: m, s: (P.idx + 4) % N, lat: clamp(P.lat || 0, -(W - 1), W - 1), life: 18, seek: lead, speed: 150 });
+  toast('SEEKER LOCKED: ' + lead.name, '#ff5ad8'); sfxWhoosh(); shake = Math.max(shake, 0.3);
+  return true;
+}
 function fireRocket() {
   const m = mkRocketMesh(new THREE.Color(2.6, 1.0, 0.25), 0xff9a2f); scene.add(m);
   let tgt = null, bd = 1e9;
@@ -800,7 +817,7 @@ function aiShoot(a, dt) {
   const gap = P.prog - a.prog; /* >0: player is ahead of this AI */
   a.fireCd -= dt; a.oilCd2 -= dt;
   if (a.fireCd <= 0 && gap > 6 && gap < 100 && !FL.on) {
-    a.fireCd = [rand(16, 24), rand(9, 14), rand(4.5, 7.5)][cfg.diff] || 12;
+    a.fireCd = [rand(18, 26), rand(11, 16), rand(7, 11)][cfg.diff] || 12;
     const m = mkRocketMesh(new THREE.Color(0.9, 1.4, 2.8), 0xff3b3b); scene.add(m);
     Rockets.push({ mesh: m, s: (a.s + 4) % N, lat: a.lat, life: 3.6, tgt: null, ai: a, speed: Math.max(125, a.speed + 55) });
     toast('INCOMING! ' + a.name, '#ff6b6b'); sfxWhoosh();
@@ -815,6 +832,19 @@ function aiShoot(a, dt) {
 function stepRockets(dt, racing) {
   for (let i = Rockets.length - 1; i >= 0; i--) {
     const r = Rockets[i];
+    if (r.seek) { /* homing missile: closes the gap to the leader in either direction */
+      const a = r.seek; let gap = (((a.s - r.s) % N) + N) % N; if (gap > N / 2) gap -= N;
+      const step = Math.max(150, a.speed + 90) * dt / ds;
+      r.s = (((r.s + clamp(gap, -step, step)) % N) + N) % N; r.life -= dt;
+      r.lat += (clamp(a.lat || 0, -(W - 1), W - 1) - r.lat) * Math.min(1, dt * 5);
+      const g = sample(r.s, r.lat);
+      r.mesh.position.set(g.p.x, g.p.y + 0.8, g.p.z); r.mesh.rotation.y = Math.atan2(g.t.x, g.t.z);
+      puff(r.mesh.position, V3(0, 0.5, 0), 0.8);
+      const hit = racing && Math.abs(gap) * ds < 5;
+      if (hit) { a.spinT = 2.0; a.speed *= 0.1; a.lat += rand(-2, 2); toast('SEEKER HIT ' + a.name + '!', '#ff5ad8'); }
+      if (hit || r.life <= 0) { boomFX(r.mesh.position, hit ? 14 : 4); scene.remove(r.mesh); Rockets.splice(i, 1); }
+      continue;
+    }
     r.life -= dt; r.s = (r.s + r.speed * dt / ds) % N;
     if (r.tgt && r.tgt.o) r.lat += (clamp(r.tgt.o.lat || 0, -(W - 1), W - 1) - r.lat) * Math.min(1, dt * 3.5);
     if (r.tgt && r.tgt.ghost) { /* multiplayer: steer toward the rival's LIVE ghost position */
@@ -833,7 +863,7 @@ function stepRockets(dt, racing) {
         if (dx * dx + dz * dz < 9) {
           hit = true;
           if (PU.shield > 0) { PU.shield = 0; if (shieldBall) shieldBall.visible = false; toast('SHIELD BLOCKED IT!', '#8df'); }
-          else { P.spin += (Math.random() < 0.5 ? -1 : 1) * rand(5, 7) * (drv().spin || 1); P.vel.multiplyScalar(0.45); shake = Math.max(shake, 0.9); toast('HIT BY ' + r.ai.name + '!', '#ff6b6b'); }
+          else { P.spin += (Math.random() < 0.5 ? -1 : 1) * rand(5, 7) * (drv().spin || 1); P.vel.multiplyScalar(0.62); shake = Math.max(shake, 0.9); toast('HIT BY ' + r.ai.name + '!', '#ff6b6b'); }
         }
       }
     } else if (racing) {
@@ -900,7 +930,7 @@ const carStats = id => {
   s.accel = Math.round(s.accel * (1 + 0.06 * en) * 10) / 10;
   s.steer = Math.round(s.steer * (1 + 0.035 * ty) * 100) / 100;
   s.drift = Math.round(s.drift * (1 + 0.05 * ty) * 100) / 100;
-  s.ni = economy.upLevel(id, 'ni');
+  s.ni = economy.upLevel(id, 'ni'); s.fl = economy.upLevel(id, 'fl');
   if (id === economy.sel) { /* the equipped driver's perk rides on YOUR selected car only (display + physics stay in agreement) */
     const p = drv();
     s.top = Math.round(s.top * (p.top || 1) * 10) / 10;
@@ -954,7 +984,8 @@ function setEnv(k) {
   if (cityMat) { cityMat.roughness = wet ? 0.22 : 0.45; cityMat.metalness = wet ? 0.5 : 0.2; }
   document.body.classList.toggle('nc', wet);
 }
-const P = { spin: 0, pos: V3(), vel: V3(), h: 0, idx: 0, crosses: 0, nitro: 1, prog: 0, finished: false, rank: 6 };
+const flyCap = () => 8 + 4 * (CS.fl || 0); /* flight tank in seconds: 8s base, +4s per FLIGHT upgrade level */
+const P = { fuel: 8, spin: 0, pos: V3(), vel: V3(), h: 0, idx: 0, crosses: 0, nitro: 1, prog: 0, finished: false, rank: 6 };
 {
   const g = sample(-6 * 2.4, 4);
   P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = ((Math.round(N - 14.4)) % N);
@@ -1113,7 +1144,7 @@ let state = 'menu', cdT = 3, raceT = 0, shake = 0, camYaw = P.h, lastRank = 6, o
 const DIFF = [0.9, 1, 1.07], PTS = [10, 8, 6, 4, 2, 1], LEVELS = ['Easy', 'Normal', 'Hard'];
 const CUPS = [
   { name: 'CITY DAWN', type: 'race', env: 'dawn', laps: 2, diff: 1, track: 'city' },
-  { name: 'BEACH SPRINT', type: 'race', env: 'day', laps: 3, diff: 2, track: 'beach' },
+  { name: 'BEACH SPRINT', type: 'race', env: 'day', laps: 3, diff: 1, track: 'beach' },
   { name: 'AIRFIELD DRIFT', type: 'arena', env: 'day', dur: 90, diff: 1, track: 'city' },
   { name: 'BRIDGE RUN', type: 'race', env: 'sunset', laps: 3, diff: 2, track: 'bridge' },
   { name: 'KADUNA DUST', type: 'race', env: 'sunset', laps: 3, diff: 2, track: 'kaduna' },
@@ -1172,8 +1203,8 @@ function resetWorld(c) {
   let g;
   if (arenaOn) { g = { p: V3(0, 0, -150) }; P.pos.set(0, 0, -150); P.h = 0; P.idx = 0; }
   else { const slot = c.ai + (c.netSlot || 0); g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
-  P.vel.set(0, 0, 0); P.spin = 0; P.crosses = 0; P.nitro = 1; P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0;
-  AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = c.diff >= 2 ? CS.top * rand(0.98, 1.06) - k * 0.6 : (rand(62, 71) - k * 0.4) * DIFF[c.diff] * (0.74 + CS.top / 132 * 0.28); a.hard = c.diff >= 2; a.boostT = 0; a.boostCd = rand(3, 7); a.fireCd = rand(4, 9) + k * 1.5 + [22, 9, 0][c.diff] ; a.oilCd2 = rand(6, 12); });
+  P.vel.set(0, 0, 0); P.spin = 0; P.crosses = 0; P.nitro = 1; P.fuel = flyCap(); P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0;
+  AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = c.diff >= 2 ? CS.top * rand(0.89, 0.96) - k * 0.7 : (rand(62, 71) - k * 0.4) * DIFF[c.diff] * (0.74 + CS.top / 132 * 0.28); a.hard = c.diff >= 2; a.boostT = 0; a.boostCd = rand(3, 7); a.fireCd = rand(6, 11) + k * 1.8 + [22, 10, 2][c.diff] ; a.oilCd2 = rand(6, 12); });
   smoke.forEach(o => { o.life = 0; o.s.visible = false; });
   car.flames.forEach(f => { f.visible = false; });
   Object.assign(A, { score: 0, comboT: 0, hold: 0, mult: 1, maxMult: 1, cones: 0, dur: c.dur || 90, t: c.dur || 90, hit: 0 });
@@ -1260,6 +1291,7 @@ function showScreen(n) {
   const pb = document.querySelector('#menu .screen.on .pbody'); if (pb) pb.scrollTop = 0;
   if (lastScreen === 'garage' && n !== 'garage') rebuildCar(economy.selected());
   lastScreen = n;
+  const fc = $('flyChip'); if (fc) { const fly = !!CS.fly; fc.style.display = fly ? '' : 'none'; if (fly) fc.textContent = `FLIGHT TANK  ${flyCap()}s  \u00b7  UPGRADE IN GARAGE`; }
   if (n === 'tour') renderTour();
   if (n === 'night') { updateNightUI(); }
   if (n === 'multi') renderMp();
@@ -1374,7 +1406,7 @@ document.addEventListener('click', e => {
     const [cid, k] = up.dataset.up.split(':');
     const lv = economy.upLevel(cid, k);
     if (lv < 5) {
-      const cost = economy.upCost(k, lv), lab = { en: 'ENGINE', ty: 'TYRES', ni: 'NITRO' }[k];
+      const cost = economy.upCost(k, lv), lab = { en: 'ENGINE', ty: 'TYRES', ni: 'NITRO', fl: 'FLIGHT' }[k];
       if (economy.buyUp(cid, k)) { sfxMission(); confetti(12); toast(`${lab} Lv ${lv + 1} INSTALLED${economy.selected() === cid ? ' \u00b7 FEEL THE DIFFERENCE' : ''}`, '#7dff8a'); if (economy.selected() === cid) rebuildCar(cid); }
       else { toast(`NEED $${(cost - economy.money).toLocaleString()} MORE`, '#ff7b7b'); beep(220, 0.2, 'square', 0.1); }
     }
@@ -1410,7 +1442,7 @@ function stepPlayer(dt, racing) {
     }
     if (!FL.on && flyWant > 0) {
       flyWant -= dt;
-      if (P.nitro < 0.06) { if (flyWant <= 0) toast('NEED NITRO TO FLY', '#ff8a6b'); }
+      if (P.fuel < 1) { if (flyWant <= 0) toast('FLIGHT TANK EMPTY', '#ff8a6b'); }
       else if (fwd > 8) { flyWant = 0; FL.on = true; FL.alt = 0.8; FL.tgt = 20; FL.land = false; P.vel.addScaledVector(f, 6); sfxWhoosh(); toast('FLIGHT MODE \u2708', '#8df'); }
       else if (flyWant <= 0) toast('GO FASTER TO TAKE OFF', '#ff8a6b');
     }
@@ -1426,9 +1458,10 @@ function stepPlayer(dt, racing) {
   if (FL.on) {
     if (FL.land) FL.tgt = 0; else FL.tgt = clamp(FL.tgt, 3, 42);
     FL.alt += clamp(FL.tgt - FL.alt, -17 * dt, 11 * dt);
-    P.nitro = Math.max(0, P.nitro - (cfg.env === 'nightRain' ? 0.095 : 0.075) * dt); /* thrusters burn nitro */
+    P.fuel = Math.max(0, P.fuel - (cfg.env === 'nightRain' ? 1.3 : 1) * dt); /* thrusters burn the flight tank (not nitro) */
+    if (P.fuel <= 0 && !FL.land) { FL.land = true; toast('TANK EMPTY \u00b7 LANDING', '#ff8a6b'); }
     FL.time += dt;
-    if ((FL.land && FL.alt <= 0.35) || P.nitro <= 0.001) { FL.on = false; FL.land = false; FL.alt = 0; document.body.classList.remove('flying'); sfxThud(); shake = Math.max(shake, 0.18); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 1.6); }
+    if (FL.land && FL.alt <= 0.35) { FL.on = false; FL.land = false; FL.alt = 0; document.body.classList.remove('flying'); sfxThud(); shake = Math.max(shake, 0.18); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 1.6); }
   }
   const gas = k.up || FL.on;
   const boosting = can && k.boost && P.nitro > 0.02 && gas;
@@ -1450,7 +1483,8 @@ function stepPlayer(dt, racing) {
   const nf = V3(Math.sin(P.h), 0, Math.cos(P.h)), sp2 = P.vel.length();
   P.vel.lerp(nf.multiplyScalar(fwd >= 0 ? sp2 : -sp2), 1 - Math.exp(-grip * dt));
   const slip = P.vel.dot(V3(-Math.cos(P.h), 0, Math.sin(P.h)));
-  if (FL.on) { /* nitro drained by thrusters above */ }
+  if (!FL.on && CS.fly && can) P.fuel = Math.min(flyCap(), P.fuel + 0.35 * dt); /* tank slowly refills on the ground */
+  if (FL.on) { /* flight burns the tank, not nitro */ }
   else if (boosting) P.nitro = Math.max(0, P.nitro - 0.26 * (1 - 0.06 * NIV) * (drv().niBurn || 1) * dt); else P.nitro = Math.min(1, P.nitro + (0.025 + (k.drift && sp > 30 ? 0.09 : 0)) * (1 + 0.10 * NIV) * (drv().niRef || 1) * dt);
   if (cfg.type !== 'arena') {
     const drifting = can && !FL.on && Math.abs(slip) > 4.5 && sp > 18;
@@ -1541,10 +1575,10 @@ function stepAI(dt, racing) {
     if (racing) {
       const i0 = ((Math.floor(a.s) % N) + N) % N;
       const gap = P.prog - a.prog;
-      const rb = a.hard ? clamp(gap / 120 * 0.12, -0.04, 0.22) : clamp(gap / 150 * 0.06, -0.06, 0.1);
+      const rb = a.hard ? clamp(gap / 150 * 0.08, -0.05, 0.12) : clamp(gap / 150 * 0.06, -0.06, 0.1);
       let boostK = 1;
       if (a.hard) { /* hard AI uses nitro bursts too */
-        if (a.boostT > 0) { a.boostT -= dt; boostK = 1.16; } else { a.boostCd -= dt; if (a.boostCd <= 0) { a.boostT = rand(1.2, 2.2); a.boostCd = rand(5, 9); } }
+        if (a.boostT > 0) { a.boostT -= dt; boostK = 1.09; } else { a.boostCd -= dt; if (a.boostCd <= 0) { a.boostT = rand(1.0, 1.8); a.boostCd = rand(8, 13); } }
       }
       const tgt = a.base * (1 - clamp(curv[i0] * (a.hard ? 1.05 : 1.6), 0, a.hard ? 0.24 : 0.36)) * (1 + rb) * boostK;
       a.speed += (tgt - a.speed) * Math.min(1, dt * (a.hard ? 2.2 : 1.2));
@@ -1612,6 +1646,12 @@ function hud(dt, sp, boosting) {
   $('ring').style.strokeDashoffset = 389.6 * (1 - clamp(kph / (CS.top * 3.6 + 48), 0, 1));
   $('ring').style.stroke = boosting ? '#7ff' : '#3cf';
   $('nit').textContent = `NITRO ${Math.round(P.nitro * 100)}%`;
+  const fh = $('fuelHud');
+  if (fh) {
+    const on = !!CS.fly && cfg.type !== 'arena' && (state === 'race' || state === 'count');
+    fh.style.display = on ? 'flex' : 'none';
+    if (on) { const cap = flyCap(), f = clamp(P.fuel / cap, 0, 1); $('fuelBar').firstElementChild.style.width = (f * 100) + '%'; $('fuelT').textContent = Math.ceil(P.fuel) + 's'; fh.classList.toggle('low', P.fuel < 3); }
+  }
   const dOn = RD.comboT > 0 && RD.pts > 50 && cfg.type !== 'arena';
   $('driftHud').style.opacity = dOn ? 1 : 0;
   if (dOn) { $('driftPts').textContent = `DRIFT ${Math.floor(RD.pts).toLocaleString()}`; $('driftMult').textContent = `x${RD.mult}`; }
@@ -1894,7 +1934,7 @@ function renderGarage() {
     const tags = [c.stats.fly ? '<span class="tag fly">FLYING \u2708</span>' : '', owned ? '<span class="tag own">OWNED</span>' : (c.tag && !(c.stats.fly && /FLYING/i.test(c.tag)) ? `<span class="tag">${c.tag}</span>` : ''), sel ? '<span class="tag sel">SELECTED</span>' : ''].join(' ');
     const price = owned ? (sel ? 'SELECTED' : 'OWNED') : '$' + c.price.toLocaleString();
     const cta = sel ? 'SELECTED' : owned ? 'TAP TO SELECT' : (previewId === c.id ? (afford ? 'TAP AGAIN TO BUY $' + c.price.toLocaleString() : 'NEED $' + (c.price - economy.money).toLocaleString() + ' MORE') : 'TAP TO PREVIEW');
-    const upRow = owned ? `<div class="upRow">${[['en', 'ENGINE'], ['ty', 'TYRES'], ['ni', 'NITRO']].map(([k, lab]) => {
+    const upRow = owned ? `<div class="upRow">${[['en', 'ENGINE'], ['ty', 'TYRES'], ['ni', 'NITRO']].concat(c.stats.fly ? [['fl', 'FLIGHT']] : []).map(([k, lab]) => {
       const lv = economy.upLevel(c.id, k), max = lv >= 5, cost = max ? 0 : economy.upCost(k, lv);
       const pips = Array.from({ length: 5 }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');
       return `<button type="button" class="upBtn${max ? ' max' : ''}${!max && economy.money < cost ? ' cant' : ''}" data-up="${c.id}:${k}" aria-label="Upgrade ${lab}">
@@ -1903,7 +1943,7 @@ function renderGarage() {
     return `<div class="carCard${sel ? ' sel' : ''}${!owned && !afford ? ' locked' : ''}${!owned && afford && previewId === c.id ? ' cta-buy' : ''}${!owned && !afford && previewId === c.id ? ' cta-no' : ''}" data-car="${c.id}" data-cta="${cta}">
       <div class="top"><span>${c.name}</span> ${tags}<span class="price ${owned ? 'own' : afford ? '' : 'no'}">${price}</span></div>
       <div class="desc">${c.desc}</div>
-      <div class="bars">${statBar('SPEED', eff.top / 136)}${statBar('ACCEL', eff.accel / 72)}${statBar('GRIP', (eff.steer - 1.5) / 0.85)}${statBar('NITRO', 0.45 + 0.11 * (eff.ni || 0))}</div>
+      <div class="bars">${statBar('SPEED', eff.top / 136)}${statBar('ACCEL', eff.accel / 72)}${statBar('GRIP', (eff.steer - 1.5) / 0.85)}${statBar('NITRO', 0.45 + 0.11 * (eff.ni || 0))}${c.stats.fly ? statBar('FLY ' + (8 + 4 * (eff.fl || 0)) + 's', (8 + 4 * (eff.fl || 0)) / 28) : ''}</div>
       ${upRow}
     </div>`;
   }).join('');
