@@ -22,7 +22,7 @@ const TIERS = [
 
 export function createAdventure(canvasTex, ctx) {
   const group = new THREE.Group(); group.visible = false;
-  const S = { heat: 0, freeT: 0, bust: 0, slow: 0, env: 'day', near: null, navD: 0, navA: 0, nextIn: 5, police: 0 };
+  const S = { heat: 0, freeT: 0, bust: 0, slow: 0, env: 'day', near: null, navD: 0, navA: 0, nextIn: 5, police: 0, pow: 100, powCd: 9, hitFlash: 0 };
   let retPos = null, cashPend = 0, cashT = 0, lowT = 0, hadPolice = false, sirT = 0, sirHi = false, spawnCd = 0, tG = 0;
   const dummy = new THREE.Object3D();
 
@@ -341,12 +341,21 @@ export function createAdventure(canvasTex, ctx) {
   const polOn = p => { p.on = true; p.grp.visible = true; };
   const polOff = p => { p.on = false; p.grp.visible = false; };
 
-  function busted() {
+  function busted(byPower) {
     const money = ctx.economy.money || 0;
     const amt = Math.min(money, Math.min(5000, 300 + Math.round(S.heat * 40)));
     if (amt > 0) ctx.busted(amt); else ctx.busted(0);
-    S.heat = 20; S.freeT = 0; S.bust = 0; S.slow = 7;
+    if (byPower) ctx.toast('WRECKED! THE COPS TOTALED YOUR RIDE', '#ff6b6b');
+    S.heat = 20; S.freeT = 0; S.bust = 0; S.slow = 7; S.pow = 100; S.powCd = 9;
     POL.forEach(polOff); hadPolice = false; lowT = 0;
+  }
+  /* POWER: cops ramming you (and rivals, in multiplayer) grind it down. At zero you are busted.
+     It slowly repairs itself after ~3.5 s without a hit. */
+  function hitPower(d, label) {
+    if (S.slow > 0) return; /* no damage while serving a bust */
+    S.pow = clamp(S.pow - d, 0, 100); S.powCd = 0; S.hitFlash = 1;
+    if (label) ctx.toast(label, '#ff6b6b');
+    if (S.pow <= 0) busted(true);
   }
 
   /* ---------- minimap base (pre-rendered once) ---------- */
@@ -408,6 +417,7 @@ export function createAdventure(canvasTex, ctx) {
     flushCash();
     POL.forEach(polOff);
     S.bust = 0; S.near = null; hadPolice = false; lowT = 0; sirT = 0;
+    S.pow = 100; S.powCd = 9; S.hitFlash = 0;
     if (!resume) {
       S.heat = 0; S.freeT = 0; S.slow = 0; S.nextIn = 5; retPos = null;
       while (markers.length) removeMarker(0);
@@ -416,7 +426,7 @@ export function createAdventure(canvasTex, ctx) {
   }
   function raceStart() {
     if (S.near) { const i = markers.findIndex(m => m.x === S.near.x && m.z === S.near.z); if (i >= 0) removeMarker(i); }
-    S.near = null; S.bust = 0;
+    S.near = null; S.bust = 0; S.pow = 100; S.powCd = 9;
     POL.forEach(polOff); hadPolice = false;
     flushCash();
   }
@@ -436,6 +446,9 @@ export function createAdventure(canvasTex, ctx) {
     const px = Pp.x, pz = Pp.z, sp = o.sp, alt = o.alt, slip = o.slip;
     S.freeT += dt;
     if (S.slow > 0) S.slow = Math.max(0, S.slow - dt);
+    /* power repair: no hits for a while and the panel shop in your glovebox fixes it */
+    S.powCd += dt; S.hitFlash = Math.max(0, S.hitFlash - dt * 1.6);
+    if (S.powCd > 3.5 && S.pow < 100) S.pow = clamp(S.pow + 6 * dt, 0, 100);
 
     /* heat */
     let dh = 0;
@@ -471,7 +484,7 @@ export function createAdventure(canvasTex, ctx) {
     }
     /* traffic */
     trafficTick(dt, px, pz);
-    /* player vs traffic */
+    /* player vs traffic — smashes dent your power too */
     if (alt < 3) for (const t of traffic) {
       const gp = trafficPos(t);
       const dx = px - gp.x, dz = pz - gp.z, d2 = dx * dx + dz * dz;
@@ -482,6 +495,7 @@ export function createAdventure(canvasTex, ctx) {
       if (vo < 0) { Pv.x -= nx * vo * 1.4; Pv.z -= nz * vo * 1.4; Pv.multiplyScalar(0.72); }
       t.stun = 2.6;
       S.heat = clamp(S.heat + 14, 0, 100);
+      hitPower(4);
       ctx.shake(0.6); ctx.puff(Pp, 1.4); ctx.thud();
       break;
     }
@@ -531,16 +545,19 @@ export function createAdventure(canvasTex, ctx) {
       p.barR.visible = flash; p.barB.visible = !flash;
       p.haloR.material.opacity = flash ? 0.75 : 0.08; p.haloB.material.opacity = flash ? 0.08 : 0.75;
       nearCop = Math.min(nearCop, dist);
-      if (dist < 10 && alt < 3) anyClose = true;
+      /* cops ram you: every hit grinds the power down until the car gives out */
       if (dist < 3.8 && alt < 3 && p.ramCd <= 0) {
-        p.ramCd = 0.8; S.bust += 0.8;
+        p.ramCd = 0.8;
         const nx = dx / Math.max(0.01, dist), nz = dz / Math.max(0.01, dist);
         ctx.onRam(nx, nz, 7); ctx.puff(Pp, 1.6);
+        hitPower(6 + 9 * (S.heat / 100) + S.police * 1.5, S.police > 1 ? 'PIT MANEUVER!' : 'RAMMED BY POLICE!');
       }
+      /* boxed in: stopped or crawling next to a cruiser and they cuff you */
+      if (dist < 10 && alt < 3 && sp < 12) anyClose = true;
     }
     S.police = POL.filter(p => p.on).length;
     if (anyClose) S.bust += dt; else S.bust = Math.max(0, S.bust - dt * 0.5);
-    if (S.bust >= 3) busted();
+    if (S.bust >= 2.6) busted(false);
     if (S.heat < 15) { lowT += dt; if (lowT > 6) { POL.forEach(polOff); lowT = 0; } } else lowT = 0;
     if (hadPolice && S.police === 0 && S.heat < 10) { hadPolice = false; ctx.escape(); }
     /* siren */
@@ -549,5 +566,5 @@ export function createAdventure(canvasTex, ctx) {
       if (sirT <= 0) { sirT = 0.45; sirHi = !sirHi; ctx.beep(sirHi ? 900 : 760, 0.2, 'square', clamp(1 - nearCop / 200, 0.1, 1) * 0.07); }
     }
   }
-  return { group, E, S, tick, collide, crash, drawMini, setEnv, enter, raceStart, saveReturn, nearestStreet, leave, markers, traffic };
+  return { group, E, S, tick, collide, crash, drawMini, setEnv, enter, raceStart, saveReturn, nearestStreet, leave, markers, traffic, hitPower, get pol() { return POL; } };
 }

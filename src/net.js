@@ -34,11 +34,16 @@ function makeRemoteCar(p) {
   c2.fillText(String(p.name || 'RIVAL').slice(0, 12), 256, 66);
   const tag = new d.THREE.Sprite(new d.THREE.SpriteMaterial({ map: new d.THREE.CanvasTexture(cv), transparent: true, depthWrite: false, toneMapped: false }));
   tag.scale.set(7, 1.31, 1); tag.position.y = 3.4; g.add(tag);
+  /* POWER bar (adventure free-roam): green → red as the rival's car gets wrecked */
+  const pbg = new d.THREE.Sprite(new d.THREE.SpriteMaterial({ color: 0x0a0f18, transparent: true, opacity: 0.75, depthWrite: false, toneMapped: false }));
+  pbg.scale.set(3.3, 0.34, 1); pbg.position.y = 2.2; g.add(pbg);
+  const pfill = new d.THREE.Sprite(new d.THREE.SpriteMaterial({ color: 0x35d16a, transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false }));
+  pfill.center.set(0, 0.5); pfill.position.set(-1.55, 2.2, 0.01); pfill.scale.set(3.1, 0.22, 1); g.add(pfill);
   /* shield bubble (synced power-ups): shows while the rival's shield is live */
   const bub = new d.THREE.Mesh(new d.THREE.SphereGeometry(2.7, 18, 12), new d.THREE.MeshBasicMaterial({ color: 0x66ddff, transparent: true, opacity: 0.3, blending: d.THREE.AdditiveBlending, depthWrite: false, side: d.THREE.DoubleSide, toneMapped: false }));
   bub.visible = false; g.add(bub);
   g.visible = false; g.traverse(o => { o.frustumCulled = false; }); d.scene.add(g);
-  return { g, tag, bub, buf: [], vext: null, placed: false, lastIt: 0 };
+  return { g, tag, bub, pbg, pfill, buf: [], vext: null, placed: false, lastIt: 0, lastPw: 100 };
 }
 
 /* SNAPSHOT-BUFFER INTERPOLATION — the same trick that makes AI racers buttery:
@@ -50,6 +55,7 @@ function makeRemoteCar(p) {
    by the buffer). If packets starve we coast on the last measured velocity,
    decaying to a stop, so a lagging rival never teleports or flies away. */
 const BUFN = 12, RENDER_DELAY = 420, VCAP = 135, STARVE = 0.85, TELE2 = 10000;
+const clamp2 = (x, a, b) => Math.min(b, Math.max(a, x));
 function moveRemote(uid, st, now) {
   const r = N.cars.get(uid); if (!r || st.x === undefined) return;
   r.buf.push({ rt: now, x: st.x, y: st.y || 0, z: st.z, h: st.h || 0 });
@@ -146,7 +152,7 @@ export const net = {
     N.code = code; N.host = host; N.uid = cloud.user.uid; N.started = false; N.mySlot = 0;
     N.unsub = cloud.roomListen(code, room => {
       N.room = room;
-      if (!room) { N.deps.toast('ROOM CLOSED BY HOST', '#ff7b7b'); this.leave(true); return; }
+      if (!room) { N.deps.toast('ROOM CLOSED BY HOST', '#ff7b7b'); this.leave(true); if (N.deps.onRoomClosed) N.deps.onRoomClosed(); return; }
       if (room.status === 'racing' && !N.started) {
         N.started = true;
         resetGhosts();
@@ -170,6 +176,15 @@ export const net = {
           const it = p.state && p.state.it;
           if (it && it.ts && r.lastIt !== it.ts) { r.lastIt = it.ts; if (N.deps.onRemoteItem) N.deps.onRemoteItem(p.uid, it, p.name); }
           if (r.bub) r.bub.visible = !!(p.state && p.state.sh > 0);
+          /* adventure free-roam: mirror the rival's POWER bar, toast when they get wrecked */
+          if (r.pfill && p.state && p.state.pw !== undefined && p.state.pw !== r.lastPw) {
+            const pw = clamp2(p.state.pw, 0, 100);
+            r.pfill.scale.x = Math.max(0.06, 3.1 * pw / 100);
+            r.pfill.material.color.setHSL(0.33 * pw / 100, 0.85, 0.5);
+            if (pw <= 0 && r.lastPw > 0) N.deps.toast((p.name || 'RIVAL') + ' GOT WRECKED!', '#ffd166');
+            r.lastPw = pw;
+          }
+          if (r.pbg && r.pfill) { const adv2 = N.room && N.room.mode === 'adv'; r.pbg.visible = r.pfill.visible = !!adv2; }
         }
       }
       for (const [uid, r] of N.cars) if (!seen.has(uid)) { N.deps.scene.remove(r.g); N.cars.delete(uid); }
@@ -187,10 +202,10 @@ export const net = {
     await cloud.roomTouch(N.code, { laps: n });
   },
 
-  async start() { /* host only */
+  async start(kind = 'race') { /* host only: kind 'race' = laps on a circuit, 'adv' = free-roam adventure city */
     if (!N.host || !N.code) return;
     const laps = (N.room && N.room.laps) || N.deps.optLaps(); /* the lap count the host picked in the lobby */
-    await cloud.roomTouch(N.code, { status: 'racing', env: N.deps.optEnv(), laps, goAt: Date.now() + 4500 });
+    await cloud.roomTouch(N.code, { status: 'racing', env: N.deps.optEnv(), laps, goAt: Date.now() + 4500, mode: kind === 'adv' ? 'adv' : 'race' });
   },
 
   async backToLobby() { if (N.code) await cloud.roomTouch(N.code, { status: 'lobby' }); },
@@ -205,7 +220,7 @@ export const net = {
   },
   push(state) { this.pushNow(state); },
 
-  tick(dt, racing, P, raceT, finished) {
+  tick(dt, racing, P, raceT, finished, pow) {
     if (!N.code) return;
     stepRemoteCars(dt);
     N.pushT -= dt;
@@ -213,6 +228,7 @@ export const net = {
     N.pushT = racing ? 0.33 : 2.5;
     const d = N.deps;
     const st = { x: P.pos.x, z: P.pos.z, y: P.pos.y, h: P.h, ts: Date.now(), prog: P.prog, fin: !!P.finished, tms: Math.round(raceT * 1000) };
+    if (pow !== undefined && pow !== null) st.pw = Math.round(pow); /* adventure free-roam: stream car power */
     if (racing && d.itemEvt) { const it = d.itemEvt(); if (it) st.it = it; if (d.shieldS) st.sh = Math.max(0, Math.ceil(d.shieldS())); } /* synced power-ups ride the existing write — zero extra cost */
     this.push(st);
   },
@@ -248,7 +264,7 @@ export const net = {
   myName() { return N.deps.driverName(); },
   myState() { return { name: this.myName(), car: N.deps.carId(), color: N.deps.carColor(), tat: N.deps.carTat ? N.deps.carTat() : 'none' }; },
   uid() { return N.uid; },
-  remotes() { const o = []; for (const [uid, r] of N.cars) if (r.placed && r.g.visible) { const p = N.players.find(q => q.uid === uid); o.push({ uid, x: r.g.position.x, z: r.g.position.z, name: p && p.name }); } return o; },
+  remotes() { const o = []; for (const [uid, r] of N.cars) if (r.placed && r.g.visible) { const p = N.players.find(q => q.uid === uid); o.push({ uid, x: r.g.position.x, z: r.g.position.z, h: r.g.rotation.y, vx: r.vext ? r.vext.vx : 0, vz: r.vext ? r.vext.vz : 0, name: p && p.name }); } return o; },
   /* live race order: finished drivers first (by time), then by track progress */
   standings(me) {
     const rows = [{ uid: N.uid, name: 'YOU', me: true, prog: me.prog, fin: !!me.fin, tms: me.tms || 0 }];
