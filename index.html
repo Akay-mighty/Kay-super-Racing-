@@ -636,6 +636,13 @@ body.tilt #stick{display:none}
 #tiltHud i{position:absolute;left:50%;top:9px;width:26px;height:26px;margin-left:-13px;border-radius:50%;background:var(--cy);box-shadow:0 0 14px var(--cy);transition:transform .05s linear}
 #tiltHud span{position:absolute;left:0;right:0;bottom:4px;text-align:center;font:800 9px var(--fd);letter-spacing:.18em;color:#9fb0c8}
 .seg[data-k=track]{display:grid;grid-template-columns:repeat(3,1fr)}.seg[data-k=track] button{min-width:0;padding:12px 4px;font-size:12.5px}
+#fuelHud{top:calc(86px + env(safe-area-inset-top));left:12px;gap:8px;align-items:center;padding:5px 10px;border-radius:12px;background:rgba(8,12,20,.66);border:1px solid rgba(140,220,255,.45);font:800 12px var(--fd);letter-spacing:.1em;color:#9fe3ff}
+#fuelHud b{display:block;width:84px;height:9px;border-radius:6px;background:rgba(255,255,255,.14);overflow:hidden}
+#fuelHud b i{display:block;height:100%;width:100%;border-radius:6px;background:linear-gradient(90deg,#27c7ff,#8df0ff);transition:width .15s}
+#fuelHud em{font-style:normal;color:#fff;min-width:26px;text-align:right}
+#fuelHud.low{border-color:#ff7b5a;color:#ffb199}#fuelHud.low b i{background:linear-gradient(90deg,#ff5a3c,#ffb347)}
+body.menu #fuelHud{display:none!important}
+.upRow{flex-wrap:wrap}.upRow .upBtn{flex:1 1 30%}
 </style>
 </head>
 <body>
@@ -681,6 +688,7 @@ body.tilt #stick{display:none}
   <svg viewBox="0 0 156 156"><circle cx="78" cy="78" r="70" fill="rgba(10,15,26,.6)"/><circle cx="78" cy="78" r="62" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="7"/><circle id="ring" cx="78" cy="78" r="62" fill="none" stroke="#2fd4ff" stroke-width="7" stroke-linecap="round" stroke-dasharray="389.6" stroke-dashoffset="389.6" transform="rotate(-90 78 78)"/></svg>
   <div id="spd">0</div><div id="kmh">KM/H</div><div id="nit">NITRO 100%</div>
 </div>
+<div id="fuelHud" class="hud" style="display:none"><span>FLY</span><b id="fuelBar"><i></i></b><em id="fuelT">8s</em></div>
 <div id="altwrap" class="hud"><div id="altlab">ALT</div><div id="altbar"></div></div>
 <div id="driftHud" class="hud"><span id="driftPts">DRIFT 0</span><small id="driftMult">x1</small></div>
 <div id="coinHud" class="hud" style="display:none"><b id="coinN">COINS 0</b><i id="gemN">GEMS 0</i></div>
@@ -776,6 +784,7 @@ body.tilt #stick{display:none}
         <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1" type="button">1</button><button data-v="3" type="button">3</button><button data-v="5" type="button">5</button></div>
         <div class="lbl">TRACK</div><div class="seg" data-k="track"><button data-v="city" type="button">LAGOS CITY</button><button data-v="bridge" type="button">LAGOS BRIDGE</button><button data-v="beach" type="button">EKO BEACH</button><button data-v="jungle" type="button">JUNGLE RUN</button><button data-v="kaduna" type="button">KADUNA RIDGE</button><button data-v="obudu" type="button">OBUDU PEAK</button></div>
         <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day" type="button">NOON</button><button data-v="dawn" type="button">DAWN</button><button data-v="sunset" type="button">SUNSET</button><button data-v="night" type="button">NIGHT</button></div>
+        <div id="flyChip" class="bestchip" style="display:none"></div>
         <div id="ttBest" class="bestchip" style="display:none"></div>
         <button class="act go" data-act="tt" type="button">START HOTLAP</button>
       </div>
