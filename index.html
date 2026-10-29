@@ -324,6 +324,12 @@ body.adv #info{display:none}
 #advHud .aRow{display:flex;justify-content:space-between;font:700 10px var(--ft);letter-spacing:.16em;color:#9fb6d6;margin:3px 0 4px}
 #heatBar{height:9px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden}
 #heatBar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#ffd166,#ff7a1a 55%,#ff3b3b);transition:width .25s}
+#powBar{height:9px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden;margin-bottom:6px}
+#powBar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#35d16a,#7dff8a);transition:width .18s}
+#powBar.low i{background:linear-gradient(90deg,#ff3b3b,#ff7a1a);animation:powPulse .7s ease-in-out infinite}
+@keyframes powPulse{0%,100%{opacity:1}50%{opacity:.45}}
+#advHud.hurt{border-left-color:#ff4d4d;animation:hurtFlash .45s ease-out}
+@keyframes hurtFlash{0%{box-shadow:0 0 26px rgba(255,60,60,.75)}100%{box-shadow:none}}
 #advStars{display:flex;gap:5px;margin-top:6px}
 #advStars i{flex:1;height:7px;border-radius:4px;background:rgba(255,255,255,.12)}
 #advStars i.on{background:#ff4d4d;box-shadow:0 0 9px rgba(255,77,77,.75)}
@@ -432,7 +438,10 @@ body.menu #info,body.menu #mm,body.menu #speedo,body.menu #altwrap,body.menu #to
 body.done #touch,body.done #pauseBtn,body.done #paintBar,body.done #paintBtn{display:none!important}
 body.touch #info{transform:scale(.72);transform-origin:top left;top:max(10px,env(safe-area-inset-top));left:12px}
 body.touch #mm{left:auto;bottom:auto;right:12px;top:max(10px,env(safe-area-inset-top));width:100px;height:100px}
-body.touch #speedo{transform:scale(.7);transform-origin:top right;right:12px;bottom:auto;top:calc(max(10px,env(safe-area-inset-top)) + 108px)}
+/* touch: pause + adventure-exit sit LEFT of the minimap, never on top of it */
+body.touch #pauseBtn{right:calc(12px + 100px + 12px)}
+body.touch #advExit{right:calc(12px + 100px + 12px)}
+body.touch #speedo{transform:scale(.7);transform-origin:top right;right:12px;bottom:auto;top:calc(max(10px,env(safe-area-inset-top)) + 116px)}
 body.touch #altwrap{transform:scale(.7);transform-origin:top right;right:calc(max(10px,env(safe-area-inset-right)) + 78px);bottom:auto;top:calc(max(10px,env(safe-area-inset-top)) + 108px)}
 body.touch #toast{font-size:22px;top:22%}
 body.touch #count{transform:translate(-50%,-70%) scale(.85)}
@@ -893,6 +902,8 @@ body{font-family:var(--ft)}
 <div id="coinHud" class="hud" style="display:none"><b id="coinN">COINS 0</b><i id="gemN">GEMS 0</i></div>
 <div id="puHud" class="hud" style="display:none"></div>
 <div id="advHud" class="hud">
+  <div class="aRow"><span>POWER</span><span id="powPct">100%</span></div>
+  <div id="powBar"><i></i></div>
   <div class="aRow"><span>HEAT</span><span id="advFree">FREE 0:00</span></div>
   <div id="heatBar"><i></i></div>
   <div id="advStars"><i></i><i></i><i></i></div>
@@ -1074,6 +1085,7 @@ body{font-family:var(--ft)}
           <div id="mpList"></div>
           <button class="act wa" data-act="mpShare" type="button">SHARE ON WHATSAPP</button>
           <button class="act go" id="mpStart" data-act="mpStart" type="button">START RACE</button>
+          <button class="act" id="mpStartAdv" data-act="mpStartAdv" type="button" style="display:none">START FREE ROAM &middot; ADVENTURE CITY</button>
           <button class="act ghost" data-act="mpLeave" type="button">LEAVE ROOM</button>
         </div>
       </div>
