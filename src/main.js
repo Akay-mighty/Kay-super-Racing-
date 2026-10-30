@@ -1565,7 +1565,19 @@ function updateHeroBadge() {
   if (av) av.textContent = d.name[0];
   if (nm) nm.textContent = d.name;
   if (pk) pk.textContent = d.title;
+  const tp = $('hmTip'); if (tp) tp.style.display = store.get('ksr.tipDone', 0) ? 'none' : '';
 }
+function mdActive() {
+  const rail = $('mdRail'), d = $('mdDots'); if (!rail || !d || !rail.children[0]) return;
+  const i = Math.max(0, Math.min(rail.children.length - 1, Math.round(rail.scrollLeft / (rail.children[0].offsetWidth + 12))));
+  [...d.children].forEach((x, k) => x.classList.toggle('on', k === i));
+}
+function mdDots() {
+  const rail = $('mdRail'), d = $('mdDots'); if (!rail || !d) return;
+  if (d.children.length !== rail.children.length) d.innerHTML = Array.from(rail.children, () => '<b></b>').join('');
+  rail.scrollLeft = 0; mdActive();
+}
+{ const r = $('mdRail'); if (r) r.addEventListener('scroll', mdActive, { passive: true }); }
 async function loadLadder() {
   const box = $('ladderBox'); if (!box) return;
   let entries = boardCache['race3'];
@@ -1630,7 +1642,7 @@ function respawn() {
 const screens = [...document.querySelectorAll('#menu .screen')];
 let lastScreen = 'main';
 const HINTS = {
-  main: 'TAP START ENGINE · PICK YOUR MODE',
+  main: 'TAP RACE TO PLAY \u00b7 GARAGE TO CHANGE YOUR CAR', modes: 'SWIPE TO SEE ALL MODES \u00b7 TAP PLAY',
   quick: 'SET OPTIONS \u00b7 START TO RACE', tour: '5 ROUNDS \u00b7 CHAMPION TAKES THE CROWN',
   night: 'NIGHT CIRCUIT · RAIN · NEON · ×1.8 CASH', multi: 'CREATE A ROOM · SHARE THE CODE · RACE LIVE',
   arena: 'DRIFT \u00b7 SMASH CONES \u00b7 BEAT THE CLOCK', tt: 'CLEAN LINES SET RECORDS',
@@ -1646,6 +1658,7 @@ function showScreen(n) {
   if (lastScreen === 'garage' && n !== 'garage') rebuildCar(economy.selected());
   lastScreen = n;
   const fc = $('flyChip'); if (fc) { const fly = !!CS.fly; fc.style.display = fly ? '' : 'none'; if (fly) fc.textContent = `FLIGHT TANK  ${flyCap()}s  \u00b7  UPGRADE IN GARAGE`; }
+  if (n === 'modes') { updateNightUI(); mdDots(); }
   if (n === 'tour') renderTour();
   if (n === 'night') { updateNightUI(); }
   if (n === 'adv') { const nb = $('advNc'); if (nb) nb.style.display = nightUnlocked() ? '' : 'none'; }
@@ -1661,7 +1674,7 @@ function showScreen(n) {
 /* console-style keyboard navigation: arrows move the highlight, enter selects, esc backs out */
 let kbIdx = -1;
 function menuKeys(e) {
-  if (e.code === 'Escape' || e.code === 'Backspace') { if (lastScreen !== 'main') { kbIdx = -1; showScreen('main'); } return; }
+  if (e.code === 'Escape' || e.code === 'Backspace') { if (lastScreen !== 'main') { kbIdx = -1; showScreen(({ quick: 'modes', arena: 'modes', tt: 'modes', tour: 'modes', night: 'modes', adv: 'modes' })[lastScreen] || 'main'); } return; }
   const scr = document.querySelector('#menu .screen.on'); if (!scr) return;
   const items = [...scr.querySelectorAll('button')].filter(b => b.offsetParent !== null && !b.disabled && !b.classList.contains('sw') && !b.classList.contains('back') && !(b.parentElement && b.parentElement.classList.contains('seg')));
   if (!items.length) return;
@@ -1792,8 +1805,11 @@ document.addEventListener('click', e => {
     renderGarage(); return;
   }
   const card = e.target.closest('[data-car]'); if (card && card.dataset.car) { garageClick(card.dataset.car); return; }
+  const mn = e.target.closest('[data-mdnav]');
+  if (mn) { const rail = $('mdRail'); if (rail && rail.children[0]) rail.scrollBy({ left: (+mn.dataset.mdnav) * (rail.children[0].offsetWidth + 12), behavior: 'smooth' }); sfxPad(); return; }
   const b = e.target.closest('button'); if (!b) return;
-  if (b.dataset.go) showScreen(b.dataset.go);
+  if (b.classList.contains('hmRace')) { store.set('ksr.tipDone', 1); const tp = $('hmTip'); if (tp) tp.style.display = 'none'; }
+  if (b.dataset.go) { showScreen(b.dataset.go); if (b.dataset.gt) { const tb = document.querySelector('.gTab[data-gt="' + b.dataset.gt + '"]'); if (tb) tb.click(); } }
   else if (b.dataset.act) act(b.dataset.act);
   else if (b.dataset.c) paintPlayer(+b.dataset.c);
   else if (b.dataset.v !== undefined && b.parentElement.classList.contains('seg')) {
@@ -2499,8 +2515,8 @@ function renderDaily() {
   const b = $('dailyBtn'); if (!b) return;
   const d = economy.getDaily(), can = !d || d.last !== todayStr();
   const streak = d && d.last === yesterdayStr() ? d.streak : 0;
-  if (can) { b.disabled = false; b.classList.add('pulse'); b.textContent = `DAILY BONUS \u00b7 $${dailyAmt(streak + 1).toLocaleString()} (STREAK ${streak + 1}) \u2014 CLAIM!`; }
-  else { b.disabled = true; b.classList.remove('pulse'); b.textContent = `DAILY CLAIMED \u00b7 STREAK ${d.streak} \u2014 BACK TOMORROW`; }
+  if (can) { b.disabled = false; b.classList.add('pulse'); b.textContent = `\ud83c\udf81 TAP TO CLAIM DAILY BONUS \u00b7 $${dailyAmt(streak + 1).toLocaleString()}`; }
+  else { b.disabled = true; b.classList.remove('pulse'); b.textContent = `\ud83c\udf81 DAILY BONUS CLAIMED \u00b7 COME BACK TOMORROW`; }
 }
 function claimDaily() {
   const d = economy.getDaily(); if (d && d.last === todayStr()) return;
