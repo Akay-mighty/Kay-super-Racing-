@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildCarGeometry, SPORT } from './car-geometry.js';
@@ -37,7 +38,7 @@ const mobile = matchMedia('(any-pointer: coarse)').matches;
 let pr = Math.min(devicePixelRatio, 2);
 renderer.setPixelRatio(pr);
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.NeutralToneMapping;
 document.body.prepend(renderer.domElement);
 
@@ -47,11 +48,51 @@ scene.environmentIntensity = 0.4;
 scene.fog = new THREE.Fog(0xcfe0f0, 260, 1500);
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 1, 2800);
 
+/* ---------- CLARITY: anti-alias + sharpen + grade, run after tone-mapping ---------- */
+const CL_VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+const FXAA_FRAG = `uniform sampler2D tDiffuse; varying vec2 vUv;
+void main(){
+  vec2 px = 1.0 / vec2(textureSize(tDiffuse, 0)); vec3 L = vec3(0.299, 0.587, 0.114);
+  vec3 cM = texture2D(tDiffuse, vUv).rgb, cNW = texture2D(tDiffuse, vUv + vec2(-1.0, -1.0) * px).rgb, cNE = texture2D(tDiffuse, vUv + vec2(1.0, -1.0) * px).rgb;
+  vec3 cSW = texture2D(tDiffuse, vUv + vec2(-1.0, 1.0) * px).rgb, cSE = texture2D(tDiffuse, vUv + vec2(1.0, 1.0) * px).rgb;
+  float lM = dot(cM, L), lNW = dot(cNW, L), lNE = dot(cNE, L), lSW = dot(cSW, L), lSE = dot(cSE, L);
+  float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE))), lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+  vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
+  float dirReduce = max((lNW + lNE + lSW + lSE) * 0.03125, 0.0078125);
+  float rcp = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+  dir = clamp(dir * rcp, vec2(-8.0), vec2(8.0)) * px;
+  vec3 a = 0.5 * (texture2D(tDiffuse, vUv + dir * (1.0 / 3.0 - 0.5)).rgb + texture2D(tDiffuse, vUv + dir * (2.0 / 3.0 - 0.5)).rgb);
+  vec3 b = a * 0.5 + 0.25 * (texture2D(tDiffuse, vUv + dir * -0.5).rgb + texture2D(tDiffuse, vUv + dir * 0.5).rgb);
+  float lB = dot(b, L);
+  gl_FragColor = vec4((lB < lMin || lB > lMax) ? a : b, 1.0);
+}`;
+const GRADE_FRAG = `uniform sampler2D tDiffuse; uniform float uSharp, uSat, uCon, uVig; varying vec2 vUv;
+void main(){
+  vec2 px = 1.0 / vec2(textureSize(tDiffuse, 0));
+  vec3 e = texture2D(tDiffuse, vUv).rgb, a = texture2D(tDiffuse, vUv + vec2(0.0, -px.y)).rgb, b = texture2D(tDiffuse, vUv + vec2(-px.x, 0.0)).rgb;
+  vec3 d = texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb, h = texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb;
+  vec3 mn = min(min(min(a, b), min(d, h)), e), mx = max(max(max(a, b), max(d, h)), e);
+  vec3 amp = sqrt(clamp(min(mn, 1.0 - mx) / max(mx, vec3(0.0001)), 0.0, 1.0));
+  vec3 w = amp * (-1.0 / mix(8.0, 5.0, uSharp));
+  vec3 c = clamp((e + (a + b + d + h) * w) / (1.0 + 4.0 * w), 0.0, 1.0);
+  float l = dot(c, vec3(0.299, 0.587, 0.114));
+  c = mix(vec3(l), c, uSat); c = (c - 0.5) * uCon + 0.5;
+  vec2 q = vUv - 0.5; c *= 1.0 - uVig * dot(q, q) * 2.2;
+  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+let fxaaPass = null, gradePass = null;
+function addClarityPasses(c) {
+  fxaaPass = new ShaderPass({ uniforms: { tDiffuse: { value: null } }, vertexShader: CL_VERT, fragmentShader: FXAA_FRAG });
+  gradePass = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uSharp: { value: 0.8 }, uSat: { value: 1.07 }, uCon: { value: 1.06 }, uVig: { value: 0.16 } }, vertexShader: CL_VERT, fragmentShader: GRADE_FRAG });
+  fxaaPass.enabled = mobile; /* desktop already has 4x MSAA */
+  c.addPass(fxaaPass); c.addPass(gradePass);
+}
 let composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, { type: THREE.HalfFloatType, samples: mobile ? 0 : 4 }));
 composer.addPass(new RenderPass(scene, camera));
 let bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.4, 0.35, 2.2);
 composer.addPass(bloomPass);
 composer.addPass(new OutputPass());
+addClarityPasses(composer);
 addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
@@ -89,6 +130,7 @@ function rebuildComposer() {
   bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.4, 0.35, 2.2);
   composer.addPass(bloomPass);
   composer.addPass(new OutputPass());
+  addClarityPasses(composer);
   applyQuality();
 }
 renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); glRecover(); });
@@ -150,7 +192,7 @@ const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x607080, 1.1);
 scene.add(hemi);
 const sunOff = V3(120, 200, 80);
 const sun = new THREE.DirectionalLight(0xfff0d8, 2.5);
-sun.castShadow = true; sun.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
+sun.castShadow = true; sun.shadow.mapSize.set(mobile ? 1536 : 2048, mobile ? 1536 : 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
 Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 500 });
 scene.add(sun, sun.target);
 
@@ -1091,7 +1133,8 @@ const arena = createArena(canvasTex);
 scene.add(arena.group, camera);
 /* ---------- cars ---------- */
 const SPORT_GEO = buildCarGeometry(SPORT);
-const carMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, metalness: 0.45, roughness: 0.3, clearcoat: 0.6, clearcoatRoughness: 0.12 });
+const carMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, metalness: 0.55, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.05 });
+carMat.envMap = scene.environment; carMat.envMapIntensity = 1.3; /* real showroom reflections on the paint (scaled per time of day) */
 function makeCar(color, specGeo = SPORT_GEO, tint = null) {
   const g = new THREE.Group(), geo = specGeo.clone();
   colorize(geo, color);
@@ -1225,7 +1268,7 @@ function setEnv(k) {
   drawSky(e.sky); scene.fog.color.set(e.fog); scene.fog.near = e.fn; scene.fog.far = e.ff;
   hemi.color.set(e.hemi[0]); hemi.groundColor.set(e.hemi[1]); hemi.intensity = e.hemi[2];
   sun.color.set(e.sun[0]); sun.intensity = e.sun[1]; sunOff.set(...e.pos);
-  scene.environmentIntensity = e.env; clouds.forEach(c => { c.material.opacity = e.cloud; });
+  scene.environmentIntensity = e.env; carMat.envMapIntensity = Math.max(0.2, e.env * 3.4); clouds.forEach(c => { c.material.opacity = e.cloud; });
   bloomPass.strength = e.bloom; if (cityMat) cityMat.emissiveIntensity = e.glow * 1.4;
   starMat.opacity = e.stars; car.headlight.intensity = e.head * 2000;
   const ss = SUNSPR[k] || SUNSPR.day; sunSpr.position.set(...e.pos).normalize().multiplyScalar(2300); sunSpr.material.opacity = ss[0]; sunSpr.material.color.setHex(ss[1]);
@@ -1233,7 +1276,7 @@ function setEnv(k) {
   neonOn = !!e.rain;
   rain.visible = !!e.rain; neonGroup.visible = !!e.rain;
   neonLights.forEach(L => { L.intensity = e.rain ? 5200 : 0; });
-  if (roadStrip) { roadStrip.material.roughness = wet ? 0.24 : 0.85; roadStrip.material.metalness = wet ? 0.55 : 0; roadStrip.material.needsUpdate = false; }
+  if (roadStrip) { roadStrip.material.roughness = wet ? 0.24 : 0.7; roadStrip.material.metalness = wet ? 0.55 : 0; roadStrip.material.needsUpdate = false; }
   const TKC = TRACKS[curTrack] || TRACKS.city;
   if (ground) { ground.material.color.setHex(wet ? 0x11151c : TKC.ground); ground.material.roughness = wet ? 0.35 : (TKC.id === 'bridge' ? 0.28 : 1); ground.material.metalness = wet ? 0.45 : (TKC.id === 'bridge' ? 0.25 : 0); }
   if (cityMat) { cityMat.roughness = wet ? 0.22 : 0.45; cityMat.metalness = wet ? 0.5 : 0.2; }
@@ -1662,6 +1705,8 @@ function applyQuality() {
   /* LOW now really means LOW: no bloom, no shadow pass — half the GPU work on cheap phones */
   const low = opt.q === 'low';
   if (bloomPass) bloomPass.enabled = !low;
+  if (gradePass) { gradePass.enabled = !low; gradePass.uniforms.uSharp.value = opt.q === 'high' ? 0.85 : 0.65; }
+  if (fxaaPass) fxaaPass.enabled = mobile && !low; /* low = skip both: that mode is for weak phones */
   if (renderer.shadowMap.enabled === low) {
     renderer.shadowMap.enabled = !low; sun.castShadow = !low;
     scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
@@ -2589,7 +2634,7 @@ function frameBody(now) {
   if (state === 'paused') { composer.render(); return; }
   if (state === 'race') {
     fAcc += raw; fN++;
-    if (fAcc > 2.5) { if (fAcc / fN > 1 / 42 && pr > 1.25) { pr = Math.max(1.25, pr - 0.25); renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight); } fAcc = 0; fN = 0; }
+    if (fAcc > 2.5) { if (fAcc / fN > 1 / 36 && pr > 1.5) { pr = Math.max(1.5, pr - 0.25); renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight); } fAcc = 0; fN = 0; }
   } else { fAcc = 0; fN = 0; }
   if (state === 'count') {
     cdT -= dt; const n = Math.ceil(cdT); $('cd').textContent = n > 0 ? n : 'GO';
