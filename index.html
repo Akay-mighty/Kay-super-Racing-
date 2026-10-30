@@ -346,11 +346,16 @@ body.adv #info{display:none}
 #advPrompt button{pointer-events:auto;margin-top:5px;width:100%;padding:11px;border-radius:8px;border:1px solid rgba(90,170,255,.7);background:linear-gradient(120deg,#0d57a8,#2f8fff);color:#fff;font:800 15px var(--ft);letter-spacing:.18em;cursor:pointer;box-shadow:0 4px 18px rgba(46,107,255,.45)}
 #advPrompt button:active{transform:scale(.97);filter:brightness(1.2)}
 #advExit{display:none;top:calc(max(10px,env(safe-area-inset-top)) + 58px);right:max(12px,env(safe-area-inset-right));width:auto;height:34px;padding:0 13px;border-radius:6px;border:1px solid rgba(255,123,123,.55);background:rgba(20,10,12,.6);color:#ff9a9a;font:800 11px var(--ft);letter-spacing:.18em;pointer-events:auto;cursor:pointer;backdrop-filter:blur(8px)}
+#wpnSwap{display:none;top:calc(max(10px,env(safe-area-inset-top)) + 100px);right:max(12px,env(safe-area-inset-right));width:auto;height:34px;padding:0 13px;border-radius:6px;border:1px solid rgba(255,215,102,.5);background:rgba(24,18,6,.6);color:#ffd166;font:800 11px var(--ft);letter-spacing:.14em;pointer-events:auto;cursor:pointer;backdrop-filter:blur(8px)}
+#wpnSwap.noammo{opacity:.45;border-color:rgba(255,123,123,.5);color:#ff9a9a}
 #advQuit{display:none}
 body.adv #advExit{display:block}
+body.adv #wpnSwap{display:block}
+body.adv.duel #wpnSwap{right:calc(12px + 100px + 12px)}
 body.adv #advQuit{display:block}
 body.adv #pauseRetry{display:none}
-body.menu #advHud,body.menu #advNav,body.menu #advPrompt,body.menu #advExit{display:none!important}
+body.menu #advHud,body.menu #advNav,body.menu #advPrompt,body.menu #advExit,body.menu #wpnSwap{display:none!important}
+body.touch #wpnSwap{right:calc(12px + 100px + 12px)}
 body.touch #advHud{transform:scale(.85);transform-origin:top left}
 body.touch #advNav{top:calc(max(10px,env(safe-area-inset-top)) + 112px);left:12px}
 #ncIntro{position:fixed;inset:0;z-index:7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at center,rgba(6,10,26,.86),rgba(2,3,8,.96));opacity:0;pointer-events:none;transition:opacity .45s}
@@ -968,15 +973,16 @@ body{font-family:var(--ft)}
 <div id="advNav" class="hud"><span id="advArr">&#10148;</span><b id="advDist">0m</b></div>
 <div id="advPrompt" class="hud" style="display:none"><b id="apTitle">STREET RACE</b><span id="apSub"></span><span id="apRew"></span><button type="button" data-act="advJoin">JOIN RACE</button></div>
 <button id="advExit" class="hud" type="button" data-act="advExit">EXIT</button>
+<button id="wpnSwap" class="hud" type="button" data-act="wpnSwap" title="Swap weapon (Q)">&#9876;&#65039; GUN</button>
 <div id="mpBoard" class="hud" style="display:none"></div>
 <div id="toast" class="hud">OVERTAKE</div>
 <div id="count" class="hud"><div class="lamps"><i id="l1"></i><i id="l2"></i><i id="l3"></i></div><span id="cd">3</span></div>
 <div id="ncIntro"><h1>NIGHT CIRCUIT</h1><div class="ncSub">RAIN · LOW GRIP · NEON CITY · ×1.8 CASH</div><div class="ncRain"><i style="--x:6"></i><i style="--x:14"></i><i style="--x:23"></i><i style="--x:31"></i><i style="--x:38"></i><i style="--x:47"></i><i style="--x:56"></i><i style="--x:63"></i><i style="--x:72"></i><i style="--x:79"></i><i style="--x:88"></i><i style="--x:95"></i></div></div>
 <div id="glFix" class="ov hide"><div class="ovwrap">
-  <h1>FIXING GRAPHICS</h1>
+  <h1>GRAPHICS RECOVERY</h1>
   <div class="gspin"><i></i></div>
-  <p>YOUR PHONE FREED UP MEMORY AND THE 3D ENGINE PAUSED.<br>RESTARTING THE ENGINE IN <b id="glT">7</b>s&hellip;</p>
-  <p class="gsm">TIP: CLOSE SOME TABS OR APPS TO KEEP THE RACE SMOOTH</p>
+  <p id="glMsg">THE 3D ENGINE RAN OUT OF MEMORY AND HAD TO PAUSE.<br>RESTARTING IN <b id="glT">7</b>s&hellip; AT SAFER SETTINGS.</p>
+  <p class="gsm">TIP: CLOSE OTHER TABS &amp; APPS SO YOUR PHONE KEEPS MORE MEMORY FREE</p>
   <button class="act" data-act="glreload" type="button">RESTART NOW</button>
 </div></div>
 <div id="confetti"></div>
@@ -1031,7 +1037,7 @@ body{font-family:var(--ft)}
         <button class="mdArr l" data-mdnav="-1" type="button" aria-label="Previous mode">&#9664;</button>
         <button class="mdArr r" data-mdnav="1" type="button" aria-label="Next mode">&#9654;</button>
         <div class="mdRail" id="mdRail">
-          <article class="mdCard mc1"><i>&#127937;</i><h3>QUICK RACE</h3><p>One fast race. You pick the laps, difficulty and time of day.</p><div class="mdTags"><span>1-5 LAPS</span><span>EASY &rarr; HARD</span></div><button class="act go" data-go="quick" type="button">PLAY</button></article>
+          <article class="mdCard mc1"><i>&#127937;</i><h3>QUICK RACE</h3><p>One fast race. Pick laps, rivals (1v1 duel!), difficulty and time of day.</p><div class="mdTags"><span>1V1 DUEL</span><span>1-5 LAPS</span><span>EASY &rarr; HARD</span></div><button class="act go" data-go="quick" type="button">PLAY</button></article>
           <article class="mdCard mc2"><i>&#127942;</i><h3>TOURNAMENT</h3><p>Five events in a row. Score points and take the crown.</p><div class="mdTags"><span>5 EVENTS</span><span>BIG CASH</span></div><button class="act go" data-go="tour" type="button">PLAY</button></article>
           <article class="mdCard mc3" id="nightTile"><i>&#127747;</i><h3>NIGHT CIRCUIT</h3><p id="nightSub">HARD &middot; RAIN &middot; NEON &middot; &times;1.8 CASH</p><div class="mdTags"><span>HARD</span><span>&times;1.8 CASH</span></div><button class="act go" data-go="night" data-act="nightTile" type="button">PLAY</button></article>
           <article class="mdCard mc4"><i>&#128506;</i><h3>ADVENTURE</h3><p>Free roam the city. Drive to race markers and lose the cops.</p><div class="mdTags"><span>FREE ROAM</span><span>COPS</span></div><button class="act go" data-go="adv" type="button">PLAY</button></article>
@@ -1047,6 +1053,7 @@ body{font-family:var(--ft)}
       <div class="pbody">
         <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1" type="button">1</button><button data-v="3" type="button">3</button><button data-v="5" type="button">5</button></div>
         <div class="lbl">DIFFICULTY</div><div class="seg" data-k="diff"><button data-v="0" type="button">EASY</button><button data-v="1" type="button">NORMAL</button><button data-v="2" type="button">HARD</button></div>
+        <div class="lbl">RIVALS · 1 = DUEL</div><div class="seg" data-k="rivals"><button data-v="1" type="button">1 · 1V1</button><button data-v="3" type="button">3</button><button data-v="5" type="button">5</button></div>
         <div class="lbl">TRACK</div><div class="seg" data-k="track"><button data-v="city" type="button">LAGOS CITY</button><button data-v="bridge" type="button">LAGOS BRIDGE</button><button data-v="beach" type="button">EKO BEACH</button><button data-v="jungle" type="button">JUNGLE RUN</button><button data-v="kaduna" type="button">KADUNA RIDGE</button><button data-v="obudu" type="button">OBUDU PEAK</button><button data-v="mega" type="button">SKY MEGA RAMP</button></div>
         <div class="lbl">TIME OF DAY</div><div class="seg" data-k="env"><button data-v="day" type="button">NOON</button><button data-v="dawn" type="button">DAWN</button><button data-v="sunset" type="button">SUNSET</button><button data-v="night" type="button">NIGHT</button></div>
         <button class="act go" data-act="quick" type="button">START RACE</button>
@@ -1141,10 +1148,11 @@ body{font-family:var(--ft)}
     <!-- GARAGE -->
     <section class="screen" data-s="garage">
       <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>GARAGE</h2><p>PICK &middot; UPGRADE &middot; PAINT</p></div></div>
-      <div class="gTabs"><button class="gTab on" data-gt="cars" type="button">CARS</button><button class="gTab" data-gt="up" type="button">UPGRADE</button><button class="gTab" data-gt="paint" type="button">PAINT</button><button class="gTab" data-gt="tat" type="button">TATTOO</button><button class="gTab" data-gt="drv" type="button">DRIVER</button></div>
+      <div class="gTabs"><button class="gTab on" data-gt="cars" type="button">CARS</button><button class="gTab" data-gt="up" type="button">UPGRADE</button><button class="gTab" data-gt="wpn" type="button">ARSENAL</button><button class="gTab" data-gt="paint" type="button">PAINT</button><button class="gTab" data-gt="tat" type="button">TATTOO</button><button class="gTab" data-gt="drv" type="button">DRIVER</button></div>
       <div class="pbody">
         <div class="gSec on" data-gt="cars"><div id="carList"></div></div>
         <div class="gSec" data-gt="up"><div id="upPanel"></div></div>
+        <div class="gSec" data-gt="wpn"><div id="wpnList"></div></div>
         <div class="gSec" data-gt="paint"><div class="lbl">PICK A COLOUR</div><div class="row" id="swatches"></div></div>
         <div class="gSec" data-gt="tat"><div id="tatList"></div></div>
         <div class="gSec" data-gt="drv"><div id="drvList"></div></div>
@@ -1209,5 +1217,21 @@ body{font-family:var(--ft)}
 <div id="updBar" class="updBar"><span>NEW VERSION READY</span><button id="updGo" type="button">UPDATE</button><button id="updLater" type="button">LATER</button></div>
 <script type="module" src="/src/main.js"></script>
 <script type="module" src="/src/pwa.js"></script>
+<script>
+/* BOOT FAILSAFE: if the engine never wakes up (phone out of memory, WebGL context
+   refused at startup), the splash would sit black forever. Show a way out instead. */
+setTimeout(function () {
+  if (window.__KSR_OK) return;
+  var ov = document.getElementById('glFix');
+  if (!ov) return;
+  ov.classList.remove('hide'); ov.style.zIndex = 999;
+  var h = ov.querySelector('h1'), p = ov.querySelector('#glMsg'), tip = ov.querySelector('.gsm');
+  if (h) h.textContent = 'THE ENGINE DID NOT START';
+  if (p) p.innerHTML = 'YOUR PHONE IS OUT OF MEMORY AND REFUSED THE 3D ENGINE.<br>CLOSE A FEW APPS / TABS, THEN TAP RETRY.';
+  if (tip) tip.textContent = 'IF IT KEEPS HAPPENING, RESTART YOUR PHONE TO FREE RAM';
+  var b = ov.querySelector('button'); if (b) b.textContent = 'RETRY';
+  var boot = document.getElementById('boot'); if (boot) boot.style.opacity = '.25';
+}, 20000);
+</script>
 </body>
 </html>
