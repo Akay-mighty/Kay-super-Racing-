@@ -283,6 +283,15 @@ body.flying #altwrap{display:block}
 #puHud{bottom:calc(24px + env(safe-area-inset-bottom));left:max(20px,env(safe-area-inset-left));padding:8px 14px;border-radius:10px;background:rgba(8,12,20,.72);border:1px solid rgba(255,209,102,.65);color:#ffd166;font:800 italic 15px var(--fd);letter-spacing:.06em;box-shadow:0 0 18px rgba(255,209,102,.25)}
 #bFire{left:max(26px,env(safe-area-inset-left));bottom:calc(max(26px,env(safe-area-inset-bottom)) + 168px);width:66px;height:66px;font-size:12px;border-color:#ffd166;display:none}
 body.puitem #bFire{display:flex}
+/* ADVENTURE: dedicated SHOOT + DRIVE pedals — shoot and steer at the same time */
+#bShoot{left:max(22px,env(safe-area-inset-left));bottom:calc(max(26px,env(safe-area-inset-bottom)) + 176px);width:84px;height:84px;font-size:12px;border-color:#ffd166;display:none;flex-direction:column;gap:2px;line-height:1}
+#bShoot span{font-size:13px}
+#bShoot small{font-size:10px;font-weight:800;letter-spacing:.06em;opacity:.85}
+#bShoot.noammo{border-color:#ff6b6b;opacity:.85}
+body.adv #bShoot{display:flex}
+body.adv #bFire{display:none!important}
+#bGas{right:calc(max(24px,env(safe-area-inset-right)) + 116px);bottom:calc(max(30px,env(safe-area-inset-bottom)) + 228px);width:78px;height:78px;font-size:13px;border-color:#7dff8a;display:none}
+body.adv #bGas{display:flex}
 #ainfo{display:none;top:16px;left:16px;background:var(--glass);border-left:4px solid var(--gold);padding:9px 18px 9px 14px;border-radius:0 6px 6px 0;min-width:180px;backdrop-filter:blur(8px)}
 body.arena #ainfo{display:block}body.arena #info,body.arena #mm{display:none}
 #ascore{font:900 italic 38px/1 var(--fd)}#acombo{font:700 13px var(--ft);letter-spacing:.16em;color:var(--gold);margin:3px 0}#atime{font:700 14px var(--ft);letter-spacing:.12em}
@@ -358,6 +367,15 @@ body.menu #advHud,body.menu #advNav,body.menu #advPrompt,body.menu #advExit,body
 body.touch #wpnSwap{right:calc(12px + 100px + 12px)}
 body.touch #advHud{transform:scale(.85);transform-origin:top left}
 body.touch #advNav{top:calc(max(10px,env(safe-area-inset-top)) + 112px);left:12px}
+/* ADVENTURE first-time intro: explains the loop in four rows */
+#advIntro .aiGrid{display:grid;gap:9px;margin:14px 0 18px;max-width:600px;width:min(600px,94vw)}
+#advIntro .aiRow{display:grid;grid-template-columns:30px 128px 1fr;gap:10px;align-items:start;text-align:left;background:rgba(10,18,36,.62);border:1px solid rgba(120,170,255,.25);border-radius:10px;padding:10px 12px}
+#advIntro .aiRow i{font-style:normal;font-size:19px}
+#advIntro .aiRow b{font:800 11px/1.5 var(--ft);letter-spacing:.12em;color:#8fd0ff}
+#advIntro .aiRow span{font:500 12.5px/1.45 var(--ft);color:#dfe9f8}
+#advIntro .aiBtns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;align-items:center}
+#advIntro .aiBtns .act{width:auto;margin:0;padding:12px 26px;font-size:16px}
+#advIntro h1{font:900 italic clamp(34px,8vw,64px)/1 var(--fd);letter-spacing:.04em;background:linear-gradient(90deg,#ffd166,#ff7a1a 60%,#ff4d4d);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 24px rgba(255,179,71,.4))}
 #ncIntro{position:fixed;inset:0;z-index:7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at center,rgba(6,10,26,.86),rgba(2,3,8,.96));opacity:0;pointer-events:none;transition:opacity .45s}
 #ncIntro.show{opacity:1}
 #ncIntro h1{font:900 italic clamp(40px,10vw,92px)/1 var(--fd);letter-spacing:.05em;background:linear-gradient(90deg,#2de2ff,#ff2dd8 55%,#ff9a2f);-webkit-background-clip:text;background-clip:text;color:transparent;animation:ncFlick 1.7s steps(1) infinite;filter:drop-shadow(0 0 30px rgba(45,226,255,.45))}
@@ -967,7 +985,8 @@ body{font-family:var(--ft)}
   <div class="aRow"><span>HEAT</span><span id="advFree">FREE 0:00</span></div>
   <div id="heatBar"><i></i></div>
   <div id="advStars"><i></i><i></i><i></i></div>
-  <div class="aRow" style="margin-top:5px"><span id="advNext">NEXT RACE 0:05</span></div>
+  <div class="aRow" style="margin-top:5px"><span>RESPECT</span><span id="advRep">LV 1</span></div>
+  <div class="aRow" style="margin-top:2px"><span id="advNext">NEXT RACE 0:05</span></div>
   <div id="bustWrap" style="display:none"><div class="aRow"><span>BUSTED IN&hellip;</span></div><div id="bustBar"><i></i></div></div>
 </div>
 <div id="advNav" class="hud"><span id="advArr">&#10148;</span><b id="advDist">0m</b></div>
@@ -978,6 +997,19 @@ body{font-family:var(--ft)}
 <div id="toast" class="hud">OVERTAKE</div>
 <div id="count" class="hud"><div class="lamps"><i id="l1"></i><i id="l2"></i><i id="l3"></i></div><span id="cd">3</span></div>
 <div id="ncIntro"><h1>NIGHT CIRCUIT</h1><div class="ncSub">RAIN · LOW GRIP · NEON CITY · ×1.8 CASH</div><div class="ncRain"><i style="--x:6"></i><i style="--x:14"></i><i style="--x:23"></i><i style="--x:31"></i><i style="--x:38"></i><i style="--x:47"></i><i style="--x:56"></i><i style="--x:63"></i><i style="--x:72"></i><i style="--x:79"></i><i style="--x:88"></i><i style="--x:95"></i></div></div>
+<div id="advIntro" class="ov hide"><div class="ovwrap">
+  <h1>ADVENTURE</h1>
+  <div class="aiGrid">
+    <div class="aiRow"><i>&#128308;</i><b>RACE MARKERS</b><span>Follow the gold arrow to a glowing beam, drive in and hit JOIN RACE. The longer you stay free &mdash; and the higher your RESPECT &mdash; the bigger the races that call you.</span></div>
+    <div class="aiRow"><i>&#128680;</i><b>HEAT &amp; COPS</b><span>Speeding and crashing raise your HEAT. Stars are the cruisers on you. Get boxed in and you are BUSTED &mdash; you pay a fine. Fly or hide to lose them.</span></div>
+    <div class="aiRow"><i>&#128099;</i><b>GANG TURF</b><span>Ram a roaming gang car or shoot one and the whole crew hunts you. Wreck them for cash &mdash; or they grind your POWER to zero and tow you.</span></div>
+    <div class="aiRow"><i>&#127919;</i><b>POWER &amp; WEAPONS</b><span>POWER is your car's life. Buy weapons in GARAGE &rarr; ARSENAL, then hold SHOOT to fight back. Gold CRATES drop cash, ammo and nitro.</span></div>
+  </div>
+  <div class="aiBtns">
+    <button class="act" data-act="advIntroX" type="button">LET'S RIDE</button>
+    <button class="act ghost" data-act="advArsenal" type="button">OPEN ARSENAL</button>
+  </div>
+</div></div>
 <div id="glFix" class="ov hide"><div class="ovwrap">
   <h1>GRAPHICS RECOVERY</h1>
   <div class="gspin"><i></i></div>
@@ -998,6 +1030,8 @@ body{font-family:var(--ft)}
   <button class="tb" id="bBoost" data-a="boost" type="button">NITRO</button>
   <button class="tb" id="bFly" data-a="fly" type="button">FLY</button>
   <button class="tb" id="bFire" data-a="item" type="button">FIRE</button>
+  <button class="tb" id="bShoot" data-a="shoot" type="button"><span>SHOOT</span><small>EMPTY</small></button>
+  <button class="tb" id="bGas" data-a="gas" type="button">DRIVE</button>
 </section>
 
 <div id="menu" class="hide">
@@ -1220,6 +1254,8 @@ body{font-family:var(--ft)}
 <script>
 /* BOOT FAILSAFE: if the engine never wakes up (phone out of memory, WebGL context
    refused at startup), the splash would sit black forever. Show a way out instead. */
+window.addEventListener('error', function (e) { window.__BOOT_ERR = (e.message || 'unknown') + ' @ ' + String(e.filename || '').split('/').pop() + ':' + (e.lineno || 0); window.__BOOT_STACK = e.error && e.error.stack || ''; });
+window.addEventListener('unhandledrejection', function (e) { window.__BOOT_REJ = (e.reason && (e.reason.stack || e.reason.message)) || String(e.reason); });
 setTimeout(function () {
   if (window.__KSR_OK) return;
   var ov = document.getElementById('glFix');
