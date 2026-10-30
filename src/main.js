@@ -235,14 +235,14 @@ const TRACKS = {
   bridge: { id: 'bridge', name: 'LAGOS BRIDGE', short: { a: 0.226, b: 0.59, sideA: -1, sideB: -1, bow: 0.1, hump: 5, jump: 0.45 }, cp: [[0,0,-300],[0,4,-80],[0,10,120],[0,13,320],[60,13,470],[240,13,540],[430,12,520],[580,11,400],[640,11,220],[600,11,60],[620,9,-120],[540,6,-320],[380,2,-480],[180,0,-560],[40,0,-450]],
     ground: 0x0d3a55, road: ['#3c3f46','#41444b'], edge: ['#e8e8ea','#d42a2a'], wall: ['#d9dde3','#c2c7cf'],
     city: 80, cityOff: [230, 520], cityH: 1.9, bills: true, tunnel: false, lamps: true, grand: true, towers: true, palms: 0, trees: 0, umbrellas: 0, rocks: 0, traffic: [['danfo', 6], ['keke', 4], ['taxi', 5]] },
-  beach: { id: 'beach', name: 'EKO BEACH', short: { a: 0.375, b: 0.646, sideA: 1, sideB: 1, bow: 0.22, hump: 6, jump: 0.5 }, cp: [[0,0,-320],[0,0,-80],[40,2,140],[160,3,330],[330,4,430],[520,3,400],[640,2,260],[700,3,80],[660,4,-90],[560,2,-240],[600,5,-420],[440,3,-560],[240,0,-620],[60,0,-520]],
+  beach: { id: 'beach', name: 'EKO BEACH', short: { a: 0.6, b: 0.99, sideA: -1, sideB: -1, bow: 0.1, hump: 6, jump: 0.5 }, cp: [[0,0,-320],[0,0,-80],[40,2,140],[160,3,330],[330,4,430],[520,3,400],[640,2,260],[700,3,80],[660,4,-90],[560,2,-240],[600,5,-420],[440,3,-560],[240,0,-620],[60,0,-520]],
     ground: 0xd9c28c, road: ['#4a4a4e','#50505a'], edge: ['#f2f2f0','#2a9d5c'], wall: ['#f5e9d0','#e6d5ae'],
     city: 16, cityOff: [70, 320], cityH: 0.34, bills: 3, tunnel: false, lamps: false, grand: true, towers: false, palms: 90, trees: 0, umbrellas: 26, rocks: 0, traffic: [['keke', 3], ['danfo', 2]] },
   jungle: { id: 'jungle', name: 'JUNGLE RUN', short: { a: 0.218, b: 0.484, sideA: 1, sideB: 1, bow: -0.12, hump: 7, jump: 0.55 }, cp: [[0,0,-260],[30,2,-40],[-30,4,140],[-160,6,240],[-320,7,220],[-420,5,80],[-380,3,-80],[-440,5,-240],[-320,4,-380],[-140,2,-420],[-20,0,-380],[0,1,-330]],
     ground: 0x1e3b24, road: ['#4b4237','#514840'], edge: ['#e8e2c8','#c9a03c'], wall: ['#6b5a3e','#7a6848'],
     city: 0, cityOff: [0, 0], cityH: 1, bills: false, tunnel: false, lamps: false, grand: false, towers: false, palms: 0, trees: 150, umbrellas: 0, rocks: 40, traffic: [['keke', 2]] },
   /* Kaduna: red laterite hills, acacia & baobab, long climb and a fast descent */
-  kaduna: { id: 'kaduna', name: 'KADUNA RIDGE', short: { a: 0.68, b: 0.866, sideA: 1, sideB: 1, bow: -0.08, hump: 5, jump: 0.5 }, cp: [[0,2,-260],[0,3,0],[30,6,240],[110,12,430],[250,19,560],[430,25,630],[620,29,640],[790,31,560],[880,28,420],[880,23,260],[810,19,130],[680,15,100],[540,13,130],[420,12,165],[330,10,140],[285,8,60],[262,6,-70],[300,5,-250],[315,4,-380],[255,3,-475],[120,2,-495],[15,2,-420]],
+  kaduna: { id: 'kaduna', name: 'KADUNA RIDGE', short: { a: 0.37, b: 0.72, sideA: 1, sideB: 1, bow: 0.04, hump: 5, jump: 0.5 }, cp: [[0,2,-260],[0,3,0],[30,6,240],[110,12,430],[250,19,560],[430,25,630],[620,29,640],[790,31,560],[880,28,420],[880,23,260],[810,19,130],[680,15,100],[540,13,130],[420,12,165],[330,10,140],[285,8,60],[262,6,-70],[300,5,-250],[315,4,-380],[255,3,-475],[120,2,-495],[15,2,-420]],
     ground: 0xffffff, terrain: { kind: 'red', amp: 46 }, road: ['#4a433e','#504943'], edge: ['#f3e6c8','#c4501c'], wall: ['#b08a5e','#9e7a52'],
     city: 0, cityOff: [0, 0], cityH: 1, bills: false, tunnel: false, lamps: false, grand: true, towers: false, palms: 0, trees: 0, acacias: 80, baobabs: 16, umbrellas: 0, rocks: 70, traffic: [['keke', 3], ['danfo', 2]] },
   /* Obudu: mountain climb (60 m up) with hairpins, pines and rock */
@@ -261,7 +261,7 @@ let world = null, curTrack = 'city';
 /* SECRET SHORTCUT state: built per track by buildShortcut() inside buildWorld().
    SC.p2/t2/r2 = sampled centreline, ai/bi = main-loop indices it connects,
    hw = half width, dsc = metres per sample, ji = launch-ramp sample. */
-let SC = null, scCdT = 0;
+let SC = null, scCdT = 0, scHinted = false;
 let pts, tan, right, curv, ds, roadStrip, ground, cityMat, padGroup, pads, padsNight;
 let neonGroup, neonLights = [];
 const dummy = new THREE.Object3D(); /* shared matrix scratch object — used by world, props, pickups, skids */
@@ -356,13 +356,14 @@ function scStrip(pa, ya, pb, yb, col) { /* open strip along the shortcut samples
 }
 function buildShortcut(tk) {
   const def = tk.short; if (!def) { SC = null; return; }
-  const SW = 11, HW = SW / 2, M = 140;
+  const SW = 12, HW = SW / 2, M = 140;
   const ai = Math.round(N * def.a) % N, bi = Math.round(N * def.b) % N;
   const EA = pts[ai].clone().addScaledVector(right[ai], def.sideA * 10.5);
   const XB = pts[bi].clone().addScaledVector(right[bi], def.sideB * 10.5);
+  const XBC = pts[bi].clone(); /* the deck merges back onto the racing line: no drop, no snap */
   const ex = XB.clone().sub(EA), len = Math.hypot(ex.x, ex.z);
   const mid = EA.clone().add(XB).multiplyScalar(0.5).addScaledVector(V3(-ex.z, 0, ex.x).normalize(), def.bow * len);
-  const curve = new THREE.CatmullRomCurve3([EA, mid, XB], false, 'centripetal', 0.5);
+  const curve = new THREE.CatmullRomCurve3([EA, mid, XB, XBC], false, 'centripetal', 0.5);
   const raw = curve.getSpacedPoints(M - 1);
   const p2 = [], t2 = [], r2 = [];
   for (let i = 0; i < M; i++) {
@@ -390,6 +391,26 @@ function buildShortcut(tk) {
     pil.forEach(([x, b, z, h], n) => { dummy.position.set(x, b + h / 2, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, h, 1); dummy.updateMatrix(); m.setMatrixAt(n, dummy.matrix); });
     dummy.scale.set(1, 1, 1); world.add(m);
   }
+  /* glowing chevron texture (shared by the deck + the road arrows) */
+  const chev = canvasTex(64, 64, (g, w, h) => { g.clearRect(0, 0, w, h); g.strokeStyle = 'rgba(255,179,71,.95)'; g.lineWidth = 9; g.lineCap = 'round'; for (const yy of [20, 44]) { g.beginPath(); g.moveTo(12, yy + 10); g.lineTo(32, yy - 8); g.lineTo(52, yy + 10); g.stroke(); } });
+  /* entry beacon: a gold pillar of light you can spot from across the map */
+  const beacon = new THREE.Group();
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3.4, 95, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.26, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false, toneMapped: false }));
+  pillar.position.y = 47; beacon.add(pillar);
+  const bglow = canvasTex(64, 64, (g, w, h) => { const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,.95)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
+  const bhalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: bglow, color: 0xffb347, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }));
+  bhalo.scale.set(26, 26, 1); bhalo.position.y = 4; beacon.add(bhalo);
+  const bring = new THREE.Mesh(new THREE.TorusGeometry(3.6, 0.28, 8, 36), new THREE.MeshBasicMaterial({ color: 0xffb347, toneMapped: false, fog: false }));
+  bring.rotation.x = Math.PI / 2; bring.position.y = 0.3; beacon.add(bring);
+  beacon.position.copy(EA).y += 0.1; world.add(beacon);
+  /* arrows painted on the road: three chevrons pointing at the gate */
+  for (let k2 = 1; k2 <= 3; k2++) {
+    const i2 = (ai - k2 * 5 + N) % N, pp = pts[i2], rr = right[i2];
+    const ar = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 4.6).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: chev, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    ar.position.set(pp.x + rr.x * def.sideA * 6, pp.y + 0.14, pp.z + rr.z * def.sideA * 6);
+    ar.rotation.z = -Math.atan2(EA.x - ar.position.x, EA.z - ar.position.z);
+    world.add(ar);
+  }
   /* entry gate: two posts + SHORTCUT banner */
   const gate = new THREE.Group();
   const steel = new THREE.MeshStandardMaterial({ color: 0x8a5a20, metalness: 0.5, roughness: 0.5 });
@@ -399,7 +420,6 @@ function buildShortcut(tk) {
   ban.position.set(0, 9, -0.55); ban.rotation.y = Math.PI; gate.add(ban);
   gate.position.copy(EA).y += 0.05; gate.rotation.y = Math.atan2(t2[2].x, t2[2].z); world.add(gate);
   /* glowing chevrons along the deck */
-  const chev = canvasTex(64, 64, (g, w, h) => { g.clearRect(0, 0, w, h); g.strokeStyle = 'rgba(255,179,71,.95)'; g.lineWidth = 9; g.lineCap = 'round'; for (const yy of [20, 44]) { g.beginPath(); g.moveTo(12, yy + 10); g.lineTo(32, yy - 8); g.lineTo(52, yy + 10); g.stroke(); } });
   for (let i = 8; i < M - 8; i += Math.floor(M / 9)) {
     const ar = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 3.6).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: chev, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
     ar.position.copy(p2[i]).y += 0.14; ar.rotation.y = Math.atan2(t2[i].x, t2[i].z); world.add(ar);
@@ -604,7 +624,7 @@ padsNight = padNightIdx.map((k, n) => {
 /* shortcut pads: two orange-hot boosts on the secret causeway (bigger kick than track pads) */
 if (SC) {
   const sp2 = [];
-  for (const u of [0.16, 0.32]) {
+  for (const u of [0.09, 0.3, 0.55]) {
     const i = Math.round(u * (SC.M - 1)), m = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 7.5).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.8, 0.9, 0.25), transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
     m.position.copy(SC.p2[i]).y += 0.18; m.rotation.y = Math.atan2(SC.t2[i].x, SC.t2[i].z);
     m.userData = { cd: 0, flash: 0, k: -1, hot: 1 };
@@ -1012,8 +1032,19 @@ function wpnReset() {
   if (!wsel || AMMO[wsel] === undefined) wsel = Object.keys(AMMO)[0] || null;
   updateWpnHud();
 }
+const WSHORT = { gun: 'GUN', rockets: 'ROCKETS', oil: 'OIL', mine: 'MINE' };
 function updateWpnHud() {
   const b = $('wpnSwap'); if (!b) return;
+  const bs = $('bShoot');
+  if (bs) {
+    if (cfg.type !== 'adv') bs.style.display = 'none';
+    else {
+      bs.style.display = '';
+      if (!wsel) bs.innerHTML = '<span>ARSENAL</span><small>EMPTY</small>';
+      else bs.innerHTML = '<span>' + (WSHORT[wsel] || wpnName(wsel)) + '</span><small>' + (AMMO[wsel] > 0 ? '\u00d7' + AMMO[wsel] : 'EMPTY') + '</small>';
+      bs.classList.toggle('noammo', !!wsel && !(AMMO[wsel] > 0));
+    }
+  }
   if (cfg.type !== 'adv' || !wsel) { b.style.display = 'none'; return; }
   b.style.display = ''; b.classList.toggle('noammo', !(AMMO[wsel] > 0));
   b.innerHTML = (AMMO[wsel] > 0 ? '&#9876;&#65039; ' : '&#128683; ') + wpnName(wsel) + (AMMO[wsel] > 0 ? ' ×' + AMMO[wsel] : ' EMPTY');
@@ -1030,7 +1061,7 @@ function fireWeapon() {
   if (cfg.type !== 'adv' || state !== 'race' || P.finished || !wsel) return;
   if (wpnCd > 0) return;
   if (!(AMMO[wsel] > 0)) { toast(wpnName(wsel) + ' EMPTY · SWAP WITH Q', '#ff7b7b'); wpnCd = 0.4; return; }
-  wpnCd = wsel === 'gun' ? 0.13 : 0.6;
+  wpnCd = wsel === 'gun' ? 0.13 : wsel === 'rockets' ? 0.45 : 0.5;
   AMMO[wsel]--;
   if (wsel === 'gun' || wsel === 'rockets') adv.shootPlayer(wsel);
   else if (wsel === 'oil') adv.dropOilW();
@@ -1530,7 +1561,19 @@ const adv = createAdventure(canvasTex, {
   nitroAdd: n => { P.nitro = Math.min(1, P.nitro + n); },
   onRam: (nx, nz, imp) => { P.vel.x += nx * imp; P.vel.z += nz * imp; shake = Math.max(shake, 0.45); sfxThud(); },
   busted: amt => { if (amt > 0) economy.spend(amt); toast(amt > 0 ? `BUSTED!  -$${amt.toLocaleString()}` : 'BUSTED!', '#ff6b6b'); shake = 1; sfxThud(); },
-  escape: () => { economy.add(500); toast('LOST THE COPS!  +$500', '#7dff8a'); missionEvent('escape', 1); confetti(24); }
+  escape: () => { economy.add(500); toast('LOST THE COPS!  +$500', '#7dff8a'); missionEvent('escape', 1); confetti(24); },
+  spark: n => confetti(n),
+  crateCash: n => { economy.add(n); toast('SUPPLY CRATE  +$' + n.toLocaleString(), '#7dff8a'); sfxCoin(); },
+  crateAmmo: () => {
+    const owned = WEAPONS.filter(w => AMMO[w.id] !== undefined);
+    if (!owned.length) { economy.add(500); toast('SUPPLY CRATE  +$500', '#7dff8a'); return; }
+    const w = owned[(Math.random() * owned.length) | 0];
+    AMMO[w.id] += w.id === 'gun' ? 60 : 2;
+    updateWpnHud();
+    toast('SUPPLY CRATE \u00b7 +' + (w.id === 'gun' ? '60' : '2') + ' ' + wpnName(w), '#ffd166');
+  },
+  repAdd: n => { store.set('ksr.rep', (store.get('ksr.rep', 0) || 0) + Math.max(0, Math.round(n))); },
+  repLvl: () => Math.floor(Math.sqrt((store.get('ksr.rep', 0) || 0) / 60))
 });
 scene.add(adv.group);
 
@@ -1625,12 +1668,21 @@ function resetWorld(c) {
   neonGroup.visible = nightOn; padsNight.forEach(p => { p.visible = nightOn; });
   document.body.classList.toggle('arena', arenaOn && c.mode !== 'menu');
   document.body.classList.toggle('adv', advOn && c.mode !== 'menu');
+  if (!advOn) { /* leaving free-roam: every adventure overlay MUST go away — the stuck JOIN RACE banner */
+    ['advPrompt', 'advNav', 'bustWrap'].forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
+    show('advIntro', false);
+  }
   $('paintBar').classList.remove('open');
   let g;
   if (arenaOn) { g = { p: V3(0, 0, -150) }; P.pos.set(0, 0, -150); P.h = 0; P.idx = 0; }
   else if (advOn) { const sp = adv.enter(c.env, !!c.resume); g = { p: V3(sp.x, 0, sp.z) }; P.pos.set(sp.x, 0, sp.z); P.h = sp.h; P.idx = 0; }
   else { const slot = c.ai + (c.netSlot || 0); g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
   P.vel.set(0, 0, 0); P.jy = 0; P.jv = 0; P.spin = 0; P.crosses = 0; P.nitro = 1; P.fuel = flyCap(); P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0; P.scOn = false; P.scI = 0; scCdT = 0;
+  if (advOn && !c.resume) {
+    scHinted = false;
+    if (!store.get('ksr.advIntro', 0)) setTimeout(() => { if (cfg.type === 'adv' && state !== 'menu') show('advIntro', true); }, 800);
+    if (touch.active && !store.get('ksr.gasHint', 0)) { store.set('ksr.gasHint', 1); setTimeout(() => toast('HOLD DRIVE TO ACCELERATE \u00b7 TAP SHOOT TO FIGHT BACK', '#8df'), 2400); }
+  }
   /* HARD was overtuned: rivals sat at 89-96% of your top speed AND rubberbanded
      AND kept nitro-bursting. Now 84-92%, softer catch-up, rarer bursts. */
   AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = c.diff >= 2 ? CS.top * rand(0.84, 0.92) - k * 0.8 : (rand(62, 71) - k * 0.4) * DIFF[c.diff] * (0.74 + CS.top / 132 * 0.28); a.hard = c.diff >= 2; a.boostT = 0; a.boostCd = rand(3, 7); a.fireCd = rand(6, 11) + k * 1.8 + [22, 10, 2][c.diff] ; a.oilCd2 = rand(6, 12); a.item = null; a.itemT = 0; a.shield = 0; if (a.shieldMesh) a.shieldMesh.visible = false; });
@@ -1832,7 +1884,7 @@ function act(a) {
     const n = adv.S.near; if (!n) return;
     adv.saveReturn(n.x, n.z, P.h);
     adv.raceStart();
-    startRace({ mode: 'quick', type: 'race', laps: n.laps, diff: n.diff, ai: 5, env: adv.S.env, track: n.track, fromAdv: true, cashMult: n.mult, title: `${n.name} · ${(TRACKS[n.track] || TRACKS.city).name}` });
+    startRace({ mode: 'quick', type: 'race', laps: n.laps, diff: n.diff, ai: 5, env: adv.S.env, track: n.track, fromAdv: true, cashMult: n.mult, tier: n.tier || 0, title: `${n.name} · ${(TRACKS[n.track] || TRACKS.city).name}` });
   }
   else if (a === 'advBack') {
     /* straight back to free-roam — and if this adventure is a multiplayer room, stay in it */
@@ -1841,6 +1893,8 @@ function act(a) {
   }
   else if (a === 'advExit') { adv.leave(); if (cfg.mode === 'mp' && net.active) net.leave(); toMenu(); }
   else if (a === 'wpnSwap') cycleWeapon();
+  else if (a === 'advIntroX') { store.set('ksr.advIntro', 1); show('advIntro', false); sfxPad(); }
+  else if (a === 'advArsenal') { store.set('ksr.advIntro', 1); show('advIntro', false); toMenu(); showScreen('garage'); const tb = document.querySelector('.gTab[data-gt="arsenal"]'); if (tb) tb.click(); }
   else if (a === 'quick') startRace({ mode: 'quick', laps: opt.laps, diff: opt.diff, ai: opt.rivals || 5, env: opt.env, track: opt.track, title: (opt.rivals === 1 ? '1 VS 1 DUEL · ' : '') + (TRACKS[opt.track] && opt.track !== 'city' ? TRACKS[opt.track].name : '') });
   else if (a === 'tt') startRace({ mode: 'tt', laps: opt.laps, diff: 1, ai: 0, env: opt.env, track: opt.track, title: TRACKS[opt.track] && opt.track !== 'city' ? TRACKS[opt.track].name : '' });
   else if (a === 'arena') startRace({ mode: 'arena', type: 'arena', laps: 1, diff: opt.diff, ai: 0, env: opt.env, dur: opt.dur, title: 'DRIFT ARENA' });
@@ -1922,12 +1976,14 @@ document.addEventListener('click', e => {
   }
 });
 $('pauseBtn').onclick = pause;
+$('bShoot').addEventListener('click', () => { if (cfg.type === 'adv' && !wsel) act('advArsenal'); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); else last = performance.now(); });
 
 function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
 
 function stepPlayer(dt, racing) {
-  const k = { up: keys.KeyW || keys.ArrowUp || gp.up || (touch.active && !touch.down), down: keys.KeyS || keys.ArrowDown || gp.down || touch.down, left: keys.KeyA || keys.ArrowLeft, right: keys.KeyD || keys.ArrowRight, boost: keys.ShiftLeft || keys.ShiftRight || gp.boost || touch.boost, drift: keys.Space || gp.drift || touch.drift };
+  const advGas = cfg.type === 'adv' && touch.gasEver; /* after the first DRIVE tap, the pedal rules the throttle */
+  const k = { up: keys.KeyW || keys.ArrowUp || gp.up || ((touch.active && !touch.down) && !advGas) || (advGas && touch.gas > 0), down: keys.KeyS || keys.ArrowDown || gp.down || touch.down, left: keys.KeyA || keys.ArrowLeft, right: keys.KeyD || keys.ArrowRight, boost: keys.ShiftLeft || keys.ShiftRight || gp.boost || touch.boost, drift: keys.Space || gp.drift || touch.drift };
   const f = V3(Math.sin(P.h), 0, Math.cos(P.h)), rt = V3(-f.z, 0, f.x);
   const fwd = P.vel.dot(f), sp = P.vel.length();
   const can = racing && !P.finished;
@@ -1967,9 +2023,9 @@ function stepPlayer(dt, racing) {
   const boosting = can && k.boost && P.nitro > 0.02 && gas && !busted;
   /* FIRE input: in ADVENTURE it fires the weapon bought in the ARSENAL (hold the
      button — the machine gun keeps biting). Everywhere else it fires the power-up. */
-  const fireEdge = (gp.item && !padItemPrev) || (!!touch.item && !touchItemPrev) || (keys.KeyG && !fireKeyPrev);
-  const fireHeld = (gp.item || touch.item > 0 || keys.KeyG) && can;
-  padItemPrev = !!gp.item; fireKeyPrev = !!keys.KeyG; touchItemPrev = !!touch.item;
+  const fireEdge = (gp.item && !padItemPrev) || ((!!touch.item || !!touch.shoot) && !touchItemPrev) || (keys.KeyG && !fireKeyPrev);
+  const fireHeld = (gp.item || touch.item > 0 || touch.shoot > 0 || keys.KeyG) && can;
+  padItemPrev = !!gp.item; fireKeyPrev = !!keys.KeyG; touchItemPrev = !!(touch.item || touch.shoot);
   wpnCd = Math.max(0, wpnCd - dt);
   if (cfg.type === 'adv' && state === 'race' && !P.finished) {
     if (fireEdge || (fireHeld && wsel === 'gun')) fireWeapon();
@@ -2027,6 +2083,10 @@ function stepPlayer(dt, racing) {
   /* ---- SECRET SHORTCUT: hug the glowing pads to enter, ride the deck, launch off the ramp ---- */
   scCdT = Math.max(0, scCdT - dt);
   if (window.__SCDBG) { const g = window.__SCDBG; g.checks++; g.fwd = fwd.toFixed(1); g.stateOk = state === 'race'; g.can = can; g.d2 = ((P.pos.x - (SC ? SC.ex : 0)) ** 2 + (P.pos.z - (SC ? SC.ez : 0)) ** 2).toFixed(1); g.alt = FL.alt.toFixed(2); g.jy = P.jy.toFixed(2); g.flags = [!!SC, !P.scOn, can, !FL.on, P.jy <= 0, state === 'race', scCdT, fwd > 10, FL.alt < 1].map(v => typeof v === 'number' ? v.toFixed(2) : v ? 1 : 0).join(','); if (g.rec) { g.hist = g.hist || []; if (g.hist.length < 14) g.hist.push([g.checks, fwd.toFixed(1), g.d2, g.flags]); } }
+  if (SC && !P.scOn && state === 'race' && !scHinted) {
+    const dxh = P.pos.x - SC.ex, dzh = P.pos.z - SC.ez;
+    if (dxh * dxh + dzh * dzh < 48400) { scHinted = true; toast('GOLD BEACON \u00b7 SHORTCUT AHEAD', '#ffb347'); beep(720, 0.07, 'square', 0.06); }
+  }
   if (SC && !P.scOn && can && !FL.on && P.jy <= 0 && state === 'race' && scCdT <= 0 && fwd > 10 && FL.alt < 1) {
     const dx = P.pos.x - SC.ex, dz = P.pos.z - SC.ez;
     if (dx * dx + dz * dz < 52) { P.scOn = true; P.scI = 0; toast('SHORTCUT!', '#ffb347'); beep(720, 0.08, 'square', 0.08); setTimeout(() => beep(980, 0.1, 'square', 0.08), 70); }
@@ -2263,6 +2323,7 @@ function advUI(dt) {
   const pp = $('powPct'); if (pp) pp.textContent = Math.round(S.pow) + '%';
   const fr = $('advFree'); if (fr) fr.textContent = 'FREE ' + fmt0(S.freeT);
   const nx = $('advNext'); if (nx) nx.textContent = S.near ? 'RACE MARKER AHEAD — E / TAP JOIN' : adv.gangWar ? ' GANG FIGHT! WRECK THEM OR RUN' : 'NEXT RACE ' + fmt0(S.nextIn);
+  const rp = $('advRep'); if (rp) rp.textContent = 'LV ' + ((adv.repLvl || 0) + 1);
   const bw = $('bustWrap');
   if (bw) {
     if (S.bust > 0.05) { bw.style.display = 'block'; if ($('bustBar')) $('bustBar').firstElementChild.style.width = Math.round(clamp(S.bust / 2.6, 0, 1) * 100) + '%'; }
@@ -2460,7 +2521,7 @@ function finishRace() {
   misDone = misDone.concat(missionEvent('fly', FL.time));
   misDone = misDone.concat(missionEvent('own', economy.ownedCount()));
   misDone = misDone.concat(missionEvent('earn', cash));
-  if (cfg.fromAdv && !arenaOn && place === 1 && cfg.ai) misDone = misDone.concat(missionEvent('advwin', 1));
+  if (cfg.fromAdv && !arenaOn && place === 1 && cfg.ai) { misDone = misDone.concat(missionEvent('advwin', 1)); adv.winRep(cfg.tier || 0); }
   if (cfg.env === 'nightRain') {
     misDone = misDone.concat(missionEvent('nightdrift', arenaOn ? sc : Math.floor(RD.pts)));
     misDone = misDone.concat(missionEvent('nightfly', FL.time));
@@ -2905,6 +2966,6 @@ rebuildCar(economy.selected());
 window.addEventListener('ksr-money', updateMoneyUI);
 updateMoneyUI();
 syncSegs(); applyQuality(); applyCtrl(false); gateBoot();
-if (TURBO || location.search.includes('dbg')) { window.__DBG = { get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car, adv, act, startRace, fireWeapon, cycleWeapon, wpnReset, restockAI, get AMMO() { return AMMO; }, get wsel() { return wsel; }, get SC() { return SC; }, get curTrack() { return curTrack; }, get state() { return state; }, get cfgT() { return cfg.type; }, forceRace() { setState('race'); goT = 0.9; $('count').style.display = 'none'; } }; window.__SCDBG = { checks: 0 }; } /* dev test hook */
+if (TURBO || location.search.includes('dbg')) { window.__DBG = { get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car, adv, act, startRace, fireWeapon, cycleWeapon, wpnReset, restockAI, get AMMO() { return AMMO; }, get wsel() { return wsel; }, economy, store, touch, get SC() { return SC; }, get curTrack() { return curTrack; }, get state() { return state; }, get cfgT() { return cfg.type; }, forceRace() { setState('race'); goT = 0.9; $('count').style.display = 'none'; } }; window.__SCDBG = { checks: 0 }; } /* dev test hook */
 window.__KSR_OK = true; /* boot failsafe (index.html) stands down: the engine is alive */
 requestAnimationFrame(frame);

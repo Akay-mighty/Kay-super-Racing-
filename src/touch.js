@@ -1,6 +1,6 @@
 // Touch input, using the pointer-capture pattern from mrdoob/slop-newyork (MIT) js/touch-controls.js.
 // Each finger is tracked by pointerId so steering and buttons work at the same time.
-export const touch = { active: false, steer: 0, down: 0, boost: 0, drift: 0, fly: 0, item: 0, mode: 'stick' };
+export const touch = { active: false, steer: 0, down: 0, boost: 0, drift: 0, fly: 0, item: 0, mode: 'stick', gas: 0, shoot: 0, gasEver: false };
 
 const root = document.getElementById('touch');
 const stick = document.getElementById('stick');
@@ -38,11 +38,11 @@ const endStick = e => {
 const held = new Map();
 for (const b of root.querySelectorAll('[data-a]')) {
   const a = b.dataset.a;
-  b.addEventListener('pointerdown', e => { e.preventDefault(); held.set(e.pointerId, b); b.setPointerCapture(e.pointerId); touch[a] = 1; b.classList.add('on'); });
+  b.addEventListener('pointerdown', e => { e.preventDefault(); held.set(e.pointerId, b); touch[a] = 1; if (a === 'gas') touch.gasEver = true; try { b.setPointerCapture(e.pointerId); } catch (err) { } b.classList.add('on'); });
   const up = e => { if (held.get(e.pointerId) !== b) return; held.delete(e.pointerId); touch[a] = 0; b.classList.remove('on'); };
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => b.addEventListener(t, up));
 }
-const reset = () => { touch.steer = touch.down = touch.boost = touch.drift = touch.fly = touch.item = 0; sid = null; held.clear(); root.querySelectorAll('.on').forEach(n => n.classList.remove('on')); knob.style.transform = 'translate(-50%,-50%)'; };
+const reset = () => { touch.steer = touch.down = touch.boost = touch.drift = touch.fly = touch.item = touch.gas = touch.shoot = 0; sid = null; held.clear(); root.querySelectorAll('.on').forEach(n => n.classList.remove('on')); knob.style.transform = 'translate(-50%,-50%)'; };
 addEventListener('blur', reset);
 document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
 document.addEventListener('contextmenu', e => e.preventDefault());

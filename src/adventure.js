@@ -22,7 +22,7 @@ const TIERS = [
 
 export function createAdventure(canvasTex, ctx) {
   const group = new THREE.Group(); group.visible = false;
-  const S = { heat: 0, freeT: 0, bust: 0, slow: 0, env: 'day', near: null, navD: 0, navA: 0, nextIn: 5, police: 0, pow: 100, powCd: 9, hitFlash: 0 };
+  const S = { heat: 0, freeT: 0, bust: 0, slow: 0, env: 'day', near: null, navD: 0, navA: 0, nextIn: 5, police: 0, pow: 100, powCd: 9, hitFlash: 0, rep: 0, repLvl: 0, crT: 12, smT: 0 };
   let retPos = null, cashPend = 0, cashT = 0, lowT = 0, hadPolice = false, sirT = 0, sirHi = false, spawnCd = 0, tG = 0;
   const dummy = new THREE.Object3D();
 
@@ -205,18 +205,78 @@ export function createAdventure(canvasTex, ctx) {
     const sp = streetSpot(minD, maxD, px, pz);
     t.k = sp.k; t.dir = sp.vert ? (Math.random() < 0.5 ? 0 : 2) : (Math.random() < 0.5 ? 1 : 3);
     t.u = sp.along; t.speed = 0; t.stun = rand(0, 1.5);
+    t.free = false; t.done = false; t.gone = false; t.flipped = false; t.dented = false;
+    t.vx = t.vz = t.vy = t.air = t.yaw = t.yawV = t.roll = t.rollV = t.h0 = 0;
     t.base = t.kind === 'danfo' ? rand(8, 12) : t.kind === 'taxi' ? rand(10, 14) : t.kind === 'keke' ? rand(7, 10) : rand(8, 11);
   }
   [['danfo', 7], ['taxi', 7], ['keke', 6], ['van', 6]].forEach(([kind, cnt]) => {
     for (let i = 0; i < cnt; i++) {
       const mesh = kind === 'danfo' ? ctx.mkDanfo() : kind === 'taxi' ? ctx.mkTaxi() : kind === 'van' ? ctx.mkVan() : ctx.mkKeke();
-      mesh.visible = false; group.add(mesh);
-      const t = { mesh, kind, k: 0, dir: 0, u: 0, speed: 0, base: 10, stun: 0, latX: 0, latZ: 0 };
+      mesh.visible = false; mesh.rotation.order = 'YXZ'; group.add(mesh);
+      const t = { mesh, kind, k: 0, dir: 0, u: 0, speed: 0, base: 10, stun: 0, latX: 0, latZ: 0, w2: kind === 'danfo' ? 1.1 : kind === 'van' ? 1.15 : kind === 'taxi' ? 0.98 : 0.7 };
       traffic.push(t);
     }
   });
+  /* ---------- KNOCK-AWAY PHYSICS: hard hits send cars sliding, tumbling, even onto their roof ----------
+     Free-flight integration shared by traffic, gang cars and cruisers. A knocked car flies,
+     bounces, settles — and if the roll lands past 90° it rests UPSIDE DOWN, smoking. */
+  const TAU = Math.PI * 2;
+  function dentCar(o) {
+    if (o.dented) return; o.dented = true;
+    const root = o.mesh || o.grp; if (!root) return;
+    root.traverse(m => { if (m.isMesh && m.material && m.material.isMeshStandardMaterial && m.material.color) m.material.color.multiplyScalar(0.58); });
+  }
+  function knock(o, nx, nz, pw, x0, z0) {
+    o.free = true; o.done = false; o.flipped = false;
+    o.x = x0; o.z = z0;
+    o.vx = nx * pw; o.vz = nz * pw;
+    o.vy = clamp(pw * 0.28, 2.6, 10.5); o.air = 0.02;
+    o.yaw = 0; o.yawV = rand(-1, 1) * clamp(pw * 0.12, 0.9, 4.2);
+    o.rollV = (Math.random() < 0.5 ? -1 : 1) * clamp(pw * 0.3, 0.5, 5.6);
+    o.roll = 0;
+    dentCar(o);
+  }
+  function tumbleStep(o, dt) {
+    if (o.done) { /* resting: burns if flipped */
+      if (o.flipped) { o.burnT -= dt; if (Math.random() < dt * 4) ctx.puff((o.mesh || o.grp).position, 1.4); if (o.burnT <= 0) o.gone = true; }
+      return;
+    }
+    o.air += o.vy * dt; o.vy -= 24 * dt;
+    o.x += o.vx * dt; o.z += o.vz * dt;
+    o.yaw += o.yawV * dt; o.roll += o.rollV * dt;
+    if (o.air <= 0) {
+      o.air = 0;
+      if (o.vy < -3.2) { /* bounce: sparks and a fresh tumble */
+        o.vy = -o.vy * 0.32; o.vx *= 0.66; o.vz *= 0.66; o.yawV *= 0.7; o.rollV *= 0.5;
+        ctx.puff((o.mesh || o.grp).position, 1.1);
+      } else { /* grounded: friction + settle the roll */
+        o.vy = 0;
+        const r = ((o.roll % TAU) + TAU) % TAU;
+        if (o.rollV) { if (r > Math.PI * 0.5 && r < Math.PI * 1.5) { o.flipped = true; o.roll = Math.PI; o.burnT = rand(9, 15); } else { o.roll = 0; } o.rollV = 0; }
+        o.yawV *= Math.exp(-3 * dt); if (Math.abs(o.yawV) < 0.06) o.yawV = 0;
+        o.vx *= Math.exp(-2.8 * dt); o.vz *= Math.exp(-2.8 * dt);
+        if (!o.yawV && Math.abs(o.vx) + Math.abs(o.vz) < 0.3) o.done = true;
+      }
+    }
+    const restY = o.flipped ? (o.w2 || 1) : 0.02;
+    const mm = o.mesh || o.grp;
+    mm.position.set(o.x, restY + o.air, o.z);
+    mm.rotation.set(o.air > 0.05 ? clamp(-o.vy * 0.028, -0.3, 0.3) : 0, (o.h0 || 0) + o.yaw, o.roll);
+  }
+  function reStreet(t) { /* settled upright: back onto the street grid */
+    const kx = clamp(Math.round(t.x / PITCH), -KMAX, KMAX) * PITCH, kz = clamp(Math.round(t.z / PITCH), -KMAX, KMAX) * PITCH;
+    t.free = false; t.flipped = false; t.stun = 2.5; t.speed = 0;
+    if (Math.abs(t.x - kx) < Math.abs(t.z - kz)) { t.k = kx / PITCH; t.dir = 0; t.u = clamp(t.z, -E + 12, E - 12); }
+    else { t.k = kz / PITCH; t.dir = 1; t.u = clamp(t.x, -E + 12, E - 12); }
+  }
   function trafficTick(dt, px, pz) {
     for (const t of traffic) {
+      if (t.free) {
+        tumbleStep(t, dt); t.mesh.visible = group.visible;
+        if (t.gone || (t.done && !t.flipped && Math.hypot(t.x - px, t.z - pz) > 120)) { initTrafficCar(t, px, pz, 90, 190); }
+        else if (t.done && !t.flipped) reStreet(t);
+        continue;
+      }
       if (t.stun > 0) { t.stun -= dt; continue; }
       const sg = t.dir === 0 || t.dir === 1 ? 1 : -1;
       const pu = t.u;
@@ -290,7 +350,7 @@ export function createAdventure(canvasTex, ctx) {
     lblTexCache[tier] = tx; return tx;
   }
   function pickTier() {
-    let tier = Math.min(3, Math.floor(S.freeT / 50));
+    let tier = Math.min(3, Math.floor((S.freeT + S.repLvl * 55) / 50));
     if (tier > 0 && Math.random() < 0.35) tier--;
     return tier;
   }
@@ -328,6 +388,8 @@ export function createAdventure(canvasTex, ctx) {
   const POL = [];
   for (let i = 0; i < 4; i++) {
     const grp = ctx.mkPolice();
+    grp.rotation.order = 'YXZ';
+    grp.rotation.order = 'YXZ';
     const barR = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.2, 0.5), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 0.25, 0.25), toneMapped: false }));
     const barB = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.2, 0.5), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.6, 4), toneMapped: false }));
     barR.position.set(-0.32, 1.86, 0.1); barB.position.set(0.32, 1.86, 0.1); grp.add(barR, barB);
@@ -336,7 +398,7 @@ export function createAdventure(canvasTex, ctx) {
     haloR.scale.set(5, 5, 1); haloB.scale.set(5, 5, 1); haloR.position.set(-0.3, 2.3, 0); haloB.position.set(0.3, 2.3, 0);
     grp.add(haloR, haloB);
     grp.visible = false; group.add(grp);
-    POL.push({ grp, barR, barB, haloR, haloB, on: false, x: 0, z: 0, h: 0, speed: 0, stuck: 0, ramCd: 0 });
+    POL.push({ grp, barR, barB, haloR, haloB, on: false, x: 0, z: 0, h: 0, speed: 0, stuck: 0, ramCd: 0, w2: 0.95 });
   }
   const polOn = p => { p.on = true; p.grp.visible = true; };
   const polOff = p => { p.on = false; p.grp.visible = false; };
@@ -348,8 +410,8 @@ export function createAdventure(canvasTex, ctx) {
   const GANG = [];
   for (let i = 0; i < 4; i++) {
     const grp = ctx.mkGang(i);
-    grp.visible = false; group.add(grp);
-    GANG.push({ grp, on: false, x: 0, z: 0, h: 0, speed: 0, hp: 100, mode: 'roam', fireCd: rand(1, 2), calm: 0, stuck: 0, repT: 0, hitT: 0, wx: 0, wz: 0 });
+    grp.visible = false; grp.rotation.order = 'YXZ'; group.add(grp);
+    GANG.push({ grp, on: false, x: 0, z: 0, h: 0, speed: 0, hp: 100, mode: 'roam', fireCd: rand(1, 2), calm: 0, stuck: 0, repT: 0, hitT: 0, wx: 0, wz: 0, w2: 0.95 });
   }
   let gangCd = 5;
   function gangSpawn(g, px, pz, minD, maxD) {
@@ -357,6 +419,7 @@ export function createAdventure(canvasTex, ctx) {
     g.x = sp.vert ? sp.k * PITCH : sp.along; g.z = sp.vert ? sp.along : sp.k * PITCH;
     g.h = rand(0, 6.28); g.speed = 0; g.on = true; g.grp.visible = true;
     g.mode = 'roam'; g.hp = 100; g.calm = 0; g.stuck = 0; g.repT = 0; g.fireCd = rand(1.2, 2.4); g.hitT = 0;
+    g.free = false; g.done = false; g.gone = false; g.flipped = false; g.air = 0; g.vy = 0; g.vx = g.vz = 0; g.yaw = 0; g.roll = 0; g.rollV = 0; g.yawV = 0; g.h0 = 0;
     g.wx = rand(-E + 40, E - 40); g.wz = rand(-E + 40, E - 40);
   }
   function gangAggro(msg) {
@@ -364,15 +427,19 @@ export function createAdventure(canvasTex, ctx) {
     GANG.forEach(g => { if (g.on && g.mode !== 'hunt') { g.mode = 'hunt'; n++; } });
     if (n && msg) ctx.toast(msg, '#ff4dd8');
   }
-  function gangHit(g, dmg) { /* your weapons chew gang HP — and wrecking one pays */
-    if (!g.on) return;
+  function gangHit(g, dmg, nx, nz) { /* your weapons chew gang HP — a wreck goes up in flames and pays */
+    if (!g.on || g.mode === 'wrecked') return;
     g.hp -= dmg; g.hitT = 1; g.calm = 0;
-    GANG.forEach(o => { if (o.on && Math.hypot(o.x - g.x, o.z - g.z) < 220) o.mode = 'hunt'; });
+    GANG.forEach(o => { if (o.on && o.mode !== 'wrecked' && Math.hypot(o.x - g.x, o.z - g.z) < 220) o.mode = 'hunt'; });
     if (g.hp <= 0) {
-      g.on = false; g.grp.visible = false; g.repT = rand(26, 40);
       const cash = 1500 + ((Math.random() * 4) | 0) * 500;
       ctx.boom(g.grp.position, 14);
       ctx.gangCash(cash);
+      respect(8);
+      const dl = Math.hypot(nx || rand(-1, 1), nz || rand(-1, 1));
+      g.h0 = g.h;
+      knock(g, (nx || rand(-1, 1)) / (dl || 1), (nz || rand(-1, 1)) / (dl || 1), 15.5, g.x, g.z);
+      g.mode = 'wrecked'; g.wreckT = rand(3.6, 5.2); g.fireCd = 99;
     }
   }
   function gangWreck() { /* the gang ground your POWER to zero: towed & repaired, no arrest */
@@ -407,9 +474,10 @@ export function createAdventure(canvasTex, ctx) {
     const P = new THREE.Vector3(b.x, 0.7, b.z);
     ctx.boom(P, 16);
     let hitAny = false;
-    for (const g of GANG) if (g.on) { const d = Math.hypot(g.x - b.x, g.z - b.z); if (d < 10) { gangHit(g, 58 - d * 2.6); hitAny = true; } }
-    if (!hitAny) for (const g of GANG) if (g.on && Math.hypot(g.x - b.x, g.z - b.z) < 80) { gangAggro('YOU SHOT AT THE GANG!'); break; } /* near miss still starts the fight */
-    for (const p of POL) if (p.on) { const d = Math.hypot(p.x - b.x, p.z - b.z); if (d < 10) { p.speed = -7; p.h += rand(-0.5, 0.5); S.heat = clamp(S.heat + 10, 0, 100); } }
+    for (const g of GANG) if (g.on && g.mode !== 'wrecked') { const d = Math.hypot(g.x - b.x, g.z - b.z); if (d < 10) { gangHit(g, 58 - d * 2.6, (g.x - b.x) / Math.max(0.6, d), (g.z - b.z) / Math.max(0.6, d)); hitAny = true; } }
+    if (!hitAny) for (const g of GANG) if (g.on && g.mode !== 'wrecked' && Math.hypot(g.x - b.x, g.z - b.z) < 80) { gangAggro('YOU SHOT AT THE GANG!'); break; } /* near miss still starts the fight */
+    for (const p of POL) if (p.on && !p.free) { const d = Math.hypot(p.x - b.x, p.z - b.z); if (d < 10) { const inv = 1 / Math.max(0.6, d); p.h0 = p.h; knock(p, (p.x - b.x) * inv, (p.z - b.z) * inv, 11 - d * 0.5, p.x, p.z); S.heat = clamp(S.heat + 10, 0, 100); } }
+    for (const t of traffic) { const gp = t.free ? t : trafficPos(t); const d = Math.hypot(gp.x - b.x, gp.z - b.z); if (d < 10) { const inv = 1 / Math.max(0.6, d), pw = 16 - d * 1.1; if (!t.free) { t.h0 = Math.atan2(trafficPos(t).hx, trafficPos(t).hz); knock(t, (gp.x - b.x) * inv, (gp.z - b.z) * inv, pw, gp.x, gp.z); } else knock(t, (gp.x - b.x) * inv, (gp.z - b.z) * inv, pw, t.x, t.z); } }
     const Pp = ctx.pPos(), dp = Math.hypot(Pp.x - b.x, Pp.z - b.z);
     if (dp < 7) { hitPower(10, null, 'gang'); const Pv = ctx.pVel(), nx = (Pp.x - b.x) / Math.max(0.5, dp), nz = (Pp.z - b.z) / Math.max(0.5, dp); Pv.x += nx * 9; Pv.z += nz * 9; }
   }
@@ -435,15 +503,15 @@ export function createAdventure(canvasTex, ctx) {
         }
         else if (b.from === 'P') {
           for (const g of GANG) {
-            if (!g.on) continue;
+            if (!g.on || g.mode === 'wrecked') continue;
             const dx = g.x - b.x, dz = g.z - b.z;
             if (dx * dx + dz * dz < (b.rk ? 10 : 6.5)) {
-              if (b.rk) { bulletBoom(b); boomed = true; } else { gangHit(g, b.dmg); ctx.puff(b.mesh.position, 1); }
+              if (b.rk) { bulletBoom(b); boomed = true; } else { gangHit(g, b.dmg, b.dx, b.dz); ctx.puff(b.mesh.position, 1); }
               dead = true; break;
             }
           }
           if (!dead) for (const p of POL) { /* shooting cops: they wobble and your heat SOARS */
-            if (!p.on) continue;
+            if (!p.on || p.free) continue;
             const dx = p.x - b.x, dz = p.z - b.z;
             if (dx * dx + dz * dz < (b.rk ? 10 : 6.5)) {
               if (b.rk) { bulletBoom(b); boomed = true; }
@@ -451,7 +519,7 @@ export function createAdventure(canvasTex, ctx) {
               dead = true; break;
             }
           }
-          if (!dead && !b.rk) for (const t of traffic) { const gp = trafficPos(t); const dx = gp.x - b.x, dz = gp.z - b.z; if (dx * dx + dz * dz < 5) { t.stun = 2; ctx.puff(b.mesh.position, 0.8); dead = true; break; } }
+          if (!dead && !b.rk) for (const t of traffic) { const gp = t.free ? t : trafficPos(t); const dx = gp.x - b.x, dz = gp.z - b.z; if (dx * dx + dz * dz < 5.5) { if (!t.free) { t.h0 = Math.atan2(trafficPos(t).hx, trafficPos(t).hz); knock(t, b.dx, b.dz, 5.5, gp.x, gp.z); } else knock(t, b.dx, b.dz, 4, t.x, t.z); t.stun = 2; ctx.puff(b.mesh.position, 0.8); dead = true; break; } }
         }
       }
       b.mesh.position.set(b.x, b.y, b.z);
@@ -472,7 +540,7 @@ export function createAdventure(canvasTex, ctx) {
     } else if (kind === 'rockets') {
       let tgt = null, bd = 1e9;
       GANG.forEach(g => { if (g.on && g.mode === 'hunt') { const d = Math.hypot(g.x - Pp.x, g.z - Pp.z); if (d < bd) { bd = d; tgt = g; } } });
-      if (!tgt) GANG.forEach(g => { if (g.on) { const d = Math.hypot(g.x - Pp.x, g.z - Pp.z); if (d < bd) { bd = d; tgt = g; } } });
+      if (!tgt) GANG.forEach(g => { if (g.on && g.mode !== 'wrecked') { const d = Math.hypot(g.x - Pp.x, g.z - Pp.z); if (d < bd) { bd = d; tgt = g; } } });
       spawnBullet({ x: Pp.x + Math.sin(h) * 3, z: Pp.z + Math.cos(h) * 3, y: 0.8, dx: Math.sin(h), dz: Math.cos(h), sp: 88, life: 3.2, from: 'P', dmg: 0, rk: true, tgt });
       ctx.gshot(Pp.x, Pp.z, true);
     }
@@ -492,7 +560,7 @@ export function createAdventure(canvasTex, ctx) {
       if (o.life <= 0) { group.remove(o.mesh); o.mesh.geometry.dispose(); o.mesh.material.dispose(); OILW.splice(i, 1); continue; }
       if (o.arm > 0) continue;
       const near = (x, z) => { const dx = x - o.x, dz = z - o.z; return dx * dx + dz * dz < 9; };
-      for (const g of GANG) if (g.on && near(g.x, g.z)) { g.speed *= 0.2; g.h += rand(-0.7, 0.7); }
+      for (const g of GANG) if (g.on && g.mode !== 'wrecked' && near(g.x, g.z)) { g.speed *= 0.2; g.h += rand(-0.7, 0.7); }
       for (const p of POL) if (p.on && near(p.x, p.z)) { p.speed *= 0.2; p.h += rand(-0.7, 0.7); }
       if (o.cd <= 0) { const Pp = ctx.pPos(); if (near(Pp.x, Pp.z)) { o.cd = 1.4; ctx.pSpin(1.9); } }
     }
@@ -517,13 +585,13 @@ export function createAdventure(canvasTex, ctx) {
       m.blink.visible = ((tN * 5) | 0) % 2 === 0;
       let boom = m.life <= 0;
       if (!boom && m.arm <= 0) {
-        for (const g of GANG) if (g.on && Math.hypot(g.x - m.x, g.z - m.z) < 3.4) { boom = true; break; }
+        for (const g of GANG) if (g.on && g.mode !== 'wrecked' && Math.hypot(g.x - m.x, g.z - m.z) < 3.4) { boom = true; break; }
         if (!boom) for (const p of POL) if (p.on && Math.hypot(p.x - m.x, p.z - m.z) < 3.4) { boom = true; break; }
         if (!boom) { const Pp = ctx.pPos(); if (Math.hypot(Pp.x - m.x, Pp.z - m.z) < 2.7) boom = true; }
       }
       if (boom) {
         ctx.boom(new THREE.Vector3(m.x, 0.6, m.z), 18);
-        for (const g of GANG) if (g.on) { const d = Math.hypot(g.x - m.x, g.z - m.z); if (d < 9) gangHit(g, 62 - d * 3.2); }
+        for (const g of GANG) if (g.on && g.mode !== 'wrecked') { const d = Math.hypot(g.x - m.x, g.z - m.z); if (d < 9) gangHit(g, 62 - d * 3.2, (g.x - m.x) / Math.max(0.6, d), (g.z - m.z) / Math.max(0.6, d)); }
         for (const p of POL) if (p.on) { const d = Math.hypot(p.x - m.x, p.z - m.z); if (d < 9) { p.speed = -6; p.h += rand(-0.6, 0.6); S.heat = clamp(S.heat + 12, 0, 100); } }
         const Pp = ctx.pPos(), dp = Math.hypot(Pp.x - m.x, Pp.z - m.z);
         if (dp < 7.5) { hitPower(13, null); const Pv = ctx.pVel(), nx = (Pp.x - m.x) / Math.max(0.5, dp), nz = (Pp.z - m.z) / Math.max(0.5, dp); Pv.x += nx * 10; Pv.z += nz * 10; }
@@ -545,6 +613,58 @@ export function createAdventure(canvasTex, ctx) {
     S.pow = clamp(S.pow - d, 0, 100); S.powCd = 0; S.hitFlash = 1;
     if (label) ctx.toast(label, '#ff6b6b');
     if (S.pow <= 0) { if (src === 'gang') gangWreck(); else busted(true); }
+  }
+
+  /* ---------- RESPECT: the city remembers you ----------
+     Wrecking gangs, losing the cops, winning street races and grabbing supply
+     crates all earn RESPECT. The higher your level, the sooner the big races
+     call you (each level counts as 55s of street cred in the tier roll). */
+  function respect(n) {
+    S.rep += n; ctx.repAdd(n);
+    const lvl = ctx.repLvl();
+    if (lvl > S.repLvl) { S.repLvl = lvl; ctx.toast('RESPECT LEVEL ' + lvl + ' \u00b7 BIGGER RACES INCOMING', '#ffd166'); ctx.spark(26); }
+  }
+  function winRep(mult) { respect(Math.round(16 + 22 * (mult || 1))); }
+
+  /* ---------- supply crates: drive through one for cash, ammo or a nitro top-up ---------- */
+  const CR = [];
+  const crateGeo = new THREE.BoxGeometry(1.5, 1.1, 1.1);
+  function spawnCrate(px, pz) {
+    const sp = streetSpot(80, 240, px, pz);
+    const x = sp.vert ? sp.k * PITCH : sp.along, z = sp.vert ? sp.along : sp.k * PITCH;
+    const grp = new THREE.Group();
+    const box = new THREE.Mesh(crateGeo, new THREE.MeshStandardMaterial({ color: 0xffc93c, roughness: 0.35, metalness: 0.55, emissive: 0x8a5a00, emissiveIntensity: 0.6 }));
+    box.position.y = 0.75; box.castShadow = true; grp.add(box);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.5, 60, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false, toneMapped: false }));
+    beam.position.y = 30; grp.add(beam);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffd166, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }));
+    halo.scale.set(10, 10, 1); halo.position.y = 1.5; grp.add(halo);
+    grp.position.set(x, 0, z); group.add(grp);
+    CR.push({ grp, box, x, z, ttl: 80 });
+  }
+  function removeCrate(i) {
+    const c = CR[i]; group.remove(c.grp);
+    c.grp.traverse(o => { if (o.geometry && o.geometry !== crateGeo) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+    CR.splice(i, 1);
+  }
+  function stepCrates(dt, px, pz, alt) {
+    S.crT -= dt;
+    if (S.crT <= 0) { if (CR.length < 2) spawnCrate(px, pz); S.crT = rand(24, 42); }
+    for (let i = CR.length - 1; i >= 0; i--) {
+      const c = CR[i];
+      c.ttl -= dt;
+      c.box.rotation.y += dt * 1.6; c.box.position.y = 0.75 + Math.sin(tG * 2.4 + i) * 0.14;
+      if (c.ttl <= 0) { removeCrate(i); continue; }
+      if (alt < 3 && Math.hypot(px - c.x, pz - c.z) < 5.6) {
+        const roll = Math.random();
+        if (roll < 0.5) ctx.crateCash(400 + ((Math.random() * 6) | 0) * 100);
+        else if (roll < 0.85) ctx.crateAmmo();
+        else { ctx.nitroAdd(1); ctx.toast('SUPPLY CRATE \u00b7 NITRO REFILLED', '#8df'); }
+        respect(3);
+        ctx.beep(880, 0.09, 'square', 0.07);
+        removeCrate(i);
+      }
+    }
   }
 
   /* ---------- minimap base (pre-rendered once) ---------- */
@@ -578,6 +698,11 @@ export function createAdventure(canvasTex, ctx) {
       const [x, y] = P2S(m.x, m.z); if (x < 4 || x > w - 4 || y < 4 || y > h - 4) continue;
       mc.fillStyle = TIERS[m.tier].css; mc.beginPath(); mc.arc(x, y, 6, 0, 7); mc.fill();
       mc.strokeStyle = '#fff'; mc.lineWidth = 2; mc.stroke();
+    }
+    for (const c of CR) {
+      const [x, y] = P2S(c.x, c.z); if (x < 4 || x > w - 4 || y < 4 || y > h - 4) continue;
+      mc.fillStyle = '#ffd166'; mc.fillRect(x - 4, y - 4, 8, 8);
+      mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.strokeRect(x - 4, y - 4, 8, 8);
     }
     const flash = (performance.now() * 0.004 | 0) % 2 === 0;
     for (const p of POL) {
@@ -616,10 +741,14 @@ export function createAdventure(canvasTex, ctx) {
     bullets.forEach(b => group.remove(b.mesh)); bullets.length = 0;
     OILW.forEach(o => { group.remove(o.mesh); o.mesh.geometry.dispose(); o.mesh.material.dispose(); }); OILW.length = 0;
     MINW.forEach(m => group.remove(m.mesh)); MINW.length = 0;
-    GANG.forEach(g => { g.on = false; g.grp.visible = false; g.repT = 0; g.mode = 'roam'; });
+    GANG.forEach(g => { g.on = false; g.grp.visible = false; g.repT = 0; g.mode = 'roam'; g.free = false; g.done = false; g.flipped = false; g.air = 0; });
     gangCd = 4;
+    while (CR.length) removeCrate(0);
+    S.crT = 12; S.smT = 0;
+    S.repLvl = ctx.repLvl();
+    traffic.forEach(t => { t.free = false; t.done = false; t.gone = false; t.flipped = false; t.air = 0; t.vy = 0; t.vx = t.vz = 0; });
     if (!resume) {
-      S.heat = 0; S.freeT = 0; S.slow = 0; S.nextIn = 5; retPos = null;
+      S.heat = 0; S.freeT = 0; S.slow = 0; S.nextIn = 5; retPos = null; S.rep = 0;
       while (markers.length) removeMarker(0);
     }
     return retPos || { x: 3, z: 0, h: 0 };
@@ -677,7 +806,7 @@ export function createAdventure(canvasTex, ctx) {
       m.ring.rotation.z += dt * 2.2;
       m.beam.material.opacity = (m.ttl < 12 ? (Math.sin(tG * 9) > 0 ? 0.5 : 0.12) : 0.3 + Math.sin(tG * 3) * 0.12);
       const d = Math.hypot(m.x - px, m.z - pz);
-      if (d < 16) S.near = { ...TIERS[m.tier], x: m.x, z: m.z, track: m.track, sub: `${TIERS[m.tier].laps} LAPS · ${['EASY', 'NORMAL', 'HARD'][TIERS[m.tier].diff]} · ${ctx.trackName(m.track)}` };
+      if (d < 16) S.near = { ...TIERS[m.tier], tier: m.tier, x: m.x, z: m.z, track: m.track, sub: `${TIERS[m.tier].laps} LAPS · ${['EASY', 'NORMAL', 'HARD'][TIERS[m.tier].diff]} · ${ctx.trackName(m.track)}` };
       else if (d < bestD) { bestD = d; bestM = m; }
     }
     if (!S.near && bestM) {
@@ -686,19 +815,33 @@ export function createAdventure(canvasTex, ctx) {
     }
     /* traffic */
     trafficTick(dt, px, pz);
-    /* player vs traffic — smashes dent your power too */
+    /* player vs traffic — a real crash sends the other car FLYING, maybe onto its roof */
+    S.smT = Math.max(0, S.smT - dt);
     if (alt < 3) for (const t of traffic) {
-      const gp = trafficPos(t);
+      const gp = t.free ? t : trafficPos(t);
       const dx = px - gp.x, dz = pz - gp.z, d2 = dx * dx + dz * dz;
       if (d2 > 10.2) continue;
       const d = Math.max(0.01, Math.sqrt(d2)), nx = dx / d, nz = dz / d;
-      Pp.x += nx * (3.2 - d); Pp.z += nz * (3.2 - d);
-      const vo = Pv.x * nx + Pv.z * nz;
-      if (vo < 0) { Pv.x -= nx * vo * 1.4; Pv.z -= nz * vo * 1.4; Pv.multiplyScalar(0.72); }
-      t.stun = 2.6;
-      S.heat = clamp(S.heat + 14, 0, 100);
-      hitPower(4);
-      ctx.shake(0.6); ctx.puff(Pp, 1.4); ctx.thud();
+      const impact = -(Pv.x * nx + Pv.z * nz); /* how hard we just clipped them */
+      if (impact > 7.5) { /* proper metal-on-metal: the civilian car goes airborne */
+        if (!t.free) t.h0 = Math.atan2(trafficPos(t).hx, trafficPos(t).hz);
+        knock(t, -nx, -nz, clamp(impact * 0.66, 6, 17), gp.x, gp.z);
+        Pp.x -= nx * (3.2 - d) * 0.5; Pp.z -= nz * (3.2 - d) * 0.5;
+        Pv.x += nx * impact * 0.32; Pv.z += nz * impact * 0.32; Pv.multiplyScalar(0.82);
+        S.heat = clamp(S.heat + 12, 0, 100);
+        hitPower(3);
+        cashPend += 15; ctx.nitroAdd(0.04);
+        ctx.shake(0.85); ctx.puff(Pp, 1.8); ctx.thud();
+        if (S.smT <= 0) { S.smT = 2.2; ctx.toast('SMASHED!', '#ffd166'); }
+      } else {
+        Pp.x += nx * (3.2 - d); Pp.z += nz * (3.2 - d);
+        const vo = Pv.x * nx + Pv.z * nz;
+        if (vo < 0) { Pv.x -= nx * vo * 1.4; Pv.z -= nz * vo * 1.4; Pv.multiplyScalar(0.72); }
+        t.stun = 2.6;
+        S.heat = clamp(S.heat + 14, 0, 100);
+        hitPower(2);
+        ctx.shake(0.6); ctx.puff(Pp, 1.4); ctx.thud();
+      }
       break;
     }
     /* smashables */
@@ -722,6 +865,7 @@ export function createAdventure(canvasTex, ctx) {
         const sp2 = streetSpot(140, 260, px, pz);
         p.x = sp2.vert ? sp2.k * PITCH : sp2.along; p.z = sp2.vert ? sp2.along : sp2.k * PITCH;
         p.h = Math.atan2(px - p.x, pz - p.z); p.speed = 22; p.stuck = 0; p.ramCd = 0;
+        p.free = false; p.done = false; p.flipped = false; p.air = 0; p.vy = 0; p.vx = p.vz = 0; p.roll = 0; p.rollV = 0; p.yaw = 0; p.yawV = 0; p.grp.position.y = 0.02;
         polOn(p); hadPolice = true; spawnCd = 2.2;
         ctx.toast('POLICE CHASING YOU!', '#ff6b6b');
       }
@@ -732,6 +876,12 @@ export function createAdventure(canvasTex, ctx) {
       if (!p.on) continue;
       const dx = px - p.x, dz = pz - p.z, dist = Math.hypot(dx, dz);
       if (dist > 320 || (wanted === 0 && S.heat < 15)) { polOff(p); continue; }
+      if (p.free) { /* a rocket sent this cruiser flying: let it land first */
+        tumbleStep(p, dt);
+        p.x = p.grp.position.x; p.z = p.grp.position.z;
+        if (p.done) { if (p.flipped) { ctx.boom(p.grp.position, 10); polOff(p); } else { p.free = false; p.air = 0; p.speed = 6; p.grp.position.y = 0.02; } }
+        continue;
+      }
       const want = Math.atan2(dx, dz), rate = 3.0 / (1 + Math.abs(p.speed) / 55);
       p.h += clamp(angDiff(want, p.h), -rate * dt, rate * dt);
       const ptop = top * 0.9 * (dist > 70 ? 1.18 : 1);
@@ -783,7 +933,9 @@ export function createAdventure(canvasTex, ctx) {
     if (anyClose) S.bust += dt; else S.bust = Math.max(0, S.bust - dt * 0.5);
     if (S.bust >= 2.6) busted(false);
     if (S.heat < 15) { lowT += dt; if (lowT > 6) { POL.forEach(polOff); lowT = 0; } } else lowT = 0;
-    if (hadPolice && S.police === 0 && S.heat < 10) { hadPolice = false; ctx.escape(); }
+    if (hadPolice && S.police === 0 && S.heat < 10) { hadPolice = false; respect(15); ctx.escape(); }
+    /* supply crates: cash, ammo and nitro drop around the city */
+    stepCrates(dt, px, pz, alt);
     /* siren */
     if (S.police > 0 && nearCop < 200) {
       sirT -= dt;
@@ -808,6 +960,13 @@ export function createAdventure(canvasTex, ctx) {
     GANG.forEach(g => { if (!g.on && g.repT > 0) g.repT -= dt; });
     for (const g of GANG) {
       if (!g.on) continue;
+      if (g.mode === 'wrecked') { /* totalled: tumble, burn, then the crew bails out */
+        tumbleStep(g, dt);
+        g.wreckT -= dt;
+        if (Math.random() < dt * 7) ctx.puff(g.grp.position, 1.6);
+        if (g.wreckT <= 0) { g.on = false; g.grp.visible = false; g.repT = rand(26, 40); g.free = false; g.done = false; g.flipped = false; g.air = 0; }
+        continue;
+      }
       const dx = px - g.x, dz = pz - g.z, dist = Math.hypot(dx, dz);
       g.hitT = Math.max(0, g.hitT - dt);
       /* lose interest when you are long gone, and patch the car up a bit */
@@ -836,7 +995,7 @@ export function createAdventure(canvasTex, ctx) {
         ctx.gshot(g.x, g.z);
       }
       /* metal-on-metal with you: they shove, you can shove back harder */
-      if (dist < 3.8 && alt < 3) {
+      if (dist < 3.8 && alt < 3 && g.mode !== 'wrecked') {
         const nx = dx / Math.max(0.01, dist), nz = dz / Math.max(0.01, dist);
         if (dist < 3.4) {
           const push = 3.4 - dist;
@@ -855,10 +1014,10 @@ export function createAdventure(canvasTex, ctx) {
     }
     /* bumping a roaming gang car at speed = you went looking for trouble */
     if (alt < 3 && sp > 16) for (const g of GANG) {
-      if (!g.on || g.mode === 'hunt') continue;
+      if (!g.on || g.mode === 'hunt' || g.mode === 'wrecked') continue;
       const dx = px - g.x, dz = pz - g.z;
       if (dx * dx + dz * dz < 49) { gangAggro('YOU STARTED A GANG FIGHT!'); break; }
     }
   }
-  return { group, E, S, tick, collide, crash, drawMini, setEnv, enter, raceStart, saveReturn, nearestStreet, leave, markers, traffic, hitPower, shootPlayer, dropOilW, dropMineW, get gangWar() { return GANG.some(g => g.on && g.mode === 'hunt'); }, get gangOnN() { return GANG.filter(g => g.on).length; }, get gangs() { return GANG; }, get pol() { return POL; } };
+  return { group, E, S, tick, collide, crash, drawMini, setEnv, enter, raceStart, saveReturn, nearestStreet, leave, markers, traffic, hitPower, shootPlayer, dropOilW, dropMineW, winRep, get repLvl() { return S.repLvl; }, get rep() { return S.rep; }, get crates() { return CR; }, get gangWar() { return GANG.some(g => g.on && g.mode === 'hunt'); }, get gangOnN() { return GANG.filter(g => g.on).length; }, get gangs() { return GANG; }, get pol() { return POL; } };
 }
