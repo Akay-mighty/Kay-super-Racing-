@@ -336,7 +336,7 @@ body.adv #info{display:none}
 #bustWrap{margin-top:4px}
 #bustBar{height:7px;border-radius:4px;background:rgba(255,77,77,.2);overflow:hidden}
 #bustBar i{display:block;height:100%;width:0%;background:#ff4d4d;box-shadow:0 0 8px rgba(255,77,77,.8)}
-#advNav{display:none;top:calc(max(10px,env(safe-area-inset-top)) + 58px);left:50%;transform:translateX(-50%);align-items:center;gap:8px;padding:5px 12px;border-radius:16px;background:rgba(8,12,20,.62);border:1px solid rgba(90,170,255,.4);font:800 13px var(--fd);letter-spacing:.06em;color:#cfe3ff}
+#advNav{display:none;top:calc(max(10px,env(safe-area-inset-top)) + 128px);left:16px;align-items:center;gap:8px;padding:5px 12px;border-radius:16px;background:rgba(8,12,20,.62);border:1px solid rgba(90,170,255,.4);font:800 13px var(--fd);letter-spacing:.06em;color:#cfe3ff}
 #advArr{display:inline-block;font-size:15px;color:#5db8ff;transition:transform .12s linear;text-shadow:0 0 10px rgba(90,170,255,.8)}
 #advPrompt{display:none;flex-direction:column;align-items:center;gap:5px;bottom:calc(max(30px,env(safe-area-inset-bottom)) + 196px);left:50%;transform:translateX(-50%);width:min(340px,88vw);padding:13px 16px 14px;border-radius:14px;background:rgba(7,11,20,.88);border:1px solid rgba(90,170,255,.5);backdrop-filter:blur(10px);box-shadow:0 8px 40px rgba(0,0,0,.5),0 0 24px rgba(46,107,255,.2);animation:advPulse 1.6s ease-in-out infinite}
 @keyframes advPulse{0%,100%{box-shadow:0 8px 40px rgba(0,0,0,.5),0 0 18px rgba(46,107,255,.18)}50%{box-shadow:0 8px 40px rgba(0,0,0,.5),0 0 30px rgba(46,107,255,.4)}}
@@ -352,6 +352,7 @@ body.adv #advQuit{display:block}
 body.adv #pauseRetry{display:none}
 body.menu #advHud,body.menu #advNav,body.menu #advPrompt,body.menu #advExit{display:none!important}
 body.touch #advHud{transform:scale(.85);transform-origin:top left}
+body.touch #advNav{top:calc(max(10px,env(safe-area-inset-top)) + 112px);left:12px}
 #ncIntro{position:fixed;inset:0;z-index:7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at center,rgba(6,10,26,.86),rgba(2,3,8,.96));opacity:0;pointer-events:none;transition:opacity .45s}
 #ncIntro.show{opacity:1}
 #ncIntro h1{font:900 italic clamp(40px,10vw,92px)/1 var(--fd);letter-spacing:.05em;background:linear-gradient(90deg,#2de2ff,#ff2dd8 55%,#ff9a2f);-webkit-background-clip:text;background-clip:text;color:transparent;animation:ncFlick 1.7s steps(1) infinite;filter:drop-shadow(0 0 30px rgba(45,226,255,.45))}
