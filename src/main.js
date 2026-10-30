@@ -1477,7 +1477,7 @@ function followSun() { sun.position.set(car.position.x + sunOff.x, car.position.
 
 function resetWorld(c) {
   c = Object.assign({ type: 'race' }, c); cfg = c; TOTAL = c.laps || 1;
-  ensureTrack(c.track || 'city');
+  if (c.type !== 'adv') ensureTrack(c.track || 'city'); /* free-roam has its own city: no need to rebuild the circuit each time you come back */
   setEnv(c.env); AIs = AI.slice(0, c.ai);
   const arenaOn = c.type === 'arena', advOn = c.type === 'adv';
   world.visible = !arenaOn && !advOn; arena.group.visible = arenaOn; if (arenaOn) arena.reset();
@@ -2083,7 +2083,7 @@ const fmt0 = t => `${Math.floor(Math.max(0, t) / 60)}:${String(Math.floor(Math.m
 function advUI(dt) {
   const S = adv.S, hb = $('heatBar');
   if (hb) hb.firstElementChild.style.width = Math.round(S.heat) + '%';
-  const stars = $('#advStars');
+  const stars = $('advStars');
   if (stars) [...stars.children].forEach((el, i) => el.classList.toggle('on', i < S.police));
   /* POWER: cops & rivals grind it down; at zero you are wrecked */
   const pw = $('powBar'), ah = $('advHud');
