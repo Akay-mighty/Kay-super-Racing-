@@ -852,6 +852,60 @@ body{font-family:var(--ft)}
 /* HUD: keep the coin/gem chip clear of the pause button on narrow screens */
 #coinHud{left:calc(50% - 42px)!important;max-width:calc(100vw - 130px)}
 #pauseBtn{background:linear-gradient(165deg,#2f6fe0,#123a9e);border-color:rgba(140,190,255,.55);box-shadow:0 4px 12px rgba(4,18,64,.55),inset 0 1px 0 rgba(255,255,255,.35);color:#fff}
+
+/* ============ V10 · SIMPLE FLOW — home = RACE + 4 labelled buttons · RACE opens a swipe-card mode picker ============ */
+.tIcon{pointer-events:auto;flex:none;width:40px;height:40px;border:0;border-radius:50%;cursor:pointer;color:#fff;font:400 19px var(--fd);background:linear-gradient(180deg,#4a7bff,#1f3fb0);box-shadow:inset 0 2px 0 rgba(255,255,255,.45),inset 0 -3px 0 rgba(0,0,0,.28),0 2px 0 #08123a;display:flex;align-items:center;justify-content:center}
+.tIcon:active{transform:translateY(1px)}
+.hm{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:2px 2px 12px;pointer-events:none}
+.hm>*{pointer-events:auto}.hm>.hmGrow{pointer-events:none;flex:1;min-height:24px}
+.hmDaily{border:0;cursor:pointer;border-radius:14px;padding:11px 14px;font:400 14px var(--fd);letter-spacing:.03em;color:#3a2300;background:linear-gradient(180deg,#ffe58a,#f7b625);box-shadow:inset 0 2px 0 rgba(255,255,255,.75),inset 0 -4px 0 rgba(150,80,0,.35),0 3px 0 #7a4a06;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+.hmDaily:disabled{color:#9fb4de;background:linear-gradient(180deg,rgba(40,70,150,.75),rgba(10,20,70,.85));box-shadow:inset 0 0 0 2px rgba(130,170,255,.4);text-shadow:none;cursor:default}
+.hmDaily.pulse{animation:hmPulse 1.4s ease-in-out infinite}
+@keyframes hmPulse{50%{transform:scale(1.025);box-shadow:inset 0 2px 0 rgba(255,255,255,.75),inset 0 -4px 0 rgba(150,80,0,.35),0 3px 0 #7a4a06,0 0 22px rgba(255,200,60,.8)}}
+.hmDrv{display:flex;align-items:center;gap:10px;border:0;cursor:pointer;text-align:left;border-radius:16px;padding:8px 12px;color:#fff;background:linear-gradient(180deg,rgba(40,75,180,.88),rgba(10,24,90,.92));box-shadow:inset 0 2px 0 rgba(255,255,255,.3),inset 0 0 0 2px rgba(130,170,255,.4)}
+.hmDrv i{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font:400 22px var(--fd);font-style:normal;color:#031233;background:linear-gradient(140deg,#bfe0ff,#3e7ae8)}
+.hmDrv span{flex:1;min-width:0;display:flex;flex-direction:column}
+.hmDrv b{font:400 16px var(--fd);letter-spacing:.04em}.hmDrv small{font:700 10px var(--ft);letter-spacing:.14em;color:#a8ccff}
+.hmDrv em{font:400 10px var(--fd);font-style:normal;letter-spacing:.06em;color:#3a2300;background:linear-gradient(180deg,#ffe58a,#f7b625);border-radius:999px;padding:6px 10px}
+.hmTip{align-self:center;position:relative;background:#fff8e1;color:#3a2a10;font:700 12.5px var(--ft);letter-spacing:.06em;border-radius:12px;padding:8px 16px;box-shadow:0 4px 0 rgba(0,0,0,.25);animation:hmBob 1.6s ease-in-out infinite}
+.hmTip::after{content:'';position:absolute;left:50%;bottom:-9px;margin-left:-9px;border:9px solid transparent;border-top-color:#fff8e1;border-bottom:0}
+.hmTip b{color:#d98306}
+@keyframes hmBob{50%{transform:translateY(-4px)}}
+.hmRace{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;gap:14px;border:0;cursor:pointer;min-height:86px;border-radius:22px;color:#3a2300;background:radial-gradient(90% 80% at 20% 0%,rgba(255,255,255,.6),transparent 60%),linear-gradient(180deg,#ffe58a 0%,#f7b625 55%,#d98306 100%);box-shadow:inset 0 3px 0 rgba(255,255,255,.8),inset 0 -8px 0 rgba(150,80,0,.4),0 6px 0 #7a4a06,0 14px 26px rgba(0,0,0,.45)}
+.hmRace:active{transform:translateY(3px);box-shadow:inset 0 3px 0 rgba(255,255,255,.8),inset 0 -8px 0 rgba(150,80,0,.4),0 3px 0 #7a4a06}
+.hmFlag{font-size:46px;filter:drop-shadow(0 4px 0 rgba(120,60,0,.35))}
+.hmTxt{display:flex;flex-direction:column;align-items:flex-start;line-height:1}
+.hmTxt b{font:400 50px/0.95 var(--fd);letter-spacing:.02em;text-shadow:0 3px 0 rgba(255,255,255,.55)}
+.hmTxt small{font:800 11px var(--ft);letter-spacing:.16em;color:#6b4200;margin-top:4px}
+.hmDock{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.hmDock button{border:0;cursor:pointer;color:#fff;border-radius:16px;padding:10px 2px 9px;min-height:84px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:linear-gradient(180deg,#4f86ff,#1f45c8);box-shadow:inset 0 2px 0 rgba(255,255,255,.5),inset 0 -5px 0 rgba(0,0,0,.28),0 4px 0 #08123a}
+.hmDock button:active{transform:translateY(2px)}
+.hmDock i{font-size:27px;font-style:normal;filter:drop-shadow(0 2px 0 rgba(0,0,0,.35))}
+.hmDock b{font:400 12.5px var(--fd);letter-spacing:.03em}
+.hmDock small{font:700 7.5px var(--ft);letter-spacing:.1em;color:#cfe0ff;white-space:nowrap}
+/* mode picker */
+.screen[data-s="modes"] .pbody{position:relative;overflow:hidden!important;display:flex!important;flex-direction:column;padding:4px 0 0!important}
+.mdRail{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:6px 14% 10px;scroll-padding:0 14%;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.mdRail::-webkit-scrollbar{display:none}
+.mdCard{flex:0 0 72%;scroll-snap-align:center;position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:16px 14px 14px;border-radius:22px;color:#fff;box-shadow:inset 0 3px 0 rgba(255,255,255,.5),inset 0 -8px 0 rgba(0,0,0,.28),0 5px 0 #060d30,0 12px 22px rgba(0,0,0,.4);background:linear-gradient(160deg,#6aa4ff,#2c58e0 55%,#1a34a8)}
+.mdCard.mc2{background:linear-gradient(160deg,#ff8a99,#e2243f 55%,#a5102a)}
+.mdCard.mc3{background:linear-gradient(160deg,#a98bff,#5a35d8 55%,#2a1580)}
+.mdCard.mc4{background:linear-gradient(160deg,#6fe6a0,#14a85a 55%,#0a6a38)}
+.mdCard.mc5{background:linear-gradient(160deg,#c58bff,#8a35d8 55%,#4a1580)}
+.mdCard.mc6{background:linear-gradient(160deg,#6fe0ff,#1f95dc 55%,#0e4f9a)}
+.mdCard.locked{filter:grayscale(.75) brightness(.8)}
+.mdCard i{font-size:58px;font-style:normal;line-height:1.05;filter:drop-shadow(0 5px 0 rgba(0,0,0,.3))}
+.mdCard h3{margin:0;font:400 24px/1 var(--fd);letter-spacing:.02em;text-shadow:0 3px 0 rgba(0,0,0,.35)}
+.mdCard p{flex:1;margin:0;font:700 12.5px/1.35 var(--ft);color:#eaf2ff;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.mdTags{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.mdTags span{font:400 10px var(--fd);letter-spacing:.06em;background:rgba(4,12,52,.6);border-radius:999px;padding:4px 10px}
+.mdCard .act{width:100%;margin:8px 0 0!important;font-size:22px!important;padding:13px 16px!important}
+.mdArr{position:absolute;top:38%;z-index:3;width:38px;height:38px;border:0;border-radius:50%;cursor:pointer;color:#fff;font-size:14px;background:linear-gradient(180deg,#4a7bff,#1f3fb0);box-shadow:inset 0 2px 0 rgba(255,255,255,.45),0 3px 0 #08123a}
+.mdArr.l{left:2px}.mdArr.r{right:2px}
+.mdDots{display:flex;gap:7px;justify-content:center;padding:2px 0 4px}
+.mdDots b{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.3);transition:all .2s}.mdDots b.on{background:#ffd45e;width:22px;border-radius:5px}
+.screen[data-s="modes"].on{max-height:64dvh}
+@media (max-height:700px){.hmTxt b{font-size:40px}.hmRace{min-height:72px}.hmDock button{min-height:72px}.hmDrv{padding:6px 10px}.mdCard i{font-size:44px}}
 </style>
 </head>
 <body>
@@ -948,55 +1002,48 @@ body{font-family:var(--ft)}
       <div id="cloudBadge" class="pill" title="Cloud connection"><i></i><span id="cloudTxt">CLOUD</span></div>
       <div id="driverChip" class="pill"><i id="dAv">K</i><span id="driverNameTxt">KAY</span></div>
       <div id="moneyBadge" class="pill" title="Click to sync cloud progress"><b id="moneyVal">$0</b></div>
+      <button class="tIcon" data-go="settings" type="button" aria-label="Settings">&#9881;</button>
+      <button class="tIcon" data-go="how" type="button" aria-label="How to play">?</button>
     </div>
   </header>
   <div id="stage">
     <!-- MAIN DASHBOARD · V9 GLOSS BLUE -->
     <div class="screen on" data-s="main" id="navMain">
-      <div class="homeScroll">
-        <div class="v9top">
-          <button class="v9hero" data-go="quick" type="button">
-            <span class="v9tag">READY TO RACE</span>
-            <span class="v9big">PLAY</span>
-            <span class="v9sub">QUICK RACE &middot; PICK LAPS &middot; TIME OF DAY</span>
-            <span class="v9badge"><i id="hrAv">K</i><b id="hrDrv">KAY</b><small id="hrPerk">THE WHEELMAN</small></span>
-            <span class="v9shine"></span>
-          </button>
-          <button class="v9ladder" data-go="online" type="button">
-            <span class="v9ladHead"><b>LADDER</b><i>LIVE</i></span>
-            <span class="v9ladBox" id="ladderBox"><span class="ladRow"><b>&mdash;</b><span>LOADING&hellip;</span><i></i></span></span>
-            <span class="v9ladFoot">GLOBAL RANKING &middot; TAP TO OPEN</span>
-            <span class="v9shine"></span>
-          </button>
-        </div>
-        <div class="v9row">
-          <button class="v9tile tGar" data-go="garage" type="button"><b>GARAGE</b><span>CARS &middot; PAINT &middot; TATTOOS</span><span class="v9shine"></span></button>
-          <button class="v9tile tMul" data-go="multi" type="button"><b>MULTIPLAYER</b><span>RACE FRIENDS LIVE</span><span class="v9shine"></span></button>
-          <button class="v9tile tMis" data-go="missions" type="button"><b>MISSIONS</b><span>DAILY CASH CHALLENGES</span><span class="v9shine"></span></button>
-          <button class="v9tile tRiv" data-go="online" type="button"><b>RIVALS</b><span>GLOBAL BOARDS &middot; GHOSTS</span><span class="v9shine"></span></button>
-        </div>
-        <div class="secLbl">GAME MODES</div>
-        <div class="tileGrid">
-          <button class="tile t-red" data-go="tour" data-ic="&#127942;" type="button"><b>TOURNAMENT</b><span>5 EVENTS &middot; TAKE THE CROWN</span></button>
-          <button class="tile t-neon" id="nightTile" data-go="night" data-act="nightTile" data-ic="&#127747;" type="button"><b>NIGHT CIRCUIT</b><span id="nightSub">HARD · RAIN · NEON · ×1.8 CASH</span></button>
-          <button class="tile t-adv" data-go="adv" data-ic="&#128506;" type="button"><b>ADVENTURE</b><span>FREE ROAM &middot; COPS &middot; RACE MARKERS</span></button>
-          <button class="tile t-pur" data-go="arena" data-ic="&#128168;" type="button"><b>DRIFT ARENA</b><span>SLIDE &middot; SMASH &middot; SCORE</span></button>
-          <button class="tile t-cy" data-go="tt" data-ic="&#9201;&#65039;" type="button"><b>TIME TRIAL</b><span>SOLO &middot; BEAT YOUR GHOST</span></button>
-        </div>
-        <button class="tile t-grn gold daily" id="dailyBtn" data-act="daily" type="button">DAILY BONUS</button>
+      <div class="hm">
+        <div class="hmGrow"></div>
+        <button class="hmDaily" id="dailyBtn" data-act="daily" type="button">DAILY BONUS</button>
+        <button class="hmDrv" data-go="garage" data-gt="drv" type="button"><i id="hrAv">K</i><span><b id="hrDrv">KAY</b><small id="hrPerk">THE WHEELMAN</small></span><em>CHANGE DRIVER</em></button>
+        <div class="hmTip" id="hmTip">&#9757; TAP <b>RACE</b> TO START PLAYING</div>
+        <button class="hmRace" data-go="modes" type="button"><span class="hmFlag">&#127937;</span><span class="hmTxt"><b>RACE</b><small>CHOOSE A GAME MODE</small></span><span class="v9shine"></span></button>
+        <nav class="hmDock">
+          <button data-go="garage" type="button"><i>&#128663;</i><b>GARAGE</b><small>CARS &middot; PAINT</small></button>
+          <button data-go="multi" type="button"><i>&#127760;</i><b>FRIENDS</b><small>PLAY ONLINE</small></button>
+          <button data-go="missions" type="button"><i>&#127919;</i><b>MISSIONS</b><small>EARN CASH</small></button>
+          <button data-go="online" type="button"><i>&#127942;</i><b>RANKS</b><small>TOP PLAYERS</small></button>
+        </nav>
       </div>
-      <nav class="tileRow dock">
-        <button class="sq" data-go="garage" type="button"><i>&#128663;</i><b>GARAGE</b></button>
-        <button class="sq" data-go="missions" type="button"><i>&#127919;</i><b>MISSIONS</b></button>
-        <button class="sq" data-go="multi" type="button"><i>&#127760;</i><b>MULTI</b></button>
-        <button class="sq" data-go="online" type="button"><i>&#128081;</i><b>RIVALS</b></button>
-        <button class="sq" data-go="settings" type="button"><i>&#9881;</i><b>SETTINGS</b></button>
-        <button class="sq" data-go="how" type="button"><i>?</i><b>HELP</b></button>
-      </nav>
+      <span id="ladderBox" hidden></span>
     </div>
+    <!-- CHOOSE A MODE (swipe) -->
+    <section class="screen" data-s="modes">
+      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>CHOOSE A MODE</h2><p>SWIPE LEFT / RIGHT &middot; TAP PLAY</p></div></div>
+      <div class="pbody mdBody">
+        <button class="mdArr l" data-mdnav="-1" type="button" aria-label="Previous mode">&#9664;</button>
+        <button class="mdArr r" data-mdnav="1" type="button" aria-label="Next mode">&#9654;</button>
+        <div class="mdRail" id="mdRail">
+          <article class="mdCard mc1"><i>&#127937;</i><h3>QUICK RACE</h3><p>One fast race. You pick the laps, difficulty and time of day.</p><div class="mdTags"><span>1-5 LAPS</span><span>EASY &rarr; HARD</span></div><button class="act go" data-go="quick" type="button">PLAY</button></article>
+          <article class="mdCard mc2"><i>&#127942;</i><h3>TOURNAMENT</h3><p>Five events in a row. Score points and take the crown.</p><div class="mdTags"><span>5 EVENTS</span><span>BIG CASH</span></div><button class="act go" data-go="tour" type="button">PLAY</button></article>
+          <article class="mdCard mc3" id="nightTile"><i>&#127747;</i><h3>NIGHT CIRCUIT</h3><p id="nightSub">HARD &middot; RAIN &middot; NEON &middot; &times;1.8 CASH</p><div class="mdTags"><span>HARD</span><span>&times;1.8 CASH</span></div><button class="act go" data-go="night" data-act="nightTile" type="button">PLAY</button></article>
+          <article class="mdCard mc4"><i>&#128506;</i><h3>ADVENTURE</h3><p>Free roam the city. Drive to race markers and lose the cops.</p><div class="mdTags"><span>FREE ROAM</span><span>COPS</span></div><button class="act go" data-go="adv" type="button">PLAY</button></article>
+          <article class="mdCard mc5"><i>&#128168;</i><h3>DRIFT ARENA</h3><p>Slide, smash cones and beat the clock for the top score.</p><div class="mdTags"><span>SCORE</span><span>90s</span></div><button class="act go" data-go="arena" type="button">PLAY</button></article>
+          <article class="mdCard mc6"><i>&#9201;&#65039;</i><h3>TIME TRIAL</h3><p>Race alone against your own best ghost. Clean lines win.</p><div class="mdTags"><span>SOLO</span><span>GHOST</span></div><button class="act go" data-go="tt" type="button">PLAY</button></article>
+        </div>
+        <div class="mdDots" id="mdDots"></div>
+      </div>
+    </section>
     <!-- QUICK RACE -->
     <section class="screen" data-s="quick">
-      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>QUICK RACE</h2><p>SET THE RULES &middot; HIT THE GRID</p></div></div>
+      <div class="ph"><button class="back" data-go="modes" type="button">&#9664;</button><div><h2>QUICK RACE</h2><p>SET THE RULES &middot; HIT THE GRID</p></div></div>
       <div class="pbody">
         <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1" type="button">1</button><button data-v="3" type="button">3</button><button data-v="5" type="button">5</button></div>
         <div class="lbl">DIFFICULTY</div><div class="seg" data-k="diff"><button data-v="0" type="button">EASY</button><button data-v="1" type="button">NORMAL</button><button data-v="2" type="button">HARD</button></div>
@@ -1007,7 +1054,7 @@ body{font-family:var(--ft)}
     </section>
     <!-- DRIFT ARENA -->
     <section class="screen" data-s="arena">
-      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>DRIFT ARENA</h2><p>DRIFT &middot; SMASH CONES &middot; BEAT THE CLOCK</p></div></div>
+      <div class="ph"><button class="back" data-go="modes" type="button">&#9664;</button><div><h2>DRIFT ARENA</h2><p>DRIFT &middot; SMASH CONES &middot; BEAT THE CLOCK</p></div></div>
       <div class="pbody">
         <div class="lbl">TIME</div><div class="seg" data-k="dur"><button data-v="60" type="button">60s</button><button data-v="90" type="button">90s</button><button data-v="120" type="button">120s</button></div>
         <div class="lbl">RIVAL LEVEL</div><div class="seg" data-k="diff"><button data-v="0" type="button">EASY</button><button data-v="1" type="button">NORMAL</button><button data-v="2" type="button">HARD</button></div>
@@ -1018,7 +1065,7 @@ body{font-family:var(--ft)}
     </section>
     <!-- TIME TRIAL -->
     <section class="screen" data-s="tt">
-      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>TIME TRIAL</h2><p>SOLO RUN &middot; BEAT YOUR BEST</p></div></div>
+      <div class="ph"><button class="back" data-go="modes" type="button">&#9664;</button><div><h2>TIME TRIAL</h2><p>SOLO RUN &middot; BEAT YOUR BEST</p></div></div>
       <div class="pbody">
         <div class="lbl">LAPS</div><div class="seg" data-k="laps"><button data-v="1" type="button">1</button><button data-v="3" type="button">3</button><button data-v="5" type="button">5</button></div>
         <div class="lbl">TRACK</div><div class="seg" data-k="track"><button data-v="city" type="button">LAGOS CITY</button><button data-v="bridge" type="button">LAGOS BRIDGE</button><button data-v="beach" type="button">EKO BEACH</button><button data-v="jungle" type="button">JUNGLE RUN</button><button data-v="kaduna" type="button">KADUNA RIDGE</button><button data-v="obudu" type="button">OBUDU PEAK</button><button data-v="mega" type="button">SKY MEGA RAMP</button></div>
@@ -1030,7 +1077,7 @@ body{font-family:var(--ft)}
     </section>
     <!-- TOURNAMENT -->
     <section class="screen" data-s="tour">
-      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>TOURNAMENT</h2><p>5 EVENTS &middot; POINTS 10&middot;8&middot;6&middot;4&middot;2&middot;1</p></div></div>
+      <div class="ph"><button class="back" data-go="modes" type="button">&#9664;</button><div><h2>TOURNAMENT</h2><p>5 EVENTS &middot; POINTS 10&middot;8&middot;6&middot;4&middot;2&middot;1</p></div></div>
       <div class="pbody">
         <div id="tourList"></div>
         <button class="act go" id="tourGo" data-act="tourGo" type="button">START TOURNAMENT</button>
@@ -1039,7 +1086,7 @@ body{font-family:var(--ft)}
     </section>
     <!-- NIGHT CIRCUIT -->
     <section class="screen" data-s="night">
-      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>NIGHT CIRCUIT</h2><p>HARDEST CHAPTER · RAIN · NEON CITY</p></div></div>
+      <div class="ph"><button class="back" data-go="modes" type="button">&#9664;</button><div><h2>NIGHT CIRCUIT</h2><p>HARDEST CHAPTER · RAIN · NEON CITY</p></div></div>
       <div class="pbody">
         <div id="ntLock" class="lbl" style="color:#ffd166;display:none">&#128274; LOCKED — OWN THE TESLA SPARK OR HOLD $150,000</div>
         <div id="ntList"></div>
@@ -1049,7 +1096,7 @@ body{font-family:var(--ft)}
     </section>
     <!-- ADVENTURE -->
     <section class="screen" data-s="adv">
-      <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>ADVENTURE</h2><p>FREE ROAM &middot; FIND RACES &middot; DODGE COPS</p></div></div>
+      <div class="ph"><button class="back" data-go="modes" type="button">&#9664;</button><div><h2>ADVENTURE</h2><p>FREE ROAM &middot; FIND RACES &middot; DODGE COPS</p></div></div>
       <div class="pbody">
         <div class="lbl">TIME OF DAY</div><div class="seg" data-k="advEnv"><button data-v="day" type="button">NOON</button><button data-v="dawn" type="button">DAWN</button><button data-v="sunset" type="button">SUNSET</button><button data-v="night" type="button">NIGHT</button><button data-v="nightRain" id="advNc" type="button" style="display:none">NIGHT CITY</button></div>
         <div class="lbl" style="text-transform:none;letter-spacing:.03em;font-weight:600;margin-top:6px">Drive the open city. Glowing markers are street races — drive into one and hit JOIN RACE. Speeding, crashing and drifting near traffic raise your HEAT: cops will chase. Get caught and you pay a fine. Fly to escape or reach markers faster. The longer you stay free, the bigger the races that call you.</div>
