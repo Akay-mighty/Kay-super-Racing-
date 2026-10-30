@@ -341,6 +341,197 @@ export function createAdventure(canvasTex, ctx) {
   const polOn = p => { p.on = true; p.grp.visible = true; };
   const polOff = p => { p.on = false; p.grp.visible = false; };
 
+  /* ---------- street gangs: go looking for trouble ----------
+     They roam the city minding their business. Ram one (or shoot one) and the
+     whole crew hunts you: they chase, ram and SHOOT at your car until your
+     POWER runs out — or you wreck them first and loot the cash. */
+  const GANG = [];
+  for (let i = 0; i < 4; i++) {
+    const grp = ctx.mkGang(i);
+    grp.visible = false; group.add(grp);
+    GANG.push({ grp, on: false, x: 0, z: 0, h: 0, speed: 0, hp: 100, mode: 'roam', fireCd: rand(1, 2), calm: 0, stuck: 0, repT: 0, hitT: 0, wx: 0, wz: 0 });
+  }
+  let gangCd = 5;
+  function gangSpawn(g, px, pz, minD, maxD) {
+    const sp = streetSpot(minD, maxD, px, pz);
+    g.x = sp.vert ? sp.k * PITCH : sp.along; g.z = sp.vert ? sp.along : sp.k * PITCH;
+    g.h = rand(0, 6.28); g.speed = 0; g.on = true; g.grp.visible = true;
+    g.mode = 'roam'; g.hp = 100; g.calm = 0; g.stuck = 0; g.repT = 0; g.fireCd = rand(1.2, 2.4); g.hitT = 0;
+    g.wx = rand(-E + 40, E - 40); g.wz = rand(-E + 40, E - 40);
+  }
+  function gangAggro(msg) {
+    let n = 0;
+    GANG.forEach(g => { if (g.on && g.mode !== 'hunt') { g.mode = 'hunt'; n++; } });
+    if (n && msg) ctx.toast(msg, '#ff4dd8');
+  }
+  function gangHit(g, dmg) { /* your weapons chew gang HP — and wrecking one pays */
+    if (!g.on) return;
+    g.hp -= dmg; g.hitT = 1; g.calm = 0;
+    GANG.forEach(o => { if (o.on && Math.hypot(o.x - g.x, o.z - g.z) < 220) o.mode = 'hunt'; });
+    if (g.hp <= 0) {
+      g.on = false; g.grp.visible = false; g.repT = rand(26, 40);
+      const cash = 1500 + ((Math.random() * 4) | 0) * 500;
+      ctx.boom(g.grp.position, 14);
+      ctx.gangCash(cash);
+    }
+  }
+  function gangWreck() { /* the gang ground your POWER to zero: towed & repaired, no arrest */
+    const money = ctx.economy.money || 0, amt = Math.min(money, 1500);
+    ctx.wreck(amt);
+    S.pow = 100; S.powCd = 9; S.slow = 5;
+    const Pp = ctx.pPos(), ns = nearestStreet(Pp);
+    Pp.x = ns.x; Pp.z = ns.z; ctx.pVel().set(0, 0, 0); ctx.pSpin(0);
+    GANG.forEach(g => {
+      if (!g.on) return;
+      g.mode = 'roam'; g.speed = 0; g.calm = 0;
+      const sp = streetSpot(200, 340, ns.x, ns.z);
+      g.x = sp.vert ? sp.k * PITCH : sp.along; g.z = sp.vert ? sp.along : sp.k * PITCH;
+      g.hp = Math.min(100, g.hp + 40);
+    });
+    bullets.length = 0;
+  }
+
+  /* ---------- bullets: they shoot at you, you shoot back ---------- */
+  const bullets = [];
+  const bulGeo = new THREE.BoxGeometry(0.1, 0.1, 1.7);
+  const bulMatP = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.7, 0.4), toneMapped: false });
+  const bulMatG = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.8, 0.5, 0.4), toneMapped: false });
+  const rkGeo = new THREE.ConeGeometry(0.22, 1.3, 8).rotateX(Math.PI / 2);
+  const rkMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.1, 0.3), toneMapped: false });
+  function spawnBullet(o) {
+    const m = new THREE.Mesh(o.rk ? rkGeo : bulGeo, o.from === 'P' ? bulMatP : bulMatG);
+    m.position.set(o.x, o.y, o.z); m.rotation.y = Math.atan2(o.dx, o.dz);
+    group.add(m); o.mesh = m; bullets.push(o);
+  }
+  function bulletBoom(b) { /* rockets: splash damage all around */
+    const P = new THREE.Vector3(b.x, 0.7, b.z);
+    ctx.boom(P, 16);
+    let hitAny = false;
+    for (const g of GANG) if (g.on) { const d = Math.hypot(g.x - b.x, g.z - b.z); if (d < 10) { gangHit(g, 58 - d * 2.6); hitAny = true; } }
+    if (!hitAny) for (const g of GANG) if (g.on && Math.hypot(g.x - b.x, g.z - b.z) < 80) { gangAggro('YOU SHOT AT THE GANG!'); break; } /* near miss still starts the fight */
+    for (const p of POL) if (p.on) { const d = Math.hypot(p.x - b.x, p.z - b.z); if (d < 10) { p.speed = -7; p.h += rand(-0.5, 0.5); S.heat = clamp(S.heat + 10, 0, 100); } }
+    const Pp = ctx.pPos(), dp = Math.hypot(Pp.x - b.x, Pp.z - b.z);
+    if (dp < 7) { hitPower(10, null, 'gang'); const Pv = ctx.pVel(), nx = (Pp.x - b.x) / Math.max(0.5, dp), nz = (Pp.z - b.z) / Math.max(0.5, dp); Pv.x += nx * 9; Pv.z += nz * 9; }
+  }
+  function stepBullets(dt, px, pz, alt) {
+    const Pv = ctx.pVel();
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+      b.life -= dt;
+      if (b.rk && b.tgt && b.tgt.on) { /* strong homing toward the gang car it was aimed at */
+        const want = Math.atan2(b.tgt.x - b.x, b.tgt.z - b.z), cur = Math.atan2(b.dx, b.dz);
+        const na = cur + clamp(angDiff(want, cur), -2.6 * dt, 2.6 * dt);
+        b.dx = Math.sin(na); b.dz = Math.cos(na);
+      }
+      /* swept movement: fast rounds never tunnel through a car on a laggy frame */
+      const step = b.sp * dt, sub = Math.max(1, Math.ceil(step / 2.2)), sstep = step / sub;
+      let dead = b.life <= 0, boomed = false;
+      for (let s2 = 0; s2 < sub && !dead; s2++) {
+        b.x += b.dx * sstep; b.z += b.dz * sstep;
+        if (collide({ x: b.x, z: b.z }, 0.3, b.y).hit) dead = true;
+        else if (b.from === 'G' && alt < 4) { /* gang tracers grind your POWER down */
+          const dx = px - b.x, dz = pz - b.z;
+          if (dx * dx + dz * dz < 4.6) { hitPower(b.dmg, null, 'gang'); ctx.shake(0.25); dead = true; }
+        }
+        else if (b.from === 'P') {
+          for (const g of GANG) {
+            if (!g.on) continue;
+            const dx = g.x - b.x, dz = g.z - b.z;
+            if (dx * dx + dz * dz < (b.rk ? 10 : 6.5)) {
+              if (b.rk) { bulletBoom(b); boomed = true; } else { gangHit(g, b.dmg); ctx.puff(b.mesh.position, 1); }
+              dead = true; break;
+            }
+          }
+          if (!dead) for (const p of POL) { /* shooting cops: they wobble and your heat SOARS */
+            if (!p.on) continue;
+            const dx = p.x - b.x, dz = p.z - b.z;
+            if (dx * dx + dz * dz < (b.rk ? 10 : 6.5)) {
+              if (b.rk) { bulletBoom(b); boomed = true; }
+              else { p.speed *= 0.8; p.h += rand(-0.4, 0.4); S.heat = clamp(S.heat + 4, 0, 100); ctx.puff(b.mesh.position, 1); }
+              dead = true; break;
+            }
+          }
+          if (!dead && !b.rk) for (const t of traffic) { const gp = trafficPos(t); const dx = gp.x - b.x, dz = gp.z - b.z; if (dx * dx + dz * dz < 5) { t.stun = 2; ctx.puff(b.mesh.position, 0.8); dead = true; break; } }
+        }
+      }
+      b.mesh.position.set(b.x, b.y, b.z);
+      if (b.rk && Math.random() < 0.4) ctx.puff(b.mesh.position, 0.7);
+      if (b.rk && dead && !boomed) { /* hit a wall / ran out of life: still explode */ bulletBoom(b); }
+      if (dead) { group.remove(b.mesh); bullets.splice(i, 1); }
+    }
+  }
+  /* ---------- player weapons (bought in the garage ARSENAL) ---------- */
+  function shootPlayer(kind) {
+    const Pp = ctx.pPos(), h = ctx.pH();
+    if (kind === 'gun') {
+      for (let s = -1; s <= 1; s += 2) {
+        const ang = h + s * 0.014;
+        spawnBullet({ x: Pp.x + Math.sin(h) * 2.9, z: Pp.z + Math.cos(h) * 2.9, y: 0.78, dx: Math.sin(ang), dz: Math.cos(ang), sp: 135, life: 0.85, from: 'P', dmg: 9 });
+      }
+      ctx.gshot(Pp.x, Pp.z, true);
+    } else if (kind === 'rockets') {
+      let tgt = null, bd = 1e9;
+      GANG.forEach(g => { if (g.on && g.mode === 'hunt') { const d = Math.hypot(g.x - Pp.x, g.z - Pp.z); if (d < bd) { bd = d; tgt = g; } } });
+      if (!tgt) GANG.forEach(g => { if (g.on) { const d = Math.hypot(g.x - Pp.x, g.z - Pp.z); if (d < bd) { bd = d; tgt = g; } } });
+      spawnBullet({ x: Pp.x + Math.sin(h) * 3, z: Pp.z + Math.cos(h) * 3, y: 0.8, dx: Math.sin(h), dz: Math.cos(h), sp: 88, life: 3.2, from: 'P', dmg: 0, rk: true, tgt });
+      ctx.gshot(Pp.x, Pp.z, true);
+    }
+  }
+  const OILW = [];
+  function dropOilW() {
+    const Pp = ctx.pPos();
+    const mesh = new THREE.Mesh(new THREE.CircleGeometry(2.6, 18).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x0a0a0c, transparent: true, opacity: 0.85, depthWrite: false }));
+    mesh.position.set(Pp.x, 0.06, Pp.z); group.add(mesh);
+    OILW.push({ mesh, x: Pp.x, z: Pp.z, life: 16, arm: 0.9, cd: 0 });
+    ctx.toast('OIL DOWN — SPIN THEM OUT', '#8df');
+  }
+  function stepOilW(dt) {
+    for (let i = OILW.length - 1; i >= 0; i--) {
+      const o = OILW[i];
+      o.life -= dt; o.arm -= dt; o.cd -= dt;
+      if (o.life <= 0) { group.remove(o.mesh); o.mesh.geometry.dispose(); o.mesh.material.dispose(); OILW.splice(i, 1); continue; }
+      if (o.arm > 0) continue;
+      const near = (x, z) => { const dx = x - o.x, dz = z - o.z; return dx * dx + dz * dz < 9; };
+      for (const g of GANG) if (g.on && near(g.x, g.z)) { g.speed *= 0.2; g.h += rand(-0.7, 0.7); }
+      for (const p of POL) if (p.on && near(p.x, p.z)) { p.speed *= 0.2; p.h += rand(-0.7, 0.7); }
+      if (o.cd <= 0) { const Pp = ctx.pPos(); if (near(Pp.x, Pp.z)) { o.cd = 1.4; ctx.pSpin(1.9); } }
+    }
+  }
+  const MINW = [];
+  const mineGeo = new THREE.CylinderGeometry(0.5, 0.68, 0.26, 10);
+  function dropMineW() {
+    const Pp = ctx.pPos(), h = ctx.pH();
+    const m = new THREE.Mesh(mineGeo, new THREE.MeshStandardMaterial({ color: 0x2a2f38, roughness: 0.5, metalness: 0.6 }));
+    const blink = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.4, 0.3), toneMapped: false }));
+    blink.position.y = 0.18; m.add(blink);
+    m.position.set(Pp.x - Math.sin(h) * 3.4, 0.15, Pp.z - Math.cos(h) * 3.4);
+    group.add(m);
+    MINW.push({ mesh: m, x: m.position.x, z: m.position.z, life: 30, arm: 1.4, blink });
+    ctx.toast('MINE ARMED', '#ffd166');
+  }
+  function stepMineW(dt) {
+    const tN = performance.now() * 0.001;
+    for (let i = MINW.length - 1; i >= 0; i--) {
+      const m = MINW[i];
+      m.life -= dt; m.arm -= dt;
+      m.blink.visible = ((tN * 5) | 0) % 2 === 0;
+      let boom = m.life <= 0;
+      if (!boom && m.arm <= 0) {
+        for (const g of GANG) if (g.on && Math.hypot(g.x - m.x, g.z - m.z) < 3.4) { boom = true; break; }
+        if (!boom) for (const p of POL) if (p.on && Math.hypot(p.x - m.x, p.z - m.z) < 3.4) { boom = true; break; }
+        if (!boom) { const Pp = ctx.pPos(); if (Math.hypot(Pp.x - m.x, Pp.z - m.z) < 2.7) boom = true; }
+      }
+      if (boom) {
+        ctx.boom(new THREE.Vector3(m.x, 0.6, m.z), 18);
+        for (const g of GANG) if (g.on) { const d = Math.hypot(g.x - m.x, g.z - m.z); if (d < 9) gangHit(g, 62 - d * 3.2); }
+        for (const p of POL) if (p.on) { const d = Math.hypot(p.x - m.x, p.z - m.z); if (d < 9) { p.speed = -6; p.h += rand(-0.6, 0.6); S.heat = clamp(S.heat + 12, 0, 100); } }
+        const Pp = ctx.pPos(), dp = Math.hypot(Pp.x - m.x, Pp.z - m.z);
+        if (dp < 7.5) { hitPower(13, null); const Pv = ctx.pVel(), nx = (Pp.x - m.x) / Math.max(0.5, dp), nz = (Pp.z - m.z) / Math.max(0.5, dp); Pv.x += nx * 10; Pv.z += nz * 10; }
+        group.remove(m.mesh); MINW.splice(i, 1);
+      }
+    }
+  }
+
   function busted(byPower) {
     const money = ctx.economy.money || 0;
     const amt = Math.min(money, Math.min(5000, 300 + Math.round(S.heat * 40)));
@@ -349,13 +540,11 @@ export function createAdventure(canvasTex, ctx) {
     S.heat = 20; S.freeT = 0; S.bust = 0; S.slow = 7; S.pow = 100; S.powCd = 9;
     POL.forEach(polOff); hadPolice = false; lowT = 0;
   }
-  /* POWER: cops ramming you (and rivals, in multiplayer) grind it down. At zero you are busted.
-     It slowly repairs itself after ~3.5 s without a hit. */
-  function hitPower(d, label) {
+  function hitPower(d, label, src) {
     if (S.slow > 0) return; /* no damage while serving a bust */
     S.pow = clamp(S.pow - d, 0, 100); S.powCd = 0; S.hitFlash = 1;
     if (label) ctx.toast(label, '#ff6b6b');
-    if (S.pow <= 0) busted(true);
+    if (S.pow <= 0) { if (src === 'gang') gangWreck(); else busted(true); }
   }
 
   /* ---------- minimap base (pre-rendered once) ---------- */
@@ -397,6 +586,12 @@ export function createAdventure(canvasTex, ctx) {
       mc.fillStyle = flash ? '#ff4040' : '#3a6bff'; mc.beginPath(); mc.arc(x, y, 5.5, 0, 7); mc.fill();
       mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke();
     }
+    for (const g of GANG) {
+      if (!g.on) continue;
+      const [x, y] = P2S(g.x, g.z); if (x < 4 || x > w - 4 || y < 4 || y > h - 4) continue;
+      mc.fillStyle = g.mode === 'hunt' ? '#ff4dd8' : '#a06bff'; mc.beginPath(); mc.arc(x, y, 5, 0, 7); mc.fill();
+      mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke();
+    }
     mc.save(); mc.translate(w / 2, h / 2); mc.rotate(Math.PI - hdg);
     mc.fillStyle = '#fff'; mc.beginPath(); mc.moveTo(0, -9); mc.lineTo(6.5, 7); mc.lineTo(0, 3.6); mc.lineTo(-6.5, 7); mc.closePath(); mc.fill();
     mc.strokeStyle = '#3cf'; mc.lineWidth = 2.5; mc.stroke(); mc.restore();
@@ -418,6 +613,11 @@ export function createAdventure(canvasTex, ctx) {
     POL.forEach(polOff);
     S.bust = 0; S.near = null; hadPolice = false; lowT = 0; sirT = 0;
     S.pow = 100; S.powCd = 9; S.hitFlash = 0;
+    bullets.forEach(b => group.remove(b.mesh)); bullets.length = 0;
+    OILW.forEach(o => { group.remove(o.mesh); o.mesh.geometry.dispose(); o.mesh.material.dispose(); }); OILW.length = 0;
+    MINW.forEach(m => group.remove(m.mesh)); MINW.length = 0;
+    GANG.forEach(g => { g.on = false; g.grp.visible = false; g.repT = 0; g.mode = 'roam'; });
+    gangCd = 4;
     if (!resume) {
       S.heat = 0; S.freeT = 0; S.slow = 0; S.nextIn = 5; retPos = null;
       while (markers.length) removeMarker(0);
@@ -428,6 +628,8 @@ export function createAdventure(canvasTex, ctx) {
     if (S.near) { const i = markers.findIndex(m => m.x === S.near.x && m.z === S.near.z); if (i >= 0) removeMarker(i); }
     S.near = null; S.bust = 0; S.pow = 100; S.powCd = 9;
     POL.forEach(polOff); hadPolice = false;
+    bullets.forEach(b => group.remove(b.mesh)); bullets.length = 0;
+    GANG.forEach(g => { if (g.on) { g.mode = 'roam'; g.calm = 0; } });
     flushCash();
   }
   function saveReturn(x, z, h) { retPos = { x, z, h }; }
@@ -530,10 +732,13 @@ export function createAdventure(canvasTex, ctx) {
       if (!p.on) continue;
       const dx = px - p.x, dz = pz - p.z, dist = Math.hypot(dx, dz);
       if (dist > 320 || (wanted === 0 && S.heat < 15)) { polOff(p); continue; }
-      const want = Math.atan2(dx, dz), rate = 2.6 / (1 + Math.abs(p.speed) / 55);
+      const want = Math.atan2(dx, dz), rate = 3.0 / (1 + Math.abs(p.speed) / 55);
       p.h += clamp(angDiff(want, p.h), -rate * dt, rate * dt);
       const ptop = top * 0.9 * (dist > 70 ? 1.18 : 1);
-      p.speed += (ptop - p.speed) * Math.min(1, dt * 1.3);
+      /* brake when close so the cruiser swings AT you instead of flying past —
+         that pass-through-through-the-player look is exactly what this kills */
+      const ptop2 = dist < 34 ? Math.min(ptop, 15 + dist * 0.62) : ptop;
+      p.speed += (ptop2 - p.speed) * Math.min(1, dt * 1.3);
       if (p.speed < 8 && dist > 14) { p.stuck += dt; if (p.stuck > 1.2) { p.h += (Math.random() < 0.5 ? 1 : -1) * rand(1.4, 2.4); p.stuck = 0; p.speed = -9; } }
       else p.stuck = Math.max(0, p.stuck - dt);
       p.x += Math.sin(p.h) * p.speed * dt; p.z += Math.cos(p.h) * p.speed * dt;
@@ -545,15 +750,34 @@ export function createAdventure(canvasTex, ctx) {
       p.barR.visible = flash; p.barB.visible = !flash;
       p.haloR.material.opacity = flash ? 0.75 : 0.08; p.haloB.material.opacity = flash ? 0.08 : 0.75;
       nearCop = Math.min(nearCop, dist);
-      /* cops ram you: every hit grinds the power down until the car gives out */
-      if (dist < 3.8 && alt < 3 && p.ramCd <= 0) {
-        p.ramCd = 0.8;
-        const nx = dx / Math.max(0.01, dist), nz = dz / Math.max(0.01, dist);
-        ctx.onRam(nx, nz, 7); ctx.puff(Pp, 1.6);
-        hitPower(6 + 9 * (S.heat / 100) + S.police * 1.5, S.police > 1 ? 'PIT MANEUVER!' : 'RAMMED BY POLICE!');
+      /* cops ram you: real metal-on-metal — nobody drives through anybody.
+         Every hit shoves your car, grinds the power down and bounces the cruiser back. */
+      if (dist < 4.8 && alt < 3) {
+        const inv = 1 / Math.max(0.01, dist), nx = dx * inv, nz = dz * inv; /* cop -> you */
+        const cv = Math.sin(p.h) * p.speed * nx + Math.cos(p.h) * p.speed * nz; /* cop speed toward you */
+        const pv = Pv.x * nx + Pv.z * nz; /* your speed toward the cop (negative = fleeing) */
+        const closing = cv - pv;
+        if (dist < 3.5) { /* hard separation: push both apart so they never overlap */
+          const push = 3.5 - dist;
+          p.x -= nx * push * 0.8; p.z -= nz * push * 0.8;
+          Pp.x += nx * push * 0.2; Pp.z += nz * push * 0.2;
+        }
+        if (closing > 6 && p.ramCd <= 0) {
+          p.ramCd = 0.75;
+          p.speed *= -0.35; /* recoil: the cruiser bounces back off your bumper */
+          p.h += rand(-0.12, 0.12);
+          ctx.onRam(nx, nz, 8); ctx.puff(Pp, 1.6);
+          hitPower(5 + 8 * (S.heat / 100) + S.police * 1.2, S.police > 1 ? 'PIT MANEUVER!' : 'RAMMED BY POLICE!');
+        }
       }
       /* boxed in: stopped or crawling next to a cruiser and they cuff you */
       if (dist < 10 && alt < 3 && sp < 12) anyClose = true;
+    }
+    /* cruisers never stack into one blob */
+    const act = POL.filter(p => p.on);
+    for (let i = 0; i < act.length; i++) for (let j = i + 1; j < act.length; j++) {
+      const a = act[i], b = act[j], ddx = b.x - a.x, ddz = b.z - a.z, dd = Math.hypot(ddx, ddz);
+      if (dd < 3.6 && dd > 0.01) { const psh = (3.6 - dd) / 2, nx = ddx / dd, nz = ddz / dd; a.x -= nx * psh; a.z -= nz * psh; b.x += nx * psh; b.z += nz * psh; }
     }
     S.police = POL.filter(p => p.on).length;
     if (anyClose) S.bust += dt; else S.bust = Math.max(0, S.bust - dt * 0.5);
@@ -565,6 +789,76 @@ export function createAdventure(canvasTex, ctx) {
       sirT -= dt;
       if (sirT <= 0) { sirT = 0.45; sirHi = !sirHi; ctx.beep(sirHi ? 900 : 760, 0.2, 'square', clamp(1 - nearCop / 200, 0.1, 1) * 0.07); }
     }
+    /* street gangs, bullets and dropped hardware */
+    gangTick(dt, px, pz, alt, sp);
+    stepBullets(dt, px, pz, alt);
+    stepOilW(dt);
+    stepMineW(dt);
   }
-  return { group, E, S, tick, collide, crash, drawMini, setEnv, enter, raceStart, saveReturn, nearestStreet, leave, markers, traffic, hitPower, get pol() { return POL; } };
+
+  /* ---------- gang behaviour (called from tick) ---------- */
+  function gangTick(dt, px, pz, alt, sp) {
+    const Pv = ctx.pVel(), Pp = ctx.pPos();
+    let onN = GANG.filter(g => g.on).length;
+    gangCd -= dt;
+    if (onN < 3 && gangCd <= 0) {
+      const g = GANG.find(q => !q.on);
+      if (g && g.repT <= 0) { gangSpawn(g, px, pz, 130, 300); gangCd = 7; }
+    }
+    GANG.forEach(g => { if (!g.on && g.repT > 0) g.repT -= dt; });
+    for (const g of GANG) {
+      if (!g.on) continue;
+      const dx = px - g.x, dz = pz - g.z, dist = Math.hypot(dx, dz);
+      g.hitT = Math.max(0, g.hitT - dt);
+      /* lose interest when you are long gone, and patch the car up a bit */
+      if (g.mode === 'hunt') { if (dist > 420) { g.calm += dt; if (g.calm > 9) { g.mode = 'roam'; g.hp = Math.min(100, g.hp + 45); } } else g.calm = 0; }
+      if (g.mode === 'roam' && Math.hypot(g.wx - g.x, g.wz - g.z) < 24) { g.wx = rand(-E + 40, E - 40); g.wz = rand(-E + 40, E - 40); }
+      const want = g.mode === 'hunt' ? Math.atan2(dx + Pv.x * 0.22, dz + Pv.z * 0.22) : Math.atan2(g.wx - g.x, g.wz - g.z);
+      const rate = (g.mode === 'hunt' ? 3.1 : 1.6) / (1 + Math.abs(g.speed) / 60);
+      g.h += clamp(angDiff(want, g.h), -rate * dt, rate * dt);
+      const gtop0 = g.mode === 'hunt' ? ctx.getTop() * 0.88 : 15;
+      const gtop = g.mode === 'hunt' && dist < 40 ? Math.min(gtop0, 18 + dist * 0.8) : gtop0; /* brake to swing in */
+      g.speed += (gtop - g.speed) * Math.min(1, dt * 1.4);
+      if (g.speed < 6 && dist > 16) { g.stuck += dt; if (g.stuck > 1.4) { g.h += rand(-2, 2); g.stuck = 0; } } else g.stuck = 0;
+      g.x += Math.sin(g.h) * g.speed * dt; g.z += Math.cos(g.h) * g.speed * dt;
+      const hit = collide(g, 1.9, 0);
+      if (hit.hit) { g.speed *= 0.5; if (g.mode === 'roam') { g.wx = rand(-E + 40, E - 40); g.wz = rand(-E + 40, E - 40); } }
+      /* damaged cars smoke */
+      if (g.hp < 45 && Math.random() < dt * 6) ctx.puff(g.grp.position, 0.9);
+      /* they SHOOT at you while hunting: tracers with lead + spread */
+      g.fireCd -= dt;
+      if (g.mode === 'hunt' && dist < 130 && dist > 7 && alt < 4 && g.fireCd <= 0) {
+        g.fireCd = rand(0.9, 1.7);
+        const lead = 0.28;
+        const tx = px + Pv.x * lead - g.x, tz = pz + Pv.z * lead - g.z;
+        const ang = Math.atan2(tx, tz) + rand(-0.07, 0.07);
+        spawnBullet({ x: g.x + Math.sin(g.h) * 2.6, z: g.z + Math.cos(g.h) * 2.6, y: 0.75, dx: Math.sin(ang), dz: Math.cos(ang), sp: 95, life: 1.3, from: 'G', dmg: 3.2 });
+        ctx.gshot(g.x, g.z);
+      }
+      /* metal-on-metal with you: they shove, you can shove back harder */
+      if (dist < 3.8 && alt < 3) {
+        const nx = dx / Math.max(0.01, dist), nz = dz / Math.max(0.01, dist);
+        if (dist < 3.4) {
+          const push = 3.4 - dist;
+          g.x -= nx * push * 0.7; g.z -= nz * push * 0.7;
+          Pp.x += nx * push * 0.3; Pp.z += nz * push * 0.3;
+        }
+        const cv = Math.sin(g.h) * g.speed * nx + Math.cos(g.h) * g.speed * nz, pv = Pv.x * nx + Pv.z * nz, closing = cv - pv;
+        if (closing > 6 && g.fireCd <= 0.25) {
+          g.speed *= -0.3; g.fireCd = 0.5;
+          ctx.onRam(nx, nz, 7); ctx.puff(Pp, 1.5); ctx.gshot(g.x, g.z);
+          hitPower(4 + 4 * Math.min(1, Math.abs(closing) / 30), 'GANG HIT!', 'gang');
+          if (pv > cv) gangHit(g, clamp(pv * 0.45, 3, 9)); /* you rammed THEM harder */
+        }
+      }
+      g.grp.position.set(g.x, 0.02, g.z); g.grp.rotation.y = g.h;
+    }
+    /* bumping a roaming gang car at speed = you went looking for trouble */
+    if (alt < 3 && sp > 16) for (const g of GANG) {
+      if (!g.on || g.mode === 'hunt') continue;
+      const dx = px - g.x, dz = pz - g.z;
+      if (dx * dx + dz * dz < 49) { gangAggro('YOU STARTED A GANG FIGHT!'); break; }
+    }
+  }
+  return { group, E, S, tick, collide, crash, drawMini, setEnv, enter, raceStart, saveReturn, nearestStreet, leave, markers, traffic, hitPower, shootPlayer, dropOilW, dropMineW, get gangWar() { return GANG.some(g => g.on && g.mode === 'hunt'); }, get gangOnN() { return GANG.filter(g => g.on).length; }, get gangs() { return GANG; }, get pol() { return POL; } };
 }

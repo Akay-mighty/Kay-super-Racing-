@@ -1,11 +1,11 @@
 // Kay Super Racing — economy: cash, garage ownership, upgrades, stats, daily bonus (localStorage).
-const K = { money: 'ksr.money', owned: 'ksr.owned', sel: 'ksr.sel', missions: 'ksr.missions', daily: 'ksr.daily', stats: 'ksr.stats', up: 'ksr.up' };
+const K = { money: 'ksr.money', owned: 'ksr.owned', sel: 'ksr.sel', missions: 'ksr.missions', daily: 'ksr.daily', stats: 'ksr.stats', up: 'ksr.up', wpn: 'ksr.wpn' };
 const read = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ } };
 const emit = () => { try { window.dispatchEvent(new Event('ksr-money')); } catch (e) { } };
 
 export const economy = {
-  money: 0, owned: [], sel: 'cruiser', stats: { earned: 0, races: 0, wins: 0 }, up: {},
+  money: 0, owned: [], sel: 'cruiser', stats: { earned: 0, races: 0, wins: 0 }, up: {}, wpn: [],
 
   init() {
     this.money = read(K.money, 5000);
@@ -15,9 +15,11 @@ export const economy = {
     if (!this.owned.includes(this.sel)) this.sel = this.owned[0];
     this.stats = Object.assign({ earned: 0, races: 0, wins: 0 }, read(K.stats, {}));
     this.up = read(K.up, {});
+    this.wpn = read(K.wpn, []);
+    if (!Array.isArray(this.wpn)) this.wpn = [];
     this.save();
   },
-  save() { write(K.money, this.money); write(K.owned, this.owned); write(K.sel, this.sel); write(K.stats, this.stats); write(K.up, this.up); },
+  save() { write(K.money, this.money); write(K.owned, this.owned); write(K.sel, this.sel); write(K.stats, this.stats); write(K.up, this.up); write(K.wpn, this.wpn); },
 
   add(n) { n = Math.round(n); if (!(n > 0)) return; this.money += n; this.stats.earned += n; this.save(); emit(); },
   spend(n) { n = Math.round(n); if (!(n > 0) || this.money < n) return false; this.money -= n; this.save(); emit(); return true; },
@@ -43,6 +45,14 @@ export const economy = {
     u[k] = lvl + 1; this.save(); emit(); return true;
   },
 
+  /* ---------- ARSENAL: weapons you buy once, then load up before every Adventure ---------- */
+  wpnHas(id) { return this.wpn.includes(id); },
+  wpnBuy(id, price) {
+    if (this.wpnHas(id)) return true;
+    if (!this.spend(price)) return false;
+    this.wpn.push(id); this.save(); emit(); return true;
+  },
+
   getMissions() { return read(K.missions, {}); },
   setMissions(m) { write(K.missions, m); },
 
@@ -55,9 +65,9 @@ export const economy = {
   setMoney(n) { this.money = Math.max(0, Math.round(n)); this.save(); emit(); },
   unlockAll(ids) { this.owned = [...new Set([...this.owned, ...ids])]; this.save(); emit(); },
   resetAll() {
-    this.money = 5000; this.owned = ['cruiser']; this.sel = 'cruiser'; this.up = {};
+    this.money = 5000; this.owned = ['cruiser']; this.sel = 'cruiser'; this.up = {}; this.wpn = [];
     this.stats = { earned: 0, races: 0, wins: 0 };
-    [K.money, K.owned, K.sel, K.missions, K.daily, K.stats, K.up].forEach(k => write(k, null));
+    [K.money, K.owned, K.sel, K.missions, K.daily, K.stats, K.up, K.wpn].forEach(k => write(k, null));
     this.save(); emit();
   }
 };

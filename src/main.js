@@ -32,10 +32,30 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ } }
 };
 
-/* ---------- renderer / scene ---------- */
+/* ---------- renderer / scene ----------
+   PREFLIGHT: phones under memory pressure can refuse the WebGL context at
+   startup — the module would die here and the boot splash would sit BLACK
+   forever. Detect it first and give the player a way out instead. */
+function glPreflight() {
+  try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
+}
+if (!glPreflight()) {
+  const ov = document.getElementById('glFix');
+  if (ov) {
+    ov.classList.remove('hide'); ov.style.zIndex = 999;
+    const h = ov.querySelector('h1'), p = ov.querySelector('#glMsg'), tip = ov.querySelector('.gsm');
+    if (h) h.textContent = 'NOT ENOUGH MEMORY';
+    if (p) p.innerHTML = 'YOUR PHONE REFUSED THE 3D ENGINE — MEMORY IS FULL.<br>CLOSE A FEW APPS / TABS, THEN TAP RETRY.';
+    if (tip) tip.textContent = 'RESTARTING YOUR PHONE ALSO FREES RAM';
+    const b = ov.querySelector('button'); if (b) b.textContent = 'RETRY';
+    const boot = document.getElementById('boot'); if (boot) boot.style.opacity = '.25';
+  }
+  throw new Error('KSR: WebGL unavailable');
+}
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
 const mobile = matchMedia('(any-pointer: coarse)').matches;
-let pr = Math.min(devicePixelRatio, 2);
+let pr = Math.min(devicePixelRatio, { high: mobile ? 1.75 : 2, med: mobile ? 1.35 : 1.5, low: 1 }[store_getQ()] || 2);
+function store_getQ() { try { const o = JSON.parse(localStorage.getItem('sr.opt') || '{}'); return o.q || (mobile ? 'med' : 'high'); } catch (e) { return mobile ? 'med' : 'high'; } }
 renderer.setPixelRatio(pr);
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -118,6 +138,11 @@ function glRecover() {
     if (--n <= 0) {
       clearInterval(glWatch);
       store.set('sr.glfix', 1); store.set('sr.glfixN', (store.get('sr.glfixN', 0) || 0) + 1);
+      /* remember WHEN this happened: two reloads inside 90 s = phone is drowning,
+         so the next boot starts in SAFE MODE (pixel ratio 1, no bloom, no shadows) */
+      const tries = (store.get('sr.glTries', 0) || 0) + 1;
+      store.set('sr.glTries', Date.now() - (store.get('sr.glTryT', 0) || 0) > 90000 ? 1 : tries);
+      store.set('sr.glTryT', Date.now());
       location.reload();
     }
     else { const t2 = $('glT'); if (t2) t2.textContent = String(n); }
@@ -192,7 +217,7 @@ const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x607080, 1.1);
 scene.add(hemi);
 const sunOff = V3(120, 200, 80);
 const sun = new THREE.DirectionalLight(0xfff0d8, 2.5);
-sun.castShadow = true; sun.shadow.mapSize.set(mobile ? 1536 : 2048, mobile ? 1536 : 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
+sun.castShadow = true; sun.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.04;
 Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 500 });
 scene.add(sun, sun.target);
 
@@ -970,6 +995,49 @@ function dropOil() {
   Oils.push({ mesh, x: back.x, z: back.z, life: 14, arm: 1.2 });
   mpEvt = { k: 'o', s: P.idx, lat: clamp(P.lat || 0, -(W - 1), W - 1), ts: Date.now() };
 }
+/* ---------- ARSENAL: weapons bought in the garage, fired in ADVENTURE ----------
+   Buy once, own forever. Every Adventure session loads a fresh magazine. */
+const WEAPONS = [
+  { id: 'gun',     name: 'MACHINE GUN', price: 25000, ammo: 240, desc: 'Sprays armour-piercing rounds. Hold FIRE and keep biting.' },
+  { id: 'rockets', name: 'ROCKETS',     price: 60000, ammo: 8,   desc: 'Homing rocket with splash damage. Two hits wreck a gang car.' },
+  { id: 'oil',     name: 'OIL SLICK',   price: 18000, ammo: 6,   desc: 'Drops oil behind you — cops and gang cars spin out.' },
+  { id: 'mine',    name: 'MINES',       price: 45000, ammo: 5,   desc: 'Leaves a blinking mine. Huge boom, huge damage.' }
+];
+const wpnName = id => (WEAPONS.find(w => w.id === id) || {}).name || 'WEAPON';
+let wsel = null, AMMO = {}, wpnCd = 0, fireKeyPrev = false, touchItemPrev = false;
+function wpnReset() {
+  AMMO = {};
+  WEAPONS.forEach(w => { if (economy.wpnHas(w.id)) AMMO[w.id] = w.ammo; });
+  wsel = store.get('ksr.wsel', null);
+  if (!wsel || AMMO[wsel] === undefined) wsel = Object.keys(AMMO)[0] || null;
+  updateWpnHud();
+}
+function updateWpnHud() {
+  const b = $('wpnSwap'); if (!b) return;
+  if (cfg.type !== 'adv' || !wsel) { b.style.display = 'none'; return; }
+  b.style.display = ''; b.classList.toggle('noammo', !(AMMO[wsel] > 0));
+  b.innerHTML = (AMMO[wsel] > 0 ? '&#9876;&#65039; ' : '&#128683; ') + wpnName(wsel) + (AMMO[wsel] > 0 ? ' ×' + AMMO[wsel] : ' EMPTY');
+}
+function cycleWeapon() {
+  const owned = WEAPONS.filter(w => AMMO[w.id] !== undefined);
+  if (!owned.length) { toast('NO WEAPONS · BUY THEM IN THE GARAGE ARSENAL', '#ffd166'); return; }
+  const i = owned.findIndex(w => w.id === wsel);
+  wsel = owned[(i + 1) % owned.length].id;
+  store.set('ksr.wsel', wsel); beep(760, 0.05, 'square', 0.06);
+  toast(wpnName(wsel) + ' SELECTED', '#ffd166'); updateWpnHud();
+}
+function fireWeapon() {
+  if (cfg.type !== 'adv' || state !== 'race' || P.finished || !wsel) return;
+  if (wpnCd > 0) return;
+  if (!(AMMO[wsel] > 0)) { toast(wpnName(wsel) + ' EMPTY · SWAP WITH Q', '#ff7b7b'); wpnCd = 0.4; return; }
+  wpnCd = wsel === 'gun' ? 0.13 : 0.6;
+  AMMO[wsel]--;
+  if (wsel === 'gun' || wsel === 'rockets') adv.shootPlayer(wsel);
+  else if (wsel === 'oil') adv.dropOilW();
+  else if (wsel === 'mine') adv.dropMineW();
+  updateWpnHud();
+  if (AMMO[wsel] <= 0) setTimeout(() => toast(wpnName(wsel) + ' OUT OF AMMO', '#ff7b7b'), 350);
+}
 function boomFX(p, n = 8) { for (let i = 0; i < n; i++) puff(p, V3(rand(-6, 6), rand(1, 5), rand(-6, 6)), 1.6); sfxThud(); shake = Math.max(shake, 0.45); }
 function stepPickups(dt, racing) {
   AIs.forEach(a => { if (a.spinT > 0) a.spinT -= dt; if (a.oilCd > 0) a.oilCd -= dt; });
@@ -1189,7 +1257,7 @@ function paintedGeo(id, color) {
     colorize(g, color);
     if (tint) for (const [pid, hex] of Object.entries(tint)) tintPart(g, +pid, hex);
     paintCache.set(key, g);
-    if (paintCache.size > 24) { const first = paintCache.keys().next().value; if (first !== key) paintCache.delete(first); }
+    if (paintCache.size > 64) { const first = paintCache.keys().next().value; if (first !== key) paintCache.delete(first); }
   }
   return g;
 }
@@ -1296,11 +1364,31 @@ const RD = { pts: 0, hold: 0, comboT: 0, mult: 1, maxMult: 1, pads: 0 };
 const GR = new GhostRec();
 let ghostCar = null;
 /* AI */
-const AI_IDS = ['cruiser', 'titan', 'cab', 'blaze', 'nova'];
+/* Rival GARAGES: the difficulty decides what the grid is driving. Easy = everyday
+   Lagos metal, Normal = tuned street cars, HARD = the expensive showroom monsters —
+   no more racing against cheap cars when you pick hard. */
+const AI_TIERS = [
+  ['cruiser', 'cab', 'titan', 'volt', 'blaze'],          /* easy   · $0 - $35k   */
+  ['titan', 'volt', 'blaze', 'nova', 'sultan'],          /* normal · $18k - $90k */
+  ['nova', 'sultan', 'phantom', 'apex', 'zephyr']        /* hard   · $65k - $1.5M */
+];
+const AI_IDS0 = AI_TIERS[0];
 const AI = [0xc0222a, 0x1b1d22, 0x2b6cb0, 0xe5b800, 0x2f9e5b].map((c, k) => ({
-  mesh: makeCar(c, carGeo(AI_IDS[k]), getCar(AI_IDS[k]).tint || null), name: ['RYDER', 'NOVA', 'BLAZE', 'VIPER', 'GHOST'][k], css: '#' + c.toString(16).padStart(6, '0'),
+  mesh: makeCar(c, carGeo(AI_IDS0[k]), getCar(AI_IDS0[k]).tint || null), name: ['RYDER', 'NOVA', 'BLAZE', 'VIPER', 'GHOST'][k], css: '#' + c.toString(16).padStart(6, '0'),
   s: -(k + 1) * 2.4, lat: (k % 2 ? 4 : -4), latT: 0, timer: 0, speed: 0, base: rand(62, 71) - k * 0.4, prog: 0
 }));
+let aiStockDiff = -1;
+/* swap the rivals' bodies for the tier the race is running (geometry swap only — cheap) */
+function restockAI(diff) {
+  const tier = Math.max(0, Math.min(2, diff | 0));
+  if (aiStockDiff === tier) return;
+  aiStockDiff = tier;
+  AI.forEach((a, k) => {
+    const id = AI_TIERS[tier][k % AI_TIERS[tier].length];
+    const body = a.mesh.children.find(o => o.isMesh && o.geometry && o.geometry.attributes.partId);
+    if (body) body.geometry = paintedGeo(id, parseInt(a.css.slice(1), 16));
+  });
+}
 let AIs = AI;
 AI.forEach(a => { a.latT = a.lat; });
 
@@ -1359,7 +1447,9 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyR' && ['race', 'count', 'paused', 'finished'].includes(state) && !(cfg.mode === 'tour' && P.finished)) retry();
   if (e.code === 'Escape' || e.code === 'KeyP') { if (state === 'paused') resume(); else pause(); }
   if (e.code === 'KeyT') respawn();
-  if (e.code === 'KeyE' && !e.repeat) { if (cfg.type === 'adv' && state === 'race' && adv.S.near) act('advJoin'); else usePowerup(); }
+  if (e.code === 'KeyE') { if (cfg.type === 'adv' && state === 'race') { if (adv.S.near) { if (!e.repeat) act('advJoin'); } else fireWeapon(); } else if (!e.repeat) usePowerup(); }
+  if (e.code === 'KeyQ' && !e.repeat && cfg.type === 'adv' && state === 'race') cycleWeapon();
+  if (e.code === 'KeyG') { if (cfg.type === 'adv' && state === 'race') fireWeapon(); } /* edge + hold handled in stepPlayer */
   if (e.code === 'KeyM') muted = !muted;
   if (state === 'menu' && !e.repeat && document.activeElement !== $('dname')) menuKeys(e);
 });
@@ -1422,14 +1512,20 @@ const sfxWhoosh = () => { if (!actx || muted || !noiseBuf) return; const t = act
 const adv = createAdventure(canvasTex, {
   mkDanfo, mkKeke, mkTaxi, mkVan,
   mkPolice: () => makeCar(0xf2f4f7, carGeo('titan'), getCar('titan').tint || null),
+  mkGang: i => { const ids = ['cab', 'titan', 'blaze', 'volt']; return makeCar([0x23262d, 0x3d1012, 0x14240f, 0x33230d][i % 4], carGeo(ids[i % 4]), getCar(ids[i % 4]).tint || null); },
   getTop: () => CS.top,
-  pPos: () => P.pos, pVel: () => P.vel,
+  pPos: () => P.pos, pVel: () => P.vel, pH: () => P.h,
   economy, missionEvent,
   beep: (f, d, t, v) => beep(f, d, t, v),
   toast: (t, c) => toast(t, c),
   thud: () => sfxThud(),
   shake: v => { shake = Math.max(shake, v); },
   puff: (p, k) => puff(p, V3(0, 0.6, 0), k),
+  boom: (p, n) => boomFX(p, n),
+  gangCash: n => { economy.add(n); toast('GANG CAR WRECKED  +$' + n.toLocaleString(), '#7dff8a'); confetti(18); sfxMission(); missionEvent('gang', 1); },
+  wreck: amt => { if (amt > 0) economy.spend(amt); toast(amt > 0 ? 'WRECKED BY THE GANG · TOWED  -$' + amt.toLocaleString() : 'WRECKED BY THE GANG', '#ff6b6b'); shake = 1; sfxThud(); },
+  gshot: (x, z, mine) => beep(mine ? 620 : 240 + Math.random() * 60, 0.05, 'sawtooth', mine ? 0.08 : 0.05),
+  pSpin: v => { P.spin = clamp(P.spin + v, -3, 3); },
   trackName: id => (TRACKS[id] || TRACKS.city).name,
   nitroAdd: n => { P.nitro = Math.min(1, P.nitro + n); },
   onRam: (nx, nz, imp) => { P.vel.x += nx * imp; P.vel.z += nz * imp; shake = Math.max(shake, 0.45); sfxThud(); },
@@ -1509,7 +1605,7 @@ function renderNight() {
 const COLORS = [0xeef1f5, 0xd42a2a, 0x1d6fe0, 0xf2b705, 0x22a05a, 0x16181d, 0xff6a00, 0x8a3ffc];
 let cfg = { mode: 'menu', laps: 3, diff: 1, ai: 5, env: 'day' };
 let T = store.get('sr.t', null);
-const opt = Object.assign({ laps: 3, diff: 1, dur: 90, env: 'day', track: 'city', q: mobile ? 'med' : 'high', snd: 'on', board: 'race3', ctrl: 'stick' }, store.get('sr.opt', {}));
+const opt = Object.assign({ laps: 3, diff: 1, rivals: 5, dur: 90, env: 'day', track: 'city', q: mobile ? 'med' : 'high', snd: 'on', board: 'race3', ctrl: 'stick' }, store.get('sr.opt', {}));
 const show = (id, on) => $(id).classList.toggle('hide', !on);
 const ord = n => n + ['th', 'st', 'nd', 'rd'][n <= 3 ? n : 0];
 
@@ -1535,7 +1631,10 @@ function resetWorld(c) {
   else if (advOn) { const sp = adv.enter(c.env, !!c.resume); g = { p: V3(sp.x, 0, sp.z) }; P.pos.set(sp.x, 0, sp.z); P.h = sp.h; P.idx = 0; }
   else { const slot = c.ai + (c.netSlot || 0); g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
   P.vel.set(0, 0, 0); P.jy = 0; P.jv = 0; P.spin = 0; P.crosses = 0; P.nitro = 1; P.fuel = flyCap(); P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0; P.scOn = false; P.scI = 0; scCdT = 0;
-  AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = c.diff >= 2 ? CS.top * rand(0.89, 0.96) - k * 0.7 : (rand(62, 71) - k * 0.4) * DIFF[c.diff] * (0.74 + CS.top / 132 * 0.28); a.hard = c.diff >= 2; a.boostT = 0; a.boostCd = rand(3, 7); a.fireCd = rand(6, 11) + k * 1.8 + [22, 10, 2][c.diff] ; a.oilCd2 = rand(6, 12); a.item = null; a.itemT = 0; a.shield = 0; if (a.shieldMesh) a.shieldMesh.visible = false; });
+  /* HARD was overtuned: rivals sat at 89-96% of your top speed AND rubberbanded
+     AND kept nitro-bursting. Now 84-92%, softer catch-up, rarer bursts. */
+  AI.forEach((a, k) => { a.mesh.visible = k < c.ai; a.s = -(k + 1) * 2.4; a.lat = a.latT = k % 2 ? 4 : -4; a.timer = 0; a.speed = 0; a.base = c.diff >= 2 ? CS.top * rand(0.84, 0.92) - k * 0.8 : (rand(62, 71) - k * 0.4) * DIFF[c.diff] * (0.74 + CS.top / 132 * 0.28); a.hard = c.diff >= 2; a.boostT = 0; a.boostCd = rand(3, 7); a.fireCd = rand(6, 11) + k * 1.8 + [22, 10, 2][c.diff] ; a.oilCd2 = rand(6, 12); a.item = null; a.itemT = 0; a.shield = 0; if (a.shieldMesh) a.shieldMesh.visible = false; });
+  restockAI(c.diff);
   smoke.forEach(o => { o.life = 0; o.s.visible = false; });
   car.flames.forEach(f => { f.visible = false; });
   Object.assign(A, { score: 0, comboT: 0, hold: 0, mult: 1, maxMult: 1, cones: 0, dur: c.dur || 90, t: c.dur || 90, hit: 0 });
@@ -1545,6 +1644,7 @@ function resetWorld(c) {
   pads.forEach(p => { p.userData.cd = 0; p.userData.flash = 0; });
   resetPickups(); resetTraffic();
   resetSkids();
+  if (advOn) wpnReset(); else updateWpnHud();
   raceT = 0; shake = 0; lastRank = c.ai + 1; ovCool = 0; goT = 0; prevCrosses = 0; lapStart = 0; bestLap = Infinity; camYaw = P.h;
   camera.position.set(g.p.x - Math.sin(P.h) * 9, g.p.y + 4, g.p.z - Math.cos(P.h) * 9);
 }
@@ -1555,6 +1655,7 @@ function startRace(c) {
   resetWorld(c); setupGhost();
   if (c.type === 'adv' && c.mode !== 'mp') { setState('race'); $('count').style.display = 'none'; } /* solo free-roam: no countdown */
   else { setState('count'); cdT = 3; $('cd').textContent = '3'; ['l1', 'l2', 'l3'].forEach(l => $(l).className = ''); $('count').style.display = 'flex'; }
+  updateWpnHud();
   if (c.env === 'nightRain') { const iv = $('ncIntro'); iv.classList.add('show'); clearTimeout(ncIntroT); ncIntroT = setTimeout(() => iv.classList.remove('show'), 2400); }
   if (!actx) initAudio(); if (actx && actx.state === 'suspended') actx.resume();
   if (c.title) toast(c.title, '#7df');
@@ -1713,7 +1814,7 @@ function applyCtrl(user) {
   }, !!user);
 }
 function applyQuality() {
-  pr = Math.min(devicePixelRatio, { high: 2, med: 1.5, low: 1 }[opt.q] || 2);
+  pr = Math.min(devicePixelRatio, { high: mobile ? 1.75 : 2, med: mobile ? 1.35 : 1.5, low: 1 }[opt.q] || 2);
   renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight);
   /* LOW now really means LOW: no bloom, no shadow pass — half the GPU work on cheap phones */
   const low = opt.q === 'low';
@@ -1739,7 +1840,8 @@ function act(a) {
     startRace({ mode: mpAdv ? 'mp' : 'adv', type: 'adv', laps: 1, diff: 1, ai: 0, env: adv.S.env, resume: true, title: 'BACK TO ADVENTURE' });
   }
   else if (a === 'advExit') { adv.leave(); if (cfg.mode === 'mp' && net.active) net.leave(); toMenu(); }
-  else if (a === 'quick') startRace({ mode: 'quick', laps: opt.laps, diff: opt.diff, ai: 5, env: opt.env, track: opt.track, title: TRACKS[opt.track] && opt.track !== 'city' ? TRACKS[opt.track].name : '' });
+  else if (a === 'wpnSwap') cycleWeapon();
+  else if (a === 'quick') startRace({ mode: 'quick', laps: opt.laps, diff: opt.diff, ai: opt.rivals || 5, env: opt.env, track: opt.track, title: (opt.rivals === 1 ? '1 VS 1 DUEL · ' : '') + (TRACKS[opt.track] && opt.track !== 'city' ? TRACKS[opt.track].name : '') });
   else if (a === 'tt') startRace({ mode: 'tt', laps: opt.laps, diff: 1, ai: 0, env: opt.env, track: opt.track, title: TRACKS[opt.track] && opt.track !== 'city' ? TRACKS[opt.track].name : '' });
   else if (a === 'arena') startRace({ mode: 'arena', type: 'arena', laps: 1, diff: opt.diff, ai: 0, env: opt.env, dur: opt.dur, title: 'DRIFT ARENA' });
   else if (a === 'tourGo' || a === 'next') {
@@ -1789,6 +1891,8 @@ document.addEventListener('click', e => {
   if (gt) { document.querySelectorAll('.gTab').forEach(b => b.classList.toggle('on', b === gt)); document.querySelectorAll('.gSec').forEach(x => x.classList.toggle('on', x.dataset.gt === gt.dataset.gt)); sfxPad(); renderGarage(); return; }
   const tt = e.target.closest('[data-tat]'); /* tattoo card: buy once, fit per car */
   if (tt && tt.dataset.tat) { tatClick(tt.dataset.tat); return; }
+  const wb = e.target.closest('[data-wpn]'); /* arsenal card: buy / equip a weapon */
+  if (wb && wb.dataset.wpn) { wpnClick(wb.dataset.wpn); return; }
   const ga = e.target.closest('[data-garr]'); /* garage arrows: browse cars, preview in the showroom */
   if (ga) { gIdx = (gIdx + (+ga.dataset.garr) + CARS.length) % CARS.length; rebuildCar(CARS[gIdx].id); sfxPad(); renderGarage(); return; }
   const dv = e.target.closest('[data-drv]'); /* driver card: equip owned / buy locked (must run before other handlers) */
@@ -1813,7 +1917,7 @@ document.addEventListener('click', e => {
   else if (b.dataset.act) act(b.dataset.act);
   else if (b.dataset.c) paintPlayer(+b.dataset.c);
   else if (b.dataset.v !== undefined && b.parentElement.classList.contains('seg')) {
-    const k = b.parentElement.dataset.k; opt[k] = (k === 'laps' || k === 'diff' || k === 'dur') ? +b.dataset.v : b.dataset.v; store.set('sr.opt', opt); syncSegs();
+    const k = b.parentElement.dataset.k; opt[k] = (k === 'laps' || k === 'diff' || k === 'dur' || k === 'rivals') ? +b.dataset.v : b.dataset.v; store.set('sr.opt', opt); syncSegs();
     if (k === 'env') setEnv(opt.env); if (k === 'advEnv') { } if (k === 'laps') renderBest(); if (k === 'dur') renderArBest(); if (k === 'q') applyQuality(); if (k === 'snd') muted = opt.snd === 'off'; if (k === 'board') renderBoard(); if (k === 'ctrl') applyCtrl(true);
   }
 });
@@ -1861,9 +1965,15 @@ function stepPlayer(dt, racing) {
   const gas = k.up || FL.on;
   const busted = cfg.type === 'adv' && adv.S.slow > 0; /* just got busted: top speed cut, no nitro */
   const boosting = can && k.boost && P.nitro > 0.02 && gas && !busted;
-  /* fire the held power-up: gamepad LB/RB edge or touch FIRE button (keyboard uses the keydown handler) */
-  if ((gp.item && !padItemPrev) || touch.item === 1) usePowerup();
-  padItemPrev = !!gp.item; touch.item = 0;
+  /* FIRE input: in ADVENTURE it fires the weapon bought in the ARSENAL (hold the
+     button — the machine gun keeps biting). Everywhere else it fires the power-up. */
+  const fireEdge = (gp.item && !padItemPrev) || (!!touch.item && !touchItemPrev) || (keys.KeyG && !fireKeyPrev);
+  const fireHeld = (gp.item || touch.item > 0 || keys.KeyG) && can;
+  padItemPrev = !!gp.item; fireKeyPrev = !!keys.KeyG; touchItemPrev = !!touch.item;
+  wpnCd = Math.max(0, wpnCd - dt);
+  if (cfg.type === 'adv' && state === 'race' && !P.finished) {
+    if (fireEdge || (fireHeld && wsel === 'gun')) fireWeapon();
+  } else if (fireEdge) usePowerup();
   const NIV = CS.ni || 0; /* nitro upgrade level: stronger boost, slower burn, faster refill */
   if (can) {
     const air = FL.on, slowK = busted ? 0.55 : 1;
@@ -2032,10 +2142,10 @@ function stepAI(dt, racing) {
     if (racing) {
       const i0 = ((Math.floor(a.s) % N) + N) % N;
       const gap = P.prog - a.prog;
-      const rb = a.hard ? clamp(gap / 150 * 0.08, -0.05, 0.12) : clamp(gap / 150 * 0.06, -0.06, 0.1);
+      const rb = a.hard ? clamp(gap / 150 * 0.06, -0.05, 0.07) : clamp(gap / 150 * 0.06, -0.06, 0.1);
       let boostK = 1;
-      if (a.boostT > 0) { a.boostT -= dt; boostK = 1.09; } /* nitro box / burst */
-      else if (a.hard) { a.boostCd -= dt; if (a.boostCd <= 0) { a.boostT = rand(1.0, 1.8); a.boostCd = rand(8, 13); } }
+      if (a.boostT > 0) { a.boostT -= dt; boostK = 1.06; } /* nitro box / burst */
+      else if (a.hard) { a.boostCd -= dt; if (a.boostCd <= 0) { a.boostT = rand(0.9, 1.4); a.boostCd = rand(10, 16); } }
       /* traffic ahead: harder AIs swerve earlier, easy ones often hit it */
       if (TRAF.length && cfg.type !== 'arena') {
         const look = [8, 13, 19][cfg.diff] || 12;
@@ -2152,7 +2262,7 @@ function advUI(dt) {
   if (ah) ah.classList.toggle('hurt', S.hitFlash > 0.45);
   const pp = $('powPct'); if (pp) pp.textContent = Math.round(S.pow) + '%';
   const fr = $('advFree'); if (fr) fr.textContent = 'FREE ' + fmt0(S.freeT);
-  const nx = $('advNext'); if (nx) nx.textContent = S.near ? 'RACE MARKER AHEAD — E / TAP JOIN' : 'NEXT RACE ' + fmt0(S.nextIn);
+  const nx = $('advNext'); if (nx) nx.textContent = S.near ? 'RACE MARKER AHEAD — E / TAP JOIN' : adv.gangWar ? ' GANG FIGHT! WRECK THEM OR RUN' : 'NEXT RACE ' + fmt0(S.nextIn);
   const bw = $('bustWrap');
   if (bw) {
     if (S.bust > 0.05) { bw.style.display = 'block'; if ($('bustBar')) $('bustBar').firstElementChild.style.width = Math.round(clamp(S.bust / 2.6, 0, 1) * 100) + '%'; }
@@ -2488,7 +2598,26 @@ function renderGarage() {
     }).join('')}</div>`;
   }
   renderDrivers();
+  renderArsenal();
   if (document.querySelector('.gSec[data-gt="tat"]')) renderTattoos();
+}
+/* ARSENAL tab: buy weapons once, they load into every Adventure session */
+function renderArsenal() {
+  const list = $('wpnList'); if (!list) return;
+  list.innerHTML = '<div class="lbl" style="margin:2px 0 8px">ADVENTURE ARSENAL · BUY ONCE, FIRE FOREVER · SWAP WITH Q OR THE GOLD BUTTON</div>' + WEAPONS.map(w => {
+    const has = economy.wpnHas(w.id);
+    return `<button type="button" class="drvCard${has ? ' eq' : ' lock'}" data-wpn="${w.id}">
+      <span class="dvAva">${w.name[0]}</span>
+      <span class="dvMid"><b>${w.name} <em class="dvTier ${has ? 't1' : 't2'}">${has ? 'OWNED · ' + w.ammo + ' RDS / SESSION' : 'LOCKED'}</em></b><small>${w.desc}</small></span>
+      <span class="dvPrice${!has && economy.money < w.price ? ' no' : ''}">${has ? 'TAP TO EQUIP' : '$' + w.price.toLocaleString()}</span>
+    </button>`;
+  }).join('');
+}
+function wpnClick(id) {
+  const w = WEAPONS.find(x => x.id === id); if (!w) return;
+  if (economy.wpnHas(id)) { wsel = id; store.set('ksr.wsel', id); toast(w.name + ' EQUIPPED FOR ADVENTURE', '#8be5ff'); sfxPad(); renderArsenal(); return; }
+  if (economy.wpnBuy(id, w.price)) { wsel = id; store.set('ksr.wsel', id); sfxMission(); confetti(30); toast(w.name + ' BOUGHT! GO FIND TROUBLE IN ADVENTURE', '#7dff8a'); renderArsenal(); }
+  else { toast(`NEED $${(w.price - economy.money).toLocaleString()} MORE FOR ${w.name}`, '#ff7b7b'); beep(220, 0.2, 'square', 0.1); }
 }
 function garageClick(id) {
   const c = getCar(id), owned = economy.has(id);
@@ -2710,15 +2839,24 @@ function frameBody(now) {
 muted = opt.snd === 'off';
 economy.init(); missionsInit();
 bootCloud();
-/* this phone has killed the GL context before: step the quality down so it stops happening */
+/* SAFE MODE: this phone killed the GL context twice in 90 s — it is drowning.
+   Start at pixel ratio 1 with no bloom and no shadows so the game SURVIVES.
+   ?safe=1 forces the same thing manually. ?unsafe=1 lifts it again. */
 {
   const glfixN = store.get('sr.glfixN', 0) || 0;
+  const drowning = (store.get('sr.glTries', 0) || 0) >= 2;
+  const forceSafe = location.search.includes('safe=1');
   if (store.get('sr.glfix', 0)) {
     store.set('sr.glfix', 0);
-    setTimeout(() => toast(glfixN >= 3 ? 'GRAPHICS RECOVERED · LOW MODE FOR STABILITY' : 'GRAPHICS RECOVERED · GO RACE', '#8df'), 900);
+    setTimeout(() => toast(drowning || forceSafe ? 'GRAPHICS RECOVERED · SAFE MODE FOR STABILITY' : 'GRAPHICS RECOVERED · GO RACE', '#8df'), 900);
   }
-  if (glfixN >= 3 && opt.q !== 'low') { opt.q = 'low'; store.set('sr.opt', opt); }
+  if (drowning || forceSafe) {
+    opt.q = 'low'; store.set('sr.opt', opt);
+    setTimeout(() => toast('SAFE MODE · SWITCH TO ?unsafe=1 OR SETTINGS TO LIFT IT', '#ffd166'), 2600);
+  }
+  else if (glfixN >= 3 && opt.q !== 'low') { opt.q = 'low'; store.set('sr.opt', opt); }
   else if (glfixN >= 1 && opt.q === 'high') { opt.q = 'med'; store.set('sr.opt', opt); }
+  if (location.search.includes('unsafe=1')) { store.set('sr.glTries', 0); if (opt.q === 'low') { opt.q = mobile ? 'med' : 'high'; store.set('sr.opt', opt); } }
 }
 net.init({
   THREE, scene, toast, driverName,
@@ -2767,5 +2905,6 @@ rebuildCar(economy.selected());
 window.addEventListener('ksr-money', updateMoneyUI);
 updateMoneyUI();
 syncSegs(); applyQuality(); applyCtrl(false); gateBoot();
-if (TURBO || location.search.includes('dbg')) { window.__DBG = { get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car, adv, act, startRace, get SC() { return SC; }, get curTrack() { return curTrack; }, get state() { return state; }, get cfgT() { return cfg.type; }, forceRace() { setState('race'); goT = 0.9; $('count').style.display = 'none'; } }; window.__SCDBG = { checks: 0 }; } /* dev test hook */
+if (TURBO || location.search.includes('dbg')) { window.__DBG = { get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car, adv, act, startRace, fireWeapon, cycleWeapon, wpnReset, restockAI, get AMMO() { return AMMO; }, get wsel() { return wsel; }, get SC() { return SC; }, get curTrack() { return curTrack; }, get state() { return state; }, get cfgT() { return cfg.type; }, forceRace() { setState('race'); goT = 0.9; $('count').style.display = 'none'; } }; window.__SCDBG = { checks: 0 }; } /* dev test hook */
+window.__KSR_OK = true; /* boot failsafe (index.html) stands down: the engine is alive */
 requestAnimationFrame(frame);
