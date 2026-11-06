@@ -224,7 +224,15 @@ export function createAdventure(canvasTex, ctx) {
   function dentCar(o) {
     if (o.dented) return; o.dented = true;
     const root = o.mesh || o.grp; if (!root) return;
-    root.traverse(m => { if (m.isMesh && m.material && m.material.isMeshStandardMaterial && m.material.color) m.material.color.multiplyScalar(0.58); });
+    /* the paint lives in the geometry's vertex colours (carMat is SHARED) — darken the
+       geometry itself or every car in the game turns charcoal with it */
+    root.traverse(m => {
+      if (m.isMesh && m.geometry && m.geometry.attributes && m.geometry.attributes.color) {
+        const c = m.geometry.attributes.color, arr = c.array;
+        for (let i = 0; i < arr.length; i++) arr[i] *= 0.58;
+        c.needsUpdate = true;
+      }
+    });
   }
   function knock(o, nx, nz, pw, x0, z0) {
     o.free = true; o.done = false; o.flipped = false;
@@ -338,6 +346,20 @@ export function createAdventure(canvasTex, ctx) {
   /* ---------- race markers ---------- */
   const markers = [];
   const lblTexCache = {};
+  /* ---------- SUMO ARENA site: a permanent glowing stadium gate in the free-roam city ---------- */
+  const SUMO_SITE = { x: 2 * PITCH, z: -2 * PITCH };
+  const sumoGrp = new THREE.Group();
+  {
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.6, 150, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0xff4dd8, transparent: true, opacity: 0.42, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false, toneMapped: false }));
+    beam.position.y = 75; sumoGrp.add(beam);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(5.2, 0.36, 8, 40), new THREE.MeshBasicMaterial({ color: 0xff4dd8, toneMapped: false, fog: false }));
+    ring.rotation.x = Math.PI / 2; ring.position.y = 0.6; sumoGrp.add(ring);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xff4dd8, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }));
+    halo.scale.set(22, 22, 1); halo.position.y = 3.6; sumoGrp.add(halo);
+    const lbl = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTex(256, 64, g => { g.fillStyle = 'rgba(6,10,18,.9)'; g.fillRect(0, 0, 256, 64); g.strokeStyle = '#ff4dd8'; g.lineWidth = 5; g.strokeRect(3, 3, 250, 58); g.fillStyle = '#ff4dd8'; g.font = '900 26px Segoe UI,Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('SUMO ARENA', 128, 34); }), transparent: true, depthWrite: false, fog: false, toneMapped: false }));
+    lbl.scale.set(16, 4, 1); lbl.position.y = 13; sumoGrp.add(lbl);
+    sumoGrp.position.set(SUMO_SITE.x, 0, SUMO_SITE.z); group.add(sumoGrp);
+  }
   function tierLabel(tier) {
     if (lblTexCache[tier]) return lblTexCache[tier];
     const t = TIERS[tier];
@@ -717,6 +739,13 @@ export function createAdventure(canvasTex, ctx) {
       mc.fillStyle = g.mode === 'hunt' ? '#ff4dd8' : '#a06bff'; mc.beginPath(); mc.arc(x, y, 5, 0, 7); mc.fill();
       mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke();
     }
+    { /* the SUMO ARENA gate: pink square on the map */
+      const [x, y] = P2S(SUMO_SITE.x, SUMO_SITE.z);
+      if (x > 4 && x < w - 4 && y > 4 && y < h - 4) {
+        mc.fillStyle = '#ff4dd8'; mc.fillRect(x - 6, y - 6, 12, 12);
+        mc.strokeStyle = '#fff'; mc.lineWidth = 2; mc.strokeRect(x - 6, y - 6, 12, 12);
+      }
+    }
     mc.save(); mc.translate(w / 2, h / 2); mc.rotate(Math.PI - hdg);
     mc.fillStyle = '#fff'; mc.beginPath(); mc.moveTo(0, -9); mc.lineTo(6.5, 7); mc.lineTo(0, 3.6); mc.lineTo(-6.5, 7); mc.closePath(); mc.fill();
     mc.strokeStyle = '#3cf'; mc.lineWidth = 2.5; mc.stroke(); mc.restore();
@@ -809,6 +838,10 @@ export function createAdventure(canvasTex, ctx) {
       if (d < 16) S.near = { ...TIERS[m.tier], tier: m.tier, x: m.x, z: m.z, track: m.track, sub: `${TIERS[m.tier].laps} LAPS · ${['EASY', 'NORMAL', 'HARD'][TIERS[m.tier].diff]} · ${ctx.trackName(m.track)}` };
       else if (d < bestD) { bestD = d; bestM = m; }
     }
+    /* the SUMO gate: step in and the arena calls you */
+    S.sumoNear = Math.hypot(SUMO_SITE.x - px, SUMO_SITE.z - pz) < 17;
+    sumoGrp.children[1].rotation.z += dt * 1.8; /* gate ring spins */
+    sumoGrp.children[0].material.opacity = 0.34 + Math.sin(tG * 2.4) * 0.1;
     if (!S.near && bestM) {
       S.navD = bestD;
       S.navA = -angDiff(Math.atan2(bestM.x - px, bestM.z - pz), o.h);

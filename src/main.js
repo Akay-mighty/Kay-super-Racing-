@@ -11,6 +11,7 @@ import { vehicleContact, resolveVehicleContact } from './vehicle-physics.js';
 import { touch, setControl } from './touch.js';
 import { createArena } from './arena.js';
 import { createAdventure } from './adventure.js';
+import { createSumo, SUMO_ARENAS, SUMO_RIVAL_COLS, SUMO_RIVAL_IDS } from './sumo.js';
 import { CARS, getCar, carGeo, tintPart } from './cars-data.js';
 import { economy } from './economy.js';
 import { missionsInit, missionEvent, missionState, missionsCompleted, MISSIONS } from './missions.js';
@@ -274,7 +275,7 @@ let mpEvt = null; /* last fired item event, piggybacked on the mp state push (sy
 const PU_NAMES = { seeker: 'SEEKER', rocket: 'ROCKET', shield: 'SHIELD', oil: 'OIL SLICK', magnet: 'MAGNET', nitro: 'NITRO' };
 const allPads = () => cfg.env === 'nightRain' ? pads.concat(padsNight) : pads; /* module scope — stepPlayer reads it */
 let raceCoins = 0, raceGems = 0, P_oilCd = 0, coinSpin = 0;
-const itemsOn = () => cfg.type !== 'arena' && cfg.type !== 'adv'; /* power-ups & coins ON in multiplayer too (per-player boxes, synced rockets) */
+const itemsOn = () => cfg.type !== 'arena' && cfg.type !== 'adv' && cfg.type !== 'sumo'; /* power-ups & coins ON in multiplayer too (per-player boxes, synced rockets) */
 function ensureTrack(id) {
   const tk = TRACKS[id] || TRACKS.city;
   if (curTrack === tk.id && world) return;
@@ -873,7 +874,7 @@ function resetTraffic() {
   });
 }
 function stepTraffic(dt, racing) {
-  if (cfg.type === 'arena' || cfg.type === 'adv' || !TRAF.length) return;
+  if (cfg.type === 'arena' || cfg.type === 'adv' || cfg.type === 'sumo' || !TRAF.length) return;
   TRAF.forEach(t => {
     if (t.stun > 0) t.stun -= dt;
     else t.s = (t.s + t.speed * t.dir * dt / ds + N * 2) % N;
@@ -1577,6 +1578,33 @@ const adv = createAdventure(canvasTex, {
 });
 scene.add(adv.group);
 
+/* ---------- SUMO ARENA — knockout battles in the sky (Street Legends) ---------- */
+const sumo = createSumo(canvasTex, {
+  mkRival: i => makeCar(SUMO_RIVAL_COLS[i % 5], carGeo(SUMO_RIVAL_IDS[i % 5]), getCar(SUMO_RIVAL_IDS[i % 5]).tint || null),
+  beep: (f, d, t, v) => beep(f, d, t, v),
+  thud: () => sfxThud(),
+  toast: (t, c) => toast(t, c),
+  shake: v => { shake = Math.max(shake, v); },
+  puff: (p, v, k) => puff(p, v, k),
+  boom: (p, n) => boomFX(p, n),
+  nitroAdd: n => { P.nitro = Math.min(1, P.nitro + n); },
+  cash: n => { economy.add(n); sfxCoin(); },
+  pPos: () => P.pos, pVel: () => P.vel, pJy: () => P.jy, pFly: () => FL.on, pH: () => P.h,
+  pAlt: () => (sumo.groundAt(P.pos.x, P.pos.z) ?? 0) + P.jy + FL.alt
+});
+sumo.setMerge(mergeGeometries);
+scene.add(sumo.group);
+const repLvlOf = () => Math.floor(Math.sqrt((store.get('ksr.rep', 0) || 0) / 60));
+function addRep(n) {
+  if (n <= 0) return;
+  store.set('ksr.rep', (store.get('ksr.rep', 0) || 0) + Math.round(n));
+  const before = Math.floor(Math.sqrt(((store.get('ksr.rep', 0) || 0) - n) / 60));
+  const lvl = repLvlOf();
+  toast(lvl > before ? `RESPECT LEVEL ${lvl + 1}!  +${n}` : `RESPECT +${n}`, '#ff9a2f');
+  confetti(lvl > before ? 40 : 10);
+  if (lvl > before) sfxMission();
+}
+
 /* ---------- HUD helpers ---------- */
 const mm = $('mm'), mc = mm.getContext('2d');
 let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9, msc = 1;
@@ -1648,7 +1676,7 @@ function renderNight() {
 const COLORS = [0xeef1f5, 0xd42a2a, 0x1d6fe0, 0xf2b705, 0x22a05a, 0x16181d, 0xff6a00, 0x8a3ffc];
 let cfg = { mode: 'menu', laps: 3, diff: 1, ai: 5, env: 'day' };
 let T = store.get('sr.t', null);
-const opt = Object.assign({ laps: 3, diff: 1, rivals: 5, dur: 90, env: 'day', track: 'city', q: mobile ? 'med' : 'high', snd: 'on', board: 'race3', ctrl: 'stick' }, store.get('sr.opt', {}));
+const opt = Object.assign({ laps: 3, diff: 1, rivals: 5, dur: 90, env: 'day', track: 'city', q: mobile ? 'med' : 'high', snd: 'on', board: 'race3', ctrl: 'stick', sumoTier: 0, sumoRivals: 3 }, store.get('sr.opt', {}));
 const show = (id, on) => $(id).classList.toggle('hide', !on);
 const ord = n => n + ['th', 'st', 'nd', 'rd'][n <= 3 ? n : 0];
 
@@ -1659,15 +1687,17 @@ function followSun() { sun.position.set(car.position.x + sunOff.x, car.position.
 
 function resetWorld(c) {
   c = Object.assign({ type: 'race' }, c); cfg = c; TOTAL = c.laps || 1;
-  if (c.type !== 'adv') ensureTrack(c.track || 'city'); /* free-roam has its own city: no need to rebuild the circuit each time you come back */
+  if (c.type !== 'adv' && c.type !== 'sumo') ensureTrack(c.track || 'city'); /* free-roam has its own city, the arena floats in the sky */
   setEnv(c.env); AIs = AI.slice(0, c.ai);
-  const arenaOn = c.type === 'arena', advOn = c.type === 'adv';
-  world.visible = !arenaOn && !advOn; arena.group.visible = arenaOn; if (arenaOn) arena.reset();
-  adv.group.visible = advOn;
-  const nightOn = !arenaOn && !advOn && c.env === 'nightRain';
+  const arenaOn = c.type === 'arena', advOn = c.type === 'adv', sumoOn = c.type === 'sumo';
+  world.visible = !arenaOn && !advOn && !sumoOn; arena.group.visible = arenaOn; if (arenaOn) arena.reset();
+  adv.group.visible = advOn; sumo.group.visible = sumoOn;
+  const nightOn = !arenaOn && !advOn && !sumoOn && c.env === 'nightRain';
   neonGroup.visible = nightOn; padsNight.forEach(p => { p.visible = nightOn; });
   document.body.classList.toggle('arena', arenaOn && c.mode !== 'menu');
   document.body.classList.toggle('adv', advOn && c.mode !== 'menu');
+  document.body.classList.toggle('sumo', sumoOn && c.mode !== 'menu');
+  if (!sumoOn) sumoLastRound = 0;
   if (!advOn) { /* leaving free-roam: every adventure overlay MUST go away — the stuck JOIN RACE banner */
     ['advPrompt', 'advNav', 'bustWrap'].forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
     show('advIntro', false);
@@ -1676,6 +1706,11 @@ function resetWorld(c) {
   let g;
   if (arenaOn) { g = { p: V3(0, 0, -150) }; P.pos.set(0, 0, -150); P.h = 0; P.idx = 0; }
   else if (advOn) { const sp = adv.enter(c.env, !!c.resume); g = { p: V3(sp.x, 0, sp.z) }; P.pos.set(sp.x, 0, sp.z); P.h = sp.h; P.idx = 0; }
+  else if (sumoOn) {
+    const sp = sumo.enter(c.tier || 0, c.rivals || 3);
+    sumoLastRound = sumo.S.round;
+    g = { p: V3(sp.x, sp.y, sp.z) }; P.pos.set(sp.x, 0, sp.z); P.h = sp.h; P.idx = 0;
+  }
   else { const slot = c.ai + (c.netSlot || 0); g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
   P.vel.set(0, 0, 0); P.jy = 0; P.jv = 0; P.spin = 0; P.crosses = 0; P.nitro = 1; P.fuel = flyCap(); P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0; P.scOn = false; P.scI = 0; scCdT = 0;
   if (advOn && !c.resume) {
@@ -1698,8 +1733,9 @@ function resetWorld(c) {
   resetSkids();
   if (advOn) wpnReset(); else updateWpnHud();
   raceT = 0; shake = 0; lastRank = c.ai + 1; ovCool = 0; goT = 0; prevCrosses = 0; lapStart = 0; bestLap = Infinity; camYaw = P.h;
-  camera.position.set(g.p.x - Math.sin(P.h) * 9, g.p.y + 4, g.p.z - Math.cos(P.h) * 9);
+  camera.position.set(g.p.x - Math.sin(P.h) * 9, g.p.y + 4 + (sumoOn ? 62 : 0), g.p.z - Math.cos(P.h) * 9);
 }
+let sumoLastRound = 0;
 let ncIntroT = 0;
 function startRace(c) {
   show('menu', false); show('pause', false); show('finish', false); if ($('fglobal')) $('fglobal').textContent = '';
@@ -1787,6 +1823,7 @@ function respawn() {
   if (state !== 'race' || P.finished) return;
   if (cfg.type === 'arena') { P.pos.set(0, 0, -150); P.h = 0; }
   else if (cfg.type === 'adv') { const s = adv.nearestStreet(P.pos); P.pos.set(s.x, 0, s.z); }
+  else if (cfg.type === 'sumo') { const s2 = sumo.respawnAt(); P.pos.set(s2.x, 0, s2.z); P.h = s2.h; P.jy = 0; P.jv = 0; FL.on = false; FL.alt = 0; }
   else { P.scOn = false; const g = sample(P.idx, 0); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); }
   P.vel.set(0, 0, 0); P.spin = 0; camYaw = P.h; toast('RESPAWN', '#ffffff');
 }
@@ -1800,6 +1837,7 @@ const HINTS = {
   night: 'NIGHT CIRCUIT · RAIN · NEON · ×1.8 CASH', multi: 'CREATE A ROOM · SHARE THE CODE · RACE LIVE',
   arena: 'DRIFT \u00b7 SMASH CONES \u00b7 BEAT THE CLOCK', tt: 'CLEAN LINES SET RECORDS',
   adv: 'FREE ROAM · DRIVE TO RACE MARKERS · LOSE THE COPS',
+  sumo: 'PUNCH RIVALS OFF THE SKY DECKS · LAST CAR STANDING WINS',
   garage: 'CLICK A CAR TO BUY OR SELECT', missions: 'REWARDS PAID INSTANTLY',
   online: 'SET YOUR DRIVER NAME TO APPEAR HERE', settings: 'PROGRESS SAVES AUTOMATICALLY',
   how: 'GOOD LUCK OUT THERE'
@@ -1815,6 +1853,8 @@ function showScreen(n) {
   if (n === 'tour') renderTour();
   if (n === 'night') { updateNightUI(); }
   if (n === 'adv') { const nb = $('advNc'); if (nb) nb.style.display = nightUnlocked() ? '' : 'none'; }
+  if (n === 'sumo') updateSumoMenu();
+  if (n === 'modes') updateSumoMenu();
   if (n === 'multi') renderMp();
   if (n === 'tt') renderBest();
   if (n === 'arena') renderArBest();
@@ -1827,7 +1867,7 @@ function showScreen(n) {
 /* console-style keyboard navigation: arrows move the highlight, enter selects, esc backs out */
 let kbIdx = -1;
 function menuKeys(e) {
-  if (e.code === 'Escape' || e.code === 'Backspace') { if (lastScreen !== 'main') { kbIdx = -1; showScreen(({ quick: 'modes', arena: 'modes', tt: 'modes', tour: 'modes', night: 'modes', adv: 'modes' })[lastScreen] || 'main'); } return; }
+  if (e.code === 'Escape' || e.code === 'Backspace') { if (lastScreen !== 'main') { kbIdx = -1; showScreen(({ quick: 'modes', arena: 'modes', tt: 'modes', tour: 'modes', night: 'modes', adv: 'modes', sumo: 'modes' })[lastScreen] || 'main'); } return; }
   const scr = document.querySelector('#menu .screen.on'); if (!scr) return;
   const items = [...scr.querySelectorAll('button')].filter(b => b.offsetParent !== null && !b.disabled && !b.classList.contains('sw') && !b.classList.contains('back') && !(b.parentElement && b.parentElement.classList.contains('seg')));
   if (!items.length) return;
@@ -1892,6 +1932,21 @@ function act(a) {
     startRace({ mode: mpAdv ? 'mp' : 'adv', type: 'adv', laps: 1, diff: 1, ai: 0, env: adv.S.env, resume: true, title: 'BACK TO ADVENTURE' });
   }
   else if (a === 'advExit') { adv.leave(); if (cfg.mode === 'mp' && net.active) net.leave(); toMenu(); }
+  else if (a === 'sumoGo') {
+    const tier = clamp(opt.sumoTier | 0, 0, SUMO_ARENAS.length - 1);
+    if (tier > repLvlOf()) { toast(`LOCKED · REACH RESPECT LEVEL ${SUMO_ARENAS[tier].rep + 1}`, '#ff7b7b'); sfxThud(); return; }
+    store.set('ksr.sumo', 1);
+    startRace({ mode: 'sumo', type: 'sumo', laps: 1, diff: 1, ai: 0, env: 'day', tier, rivals: opt.sumoRivals || 3, title: SUMO_ARENAS[tier].name });
+  }
+  else if (a === 'sumoJoin') {
+    if (!adv.S.sumoNear) return;
+    adv.saveReturn(P.pos.x, P.pos.z, P.h);
+    adv.raceStart();
+    store.set('ksr.sumo', 1);
+    const tier = Math.min(SUMO_ARENAS.length - 1, repLvlOf());
+    startRace({ mode: 'sumo', type: 'sumo', laps: 1, diff: 1, ai: 0, env: 'day', tier, rivals: opt.sumoRivals || 3, fromAdv: true, title: SUMO_ARENAS[tier].name });
+  }
+  else if (a === 'sumoQuit') { if (cfg.fromAdv) act('advBack'); else toMenu(); }
   else if (a === 'wpnSwap') cycleWeapon();
   else if (a === 'advIntroX') { store.set('ksr.advIntro', 1); show('advIntro', false); sfxPad(); }
   else if (a === 'advArsenal') { store.set('ksr.advIntro', 1); show('advIntro', false); toMenu(); showScreen('garage'); const tb = document.querySelector('.gTab[data-gt="arsenal"]'); if (tb) tb.click(); }
@@ -1971,12 +2026,26 @@ document.addEventListener('click', e => {
   else if (b.dataset.act) act(b.dataset.act);
   else if (b.dataset.c) paintPlayer(+b.dataset.c);
   else if (b.dataset.v !== undefined && b.parentElement.classList.contains('seg')) {
-    const k = b.parentElement.dataset.k; opt[k] = (k === 'laps' || k === 'diff' || k === 'dur' || k === 'rivals') ? +b.dataset.v : b.dataset.v; store.set('sr.opt', opt); syncSegs();
-    if (k === 'env') setEnv(opt.env); if (k === 'advEnv') { } if (k === 'laps') renderBest(); if (k === 'dur') renderArBest(); if (k === 'q') applyQuality(); if (k === 'snd') muted = opt.snd === 'off'; if (k === 'board') renderBoard(); if (k === 'ctrl') applyCtrl(true);
+    const k = b.parentElement.dataset.k; opt[k] = (k === 'laps' || k === 'diff' || k === 'dur' || k === 'rivals' || k === 'sumoTier' || k === 'sumoRivals') ? +b.dataset.v : b.dataset.v; store.set('sr.opt', opt); syncSegs();
+    if (k === 'env') setEnv(opt.env); if (k === 'advEnv') { } if (k === 'sumoTier' || k === 'sumoRivals') { } if (k === 'laps') renderBest(); if (k === 'dur') renderArBest(); if (k === 'q') applyQuality(); if (k === 'snd') muted = opt.snd === 'off'; if (k === 'board') renderBoard(); if (k === 'ctrl') applyCtrl(true);
   }
 });
 $('pauseBtn').onclick = pause;
 $('bShoot').addEventListener('click', () => { if (cfg.type === 'adv' && !wsel) act('advArsenal'); });
+addEventListener('mousedown', e => { /* SUMO: right mouse button = PUNCH (like the real sumo games) */
+  if (e.button === 2 && cfg.type === 'sumo' && state === 'race' && !P.finished) sumo.punch();
+});
+/* SUMO menu: show the tile once unlocked, grey out arenas still locked by RESPECT */
+function updateSumoMenu() {
+  const tile = $('sumoTile'); if (tile) tile.style.display = store.get('ksr.sumo', 0) ? '' : 'none';
+  const rep = repLvlOf();
+  document.querySelectorAll('[data-s="sumo"] .seg[data-k="sumoTier"] button').forEach(b => {
+    const i = +b.dataset.v, locked = i > rep;
+    b.classList.toggle('lock', locked);
+    b.innerHTML = locked ? `&#128274; LV${SUMO_ARENAS[i].rep + 1}` : SUMO_ARENAS[i].name;
+  });
+  const note = $('sumoRepNote'); if (note) note.textContent = `YOUR RESPECT LEVEL: ${rep + 1} — win arena fights, wreck gang cars and lose the cops to raise it. Higher levels unlock the bigger arenas.`;
+}
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); else last = performance.now(); });
 
 function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
@@ -1986,7 +2055,7 @@ function stepPlayer(dt, racing) {
   const k = { up: keys.KeyW || keys.ArrowUp || gp.up || ((touch.active && !touch.down) && !advGas) || (advGas && touch.gas > 0), down: keys.KeyS || keys.ArrowDown || gp.down || touch.down, left: keys.KeyA || keys.ArrowLeft, right: keys.KeyD || keys.ArrowRight, boost: keys.ShiftLeft || keys.ShiftRight || gp.boost || touch.boost, drift: keys.Space || gp.drift || touch.drift };
   const f = V3(Math.sin(P.h), 0, Math.cos(P.h)), rt = V3(-f.z, 0, f.x);
   const fwd = P.vel.dot(f), sp = P.vel.length();
-  const can = racing && !P.finished;
+  const can = racing && !P.finished && !(cfg.type === 'sumo' && (sumo.S.freeze || sumo.S.myOut));
   /* flight toggle: F key / Y button / FLY touch button */
   const padFlyEdge = gp.fly && !padFlyPrev; padFlyPrev = gp.fly;
   const flyEdge = (keys.KeyF && !flyKeyPrev) || padFlyEdge || touch.fly === 1; flyKeyPrev = !!keys.KeyF; touch.fly = 0;
@@ -2029,7 +2098,9 @@ function stepPlayer(dt, racing) {
   wpnCd = Math.max(0, wpnCd - dt);
   if (cfg.type === 'adv' && state === 'race' && !P.finished) {
     if (fireEdge || (fireHeld && wsel === 'gun')) fireWeapon();
-  } else if (fireEdge) usePowerup();
+  } else if (cfg.type === 'sumo' && state === 'race' && !P.finished) {
+    if (keys.KeyE || touch.punch) sumo.punch(); /* hold to punch whenever the gauge is ready */
+  } else if (fireEdge && cfg.type !== 'sumo') usePowerup();
   const NIV = CS.ni || 0; /* nitro upgrade level: stronger boost, slower burn, faster refill */
   if (can) {
     const air = FL.on, slowK = busted ? 0.55 : 1;
@@ -2048,7 +2119,7 @@ function stepPlayer(dt, racing) {
   if (!FL.on && CS.fly && can) P.fuel = Math.min(flyCap(), P.fuel + 0.35 * dt); /* tank slowly refills on the ground */
   if (FL.on) { /* flight burns the tank, not nitro */ }
   else if (boosting) P.nitro = Math.max(0, P.nitro - 0.26 * (1 - 0.06 * NIV) * (drv().niBurn || 1) * dt); else P.nitro = Math.min(1, P.nitro + (0.025 + (k.drift && sp > 30 ? 0.09 : 0)) * (1 + 0.10 * NIV) * (drv().niRef || 1) * dt);
-  if (cfg.type !== 'arena' && cfg.type !== 'adv') {
+  if (cfg.type !== 'arena' && cfg.type !== 'adv' && cfg.type !== 'sumo') {
     const drifting = can && !FL.on && Math.abs(slip) > 4.5 && sp > 18;
     if (drifting) { RD.hold = 1.1; RD.comboT += dt; } else { RD.hold -= dt; if (RD.hold <= 0) RD.comboT = 0; }
     RD.mult = 1 + Math.min(4, Math.floor(RD.comboT / 1.8)); RD.maxMult = Math.max(RD.maxMult, RD.mult);
@@ -2079,6 +2150,31 @@ function stepPlayer(dt, racing) {
       }
     }
     y = 0; pitch = 0;
+  } else if (cfg.type === 'sumo') {
+    /* sky arena: ground only where the decks are — drive off the edge and you DROP */
+    const gh = sumo.groundAt(P.pos.x, P.pos.z);
+    const hit = sumo.collide(P.pos, 1.9, (gh === null ? 0 : gh) + FL.alt + Math.min(P.jy, 0));
+    if (hit.hit) {
+      const vo = P.vel.x * hit.nx + P.vel.z * hit.nz;
+      if (vo < 0) {
+        P.vel.x -= hit.nx * vo * 1.45; P.vel.z -= hit.nz * vo * 1.45;
+        P.vel.multiplyScalar(1 - clamp(-vo * 0.014, 0.02, 0.35));
+        shake = Math.max(shake, clamp(-vo / 18, 0.12, 0.95));
+        if (-vo > 9) { puff(car.localToWorld(V3(0, 0.6, 1.8)), P.vel, 1.2); if (-vo > 16) sfxThud(); }
+      }
+    }
+    if (gh !== null) {
+      y = 62 + gh; pitch = sumo.slopeAt(P.pos.x, P.pos.z, P.h);
+      if (P.jy < 0) { P.jy = 0; P.jv = 0; shake = Math.max(shake, 0.4); sfxThud(); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 1.8); toast('BACK ON THE DECK', '#8df'); } /* a flying save */
+    } else if (FL.on) {
+      y = 62; /* airborne over the void: the thrusters hold you — get back or fall */
+      const dd = Math.hypot(P.pos.x, P.pos.z);
+      if (dd > 150) { P.vel.x -= (P.pos.x / dd) * 34 * dt; P.vel.z -= (P.pos.z / dd) * 34 * dt; }
+    } else {
+      /* OFF THE EDGE: gravity takes over — jy counts down below deck level */
+      P.jy += P.jv * dt; P.jv -= 30 * dt;
+      y = 62; pitch = 0;
+    }
   } else {
   /* ---- SECRET SHORTCUT: hug the glowing pads to enter, ride the deck, launch off the ramp ---- */
   scCdT = Math.max(0, scCdT - dt);
@@ -2156,7 +2252,7 @@ function stepPlayer(dt, racing) {
   }
 
   /* mesh */
-  if (P.jy > 0) { P.jy += P.jv * dt; P.jv -= 30 * dt; if (P.jy <= 0) { P.jy = 0; P.jv = 0; shake = Math.max(shake, 0.7); sfxThud(); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 2.2); toast('LANDED', '#8df'); } }
+  if (cfg.type !== 'sumo' && P.jy > 0) { P.jy += P.jv * dt; P.jv -= 30 * dt; if (P.jy <= 0) { P.jy = 0; P.jv = 0; shake = Math.max(shake, 0.7); sfxThud(); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 2.2); toast('LANDED', '#8df'); } }
   car.position.set(P.pos.x, y + 0.04 + FL.alt + P.jy, P.pos.z);
   car.rotation.y = P.h;
   car.rotation.x = pitch - (P.jy > 0 ? clamp(P.jv * 0.011, -0.3, 0.3) : 0) + (FL.on ? clamp((FL.tgt - FL.alt) * 0.014, -0.12, 0.16) - 0.05 : 0);
@@ -2264,9 +2360,10 @@ function updateCamera(dt, boosting, sp) {
 function hud(dt, sp, boosting) {
   if (cfg.type === 'arena') { $('ascore').textContent = Math.floor(A.score).toLocaleString(); $('acombo').textContent = A.comboT > 0 ? `DRIFT  x${A.mult}` : 'DRIFT TO SCORE'; $('atime').textContent = fmt(Math.max(0, A.t)); }
   if (cfg.type === 'adv') advUI(dt);
+  if (cfg.type === 'sumo') { sumoUI(dt); }
   const all = [{ p: P.prog, me: true }, ...AIs.map(a => ({ p: a.prog }))].sort((a, b) => b.p - a.p);
   const rank = all.findIndex(o => o.me) + 1;
-  if (state === 'race' && !P.finished && cfg.type !== 'arena' && cfg.type !== 'adv' && cfg.mode !== 'mp') {
+  if (state === 'race' && !P.finished && cfg.type !== 'arena' && cfg.type !== 'adv' && cfg.type !== 'sumo' && cfg.mode !== 'mp') {
     ovCool -= dt;
     if (rank < lastRank && ovCool <= 0) { toast(`OVERTAKE  +${lastRank - rank}`); P.nitro = Math.min(1, P.nitro + 0.12); ovCool = 0.9; }
     lastRank = rank; P.rank = rank;
@@ -2275,7 +2372,7 @@ function hud(dt, sp, boosting) {
   else $('mpBoard').style.display = 'none';
   if (cfg.mode === 'mp' && cfg.type === 'adv') $('pos').innerHTML = 'FR'; /* free roam: no positions */
   else if (cfg.mode !== 'mp') $('pos').innerHTML = cfg.ai ? `${P.rank}<small>/${cfg.ai + 1}</small>` : 'TT';
-  $('lap').textContent = cfg.type === 'adv' ? 'FREE ROAM' : `LAP ${clamp(P.crosses, 1, TOTAL)}/${TOTAL}`;
+  $('lap').textContent = cfg.type === 'adv' ? 'FREE ROAM' : cfg.type === 'sumo' ? `ROUND ${sumo.S.round}/${sumo.S.rounds}` : `LAP ${clamp(P.crosses, 1, TOTAL)}/${TOTAL}`;
   $('time').textContent = fmt(raceT);
   const kph = Math.round(sp * 3.6); $('spd').textContent = kph;
   $('ring').style.strokeDashoffset = 389.6 * (1 - clamp(kph / (CS.top * 3.6 + 48), 0, 1));
@@ -2300,12 +2397,13 @@ function hud(dt, sp, boosting) {
   if (ph) { const on = itemsOn() && !!PU.item && state === 'race'; ph.style.display = on ? 'block' : 'none'; if (on) ph.textContent = PU_NAMES[PU.item] + (mobile ? '' : ' \u00b7 PRESS E'); }
   if (toastT > 0 && (toastT -= dt) <= 0) $('toast').style.opacity = 0;
   if (cfg.type === 'adv') adv.drawMini(mc, mm.width, mm.height, P.pos, P.h);
+  else if (cfg.type === 'sumo') sumo.drawMini(mc, mm.width, mm.height, P.pos, P.h);
   else {
     mc.clearRect(0, 0, mm.width, mm.height); mc.drawImage(mmBase, 0, 0);
     AIs.forEach(a => { const [x, y] = mxy(a.mesh.position.x, a.mesh.position.z); mc.fillStyle = a.css; mc.beginPath(); mc.arc(x, y, 8, 0, 7); mc.fill(); mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke(); });
     if (cfg.mode === 'mp') for (const o of net.remotes()) { const [rx, ry] = mxy(o.x, o.z); mc.fillStyle = o.uid === mpLeadId ? '#ffe14a' : '#ff7a1a'; mc.beginPath(); mc.arc(rx, ry, 8, 0, 7); mc.fill(); mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke(); }
   }
-  if (cfg.type !== 'adv') { const [px, py] = mxy(P.pos.x, P.pos.z); mc.fillStyle = '#fff'; mc.beginPath(); mc.arc(px, py, 10, 0, 7); mc.fill(); mc.strokeStyle = '#3cf'; mc.lineWidth = 4; mc.stroke(); }
+  if (cfg.type !== 'adv' && cfg.type !== 'sumo') { const [px, py] = mxy(P.pos.x, P.pos.z); mc.fillStyle = '#fff'; mc.beginPath(); mc.arc(px, py, 10, 0, 7); mc.fill(); mc.strokeStyle = '#3cf'; mc.lineWidth = 4; mc.stroke(); }
   if (ghostCar && ghostCar.active && ghostCar.group.visible) { const [gx, gy] = mxy(ghostCar.group.position.x, ghostCar.group.position.z); mc.strokeStyle = '#8df'; mc.lineWidth = 3; mc.beginPath(); mc.arc(gx, gy, 8, 0, 7); mc.stroke(); }
 }
 
@@ -2331,12 +2429,22 @@ function advUI(dt) {
   }
   const pr = $('advPrompt');
   if (pr) {
-    if (S.near && state === 'race' && !P.finished) {
+    const btn = pr.querySelector('button');
+    if (S.sumoNear && !S.near && state === 'race' && !P.finished) {
+      /* the SUMO ARENA gate: pink prompt, ENTER ARENA */
+      pr.style.display = 'flex';
+      const T2 = $('apTitle');
+      if (T2) { T2.textContent = 'SUMO ARENA'; T2.style.color = '#ff4dd8'; T2.style.borderColor = '#ff4dd8'; }
+      const sb = $('apSub'); if (sb) sb.textContent = 'KNOCKOUT BATTLES ON THE SKY DECKS · 3 ROUNDS';
+      const rw = $('apRew'); if (rw) rw.textContent = 'WIN CASH + RESPECT · UNLOCKS THE ARENA MENU';
+      if (btn) btn.dataset.act = 'sumoJoin', btn.textContent = 'ENTER ARENA';
+    } else if (S.near && state === 'race' && !P.finished) {
       pr.style.display = 'flex';
       const t = S.near, T = $('apTitle');
       if (T) { T.textContent = t.name; T.style.color = t.css; T.style.borderColor = t.css; }
       const sb = $('apSub'); if (sb) sb.textContent = t.sub;
       const rw = $('apRew'); if (rw) rw.textContent = 'WIN BONUS ×' + t.mult.toFixed(1) + ' CASH';
+      if (btn) btn.dataset.act = 'advJoin', btn.textContent = 'JOIN RACE';
     } else pr.style.display = 'none';
   }
   const nv = $('advNav');
@@ -2347,6 +2455,82 @@ function advUI(dt) {
       const ar = $('advArr'); if (ar) ar.style.transform = `rotate(${S.navA}rad)`;
     } else nv.style.display = 'none';
   }
+}
+
+/* SUMO ARENA HUD: round timer, alive count, power, punch gauge, live scoreboard, kill feed */
+function sumoUI(dt) {
+  const S = sumo.S;
+  const tEl = $('sumoTime'); if (tEl) tEl.textContent = fmt0(Math.max(0, S.t));
+  const rEl = $('sumoRound'); if (rEl) rEl.textContent = 'ROUND ' + S.round + '/' + S.rounds;
+  const aEl = $('sumoAlive'); if (aEl) aEl.textContent = S.alive + ' LEFT';
+  const pb = $('sumoPow'); if (pb) { pb.firstElementChild.style.width = Math.round(S.pow) + '%'; pb.classList.toggle('low', S.pow < 30); }
+  const pcd = $('sumoPunch'), pf = $('sumoPunchF');
+  if (pcd) {
+    const rdy = S.punchCd <= 0 && !S.freeze && !S.myOut;
+    pcd.classList.toggle('rdy', rdy);
+    pcd.classList.toggle('mega', S.mega > 0);
+    if (pf) pf.style.width = Math.round(clamp(1 - S.punchCd / 2.4, 0, 1) * 100) + '%';
+    const lbl = $('sumoPunchL'); if (lbl) lbl.textContent = S.myOut ? 'OUT' : S.freeze ? 'WAIT' : rdy ? (S.mega ? 'MEGA PUNCH!' : 'PUNCH!') : 'PUNCH ' + S.punchCd.toFixed(1);
+  }
+  const board = $('sumoBoard');
+  if (board) {
+    const rows = [{ name: 'YOU', css: '#7dd7ff', out: S.myOut, stars: S.stars.YOU || 0 },
+      ...sumo.RIV.map(r => ({ name: r.name, css: r.css, out: r.elim, stars: S.stars[r.name] || 0 }))]
+      .sort((a, b) => b.stars - a.stars || (a.name === 'YOU' ? -1 : b.name === 'YOU' ? 1 : 0));
+    board.innerHTML = rows.map(r => `<div class="sb${r.out ? ' out' : ''}${r.name === 'YOU' ? ' me' : ''}"><i style="background:${r.css}"></i><b>${r.name}</b><em>${r.stars ? '\u2605'.repeat(r.stars) : '&middot;'}</em></div>`).join('');
+  }
+  const feedEl = $('sumoFeed');
+  if (feedEl) feedEl.innerHTML = S.feed.map(f => `<div class="sf" style="border-color:${f.col}">${esc(f.txt)}</div>`).join('');
+  const msgEl = $('sumoMsg');
+  if (msgEl) {
+    if (S.msg && S.msg.t > 0) { msgEl.textContent = S.msg.txt; msgEl.style.color = S.msg.col; msgEl.classList.add('show'); }
+    else msgEl.classList.remove('show');
+  }
+}
+/* spectate camera: slow orbit over the remaining fight */
+let sumoCamA = 0;
+function sumoCam(dt) {
+  sumoCamA += dt * 0.22;
+  let cx = 0, cz = 0, n = 0;
+  for (const r of sumo.RIV) if (!r.elim) { cx += r.x; cz += r.z; n++; }
+  if (n) { cx /= n; cz /= n; }
+  const r2 = 44;
+  camera.position.lerp(V3(cx + Math.sin(sumoCamA) * r2, 66 + 20 + Math.sin(sumoCamA * 0.6) * 5, cz + Math.cos(sumoCamA) * r2), 1 - Math.exp(-2.2 * dt));
+  camera.lookAt(cx, 66 + 1.5, cz);
+  camera.fov += (55 - camera.fov) * 0.04; camera.updateProjectionMatrix();
+  shake *= Math.exp(-6 * dt); sky.position.copy(camera.position); followSun();
+}
+/* sumo match over: placement by round stars, cash + RESPECT payout */
+function finishSumo() {
+  P.finished = true; setState('finished');
+  if (FL.on) FL.land = true;
+  const S = sumo.S, tier = S.tier, A2 = SUMO_ARENAS[tier];
+  const rows = [{ name: 'YOU', me: true, stars: S.stars.YOU || 0 }, ...sumo.RIV.map(r => ({ name: r.name, stars: S.stars[r.name] || 0 }))].sort((a, b) => b.stars - a.stars || (a.me ? -1 : b.me ? 1 : 0));
+  const place = rows.findIndex(r => r.me) + 1;
+  const base = [9000, 4500, 2500, 1500, 1000][Math.min(place - 1, 4)];
+  let cash = Math.round(base * A2.pay);
+  const earnRows = [place === 1 ? ['MATCH WON \u00b7 ' + A2.name, cash] : ['Sumo reward \u00b7 ' + A2.name, cash]];
+  if (S.myKO) { const k = S.myKO * 400; cash += k; earnRows.push([`Knockouts \u00d7${S.myKO}`, k]); }
+  economy.add(cash);
+  economy.stats.races++; if (place === 1) economy.stats.wins++;
+  economy.saveStats();
+  let rep = place === 1 ? 35 + tier * 12 : 8 + S.myKO * 3;
+  addRep(rep);
+  let misDone = [];
+  if (place === 1) misDone = missionEvent('sumowin', 1);
+  if (S.myKO >= 3) misDone = misDone.concat(missionEvent('ring', S.myKO));
+  misDone = misDone.concat(missionEvent('earn', cash));
+  $('fh').textContent = place === 1 ? 'KING OF THE ARENA!' : `${ord(place)} OF ${rows.length}`;
+  $('fp').textContent = `${A2.name} \u00b7 ${S.rounds} rounds \u00b7 ${S.myKO} knockout${S.myKO === 1 ? '' : 's'}`;
+  $('fres').innerHTML = rows.map((r, i) => `<div class="rr${r.me ? ' me' : ''}"><b>${i + 1}</b><span>${r.name}</span><em>${r.stars ? '\u2605'.repeat(r.stars) : '&middot;'}</em></div>`).join('');
+  $('fearn').innerHTML = '<div class="lbl">EARNINGS</div>' + earnRows.map(([n, v]) => `<div class="rr"><span>${n}</span><em style="color:#7dff8a">+$${v.toLocaleString()}</em></div>`).join('') + `<div class="rr me"><span>RESPECT EARNED</span><em style="color:#ff9a2f">+${rep}</em></div><div class="rr me"><span>TOTAL CASH</span><em style="color:#7dff8a">$${economy.money.toLocaleString()}</em></div>`;
+  $('fmis').innerHTML = misDone.length ? '<div class="lbl">MISSIONS COMPLETE</div>' + misDone.map(m => `<div class="rr me"><span>\u2b50 ${m.name}</span><em style="color:#e8b800">+$${m.reward.toLocaleString()}</em></div>`).join('') : '';
+  $('fNext').dataset.act = 'next'; $('fNext').textContent = 'NEXT RACE';
+  if (cfg.fromAdv) { $('fNext').textContent = 'BACK TO ADVENTURE'; $('fNext').dataset.act = 'advBack'; $('fNext').style.display = ''; }
+  else $('fNext').style.display = 'none';
+  $('fRetry').textContent = 'REMATCH'; $('fRetry').style.display = '';
+  if (place === 1) { confetti(110); sfxMission(); } else sfxCoin();
+  setTimeout(() => { if (state === 'finished') show('finish', true); }, 1200);
 }
 
 /* multiplayer: live "who is 1st" board + rank + lead-change toast */
@@ -2853,10 +3037,21 @@ function frameBody(now) {
   const out = stepPlayer(dt, racing);
   stepAI(dt, racing);
   if (cfg.type === 'adv' && state === 'race' && !P.finished) { adv.tick(dt, { slip: out.slip, sp: out.sp, boosting: out.boosting, alt: FL.alt + P.jy, h: P.h }); stepPvP(dt); }
-  if (state === 'race' && !P.finished && cfg.type !== 'arena' && cfg.type !== 'adv') GR.tick(raceT, car.position, P.h);
+  if (cfg.type === 'sumo' && state === 'race') {
+    sumo.tick(dt, { sp: out.sp, boosting: out.boosting, h: P.h });
+    if (sumo.S.round !== sumoLastRound && !sumo.S.matchOver) { /* next round: back to the grid */
+      sumoLastRound = sumo.S.round;
+      const sp2 = sumo.S.spawn;
+      P.pos.set(sp2.x, 0, sp2.z); P.h = sp2.h; P.vel.set(0, 0, 0); P.jy = 0; P.jv = 0; P.spin = 0; camYaw = P.h;
+      FL.on = false; FL.land = false; FL.alt = 0; document.body.classList.remove('flying');
+      camera.position.set(sp2.x - Math.sin(P.h) * 9, sp2.y + 4 + 62, sp2.z - Math.cos(P.h) * 9);
+    }
+    if (sumo.S.matchOver && !P.finished) finishSumo();
+  }
+  if (state === 'race' && !P.finished && cfg.type !== 'arena' && cfg.type !== 'adv' && cfg.type !== 'sumo') GR.tick(raceT, car.position, P.h);
   if (ghostCar && ghostCar.active) ghostCar.update(scene, raceT);
   if (state === 'race' && cfg.type === 'arena') { A.t -= dt; if (A.t <= 0 && !P.finished) { A.t = 0; finishRace(); } }
-  if (state === 'race' && cfg.type !== 'arena' && cfg.type !== 'adv') {
+  if (state === 'race' && cfg.type !== 'arena' && cfg.type !== 'adv' && cfg.type !== 'sumo') {
     if (P.crosses !== prevCrosses) {
       if (P.crosses > prevCrosses) { if (P.crosses >= 2) { const lt = raceT - lapStart; bestLap = Math.min(bestLap, lt); if (P.crosses <= TOTAL) toast(`LAP ${P.crosses - 1}   ${fmt(lt)}`, '#ffffff'); } lapStart = raceT; }
       prevCrosses = P.crosses;
@@ -2891,7 +3086,8 @@ function frameBody(now) {
     if (camera.aspect < 1) look.y -= 1.9; /* portrait: car sits in the top half, above the menu sheet */
     camera.lookAt(look);
     camera.fov += (45 - camera.fov) * 0.08; camera.updateProjectionMatrix(); sky.position.copy(camera.position); followSun();
-  } else updateCamera(dt, out.boosting, out.sp);
+  } else if (cfg.type === 'sumo' && sumo.S.spectate && state === 'race') sumoCam(dt);
+  else updateCamera(dt, out.boosting, out.sp);
   updateStreaks(dt, state === 'menu' ? 0 : out.sp, out.boosting);
   hud(dt, out.sp, out.boosting); audioUpdate(state === 'menu' ? -1 : out.sp, out.boosting, FL.on);
   composer.render();
@@ -2966,6 +3162,6 @@ rebuildCar(economy.selected());
 window.addEventListener('ksr-money', updateMoneyUI);
 updateMoneyUI();
 syncSegs(); applyQuality(); applyCtrl(false); gateBoot();
-if (TURBO || location.search.includes('dbg')) { window.__DBG = { get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car, adv, act, startRace, fireWeapon, cycleWeapon, wpnReset, restockAI, get AMMO() { return AMMO; }, get wsel() { return wsel; }, economy, store, touch, get SC() { return SC; }, get curTrack() { return curTrack; }, get state() { return state; }, get cfgT() { return cfg.type; }, forceRace() { setState('race'); goT = 0.9; $('count').style.display = 'none'; } }; window.__SCDBG = { checks: 0 }; } /* dev test hook */
+if (TURBO || location.search.includes('dbg')) { window.__DBG = { get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car, adv, sumo, SUMO_ARENAS, act, startRace, fireWeapon, cycleWeapon, wpnReset, restockAI, get AMMO() { return AMMO; }, get wsel() { return wsel; }, economy, store, touch, get SC() { return SC; }, get curTrack() { return curTrack; }, get state() { return state; }, get cfgT() { return cfg.type; }, forceRace() { setState('race'); goT = 0.9; $('count').style.display = 'none'; } }; window.__SCDBG = { checks: 0 }; } /* dev test hook */
 window.__KSR_OK = true; /* boot failsafe (index.html) stands down: the engine is alive */
 requestAnimationFrame(frame);
