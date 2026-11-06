@@ -1715,6 +1715,7 @@ function resetWorld(c) {
     sumoLastRound = sumo.S.round;
     g = { p: V3(sp.x, sp.y, sp.z) }; P.pos.set(sp.x, 0, sp.z); P.h = sp.h; P.idx = 0;
     car.visible = true;
+    const carChip = $('sumoCar'); if (carChip) carChip.textContent = getCar(economy.selected()).name; /* "VOLK MK1" style: what you came in */
   }
   else { const slot = c.ai + (c.netSlot || 0); g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
   P.vel.set(0, 0, 0); P.jy = 0; P.jv = 0; P.spin = 0; P.crosses = 0; P.nitro = 1; P.fuel = flyCap(); P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0; P.scOn = false; P.scI = 0; scCdT = 0;
@@ -2491,13 +2492,14 @@ function sumoUI(dt) {
   const rEl = $('sumoRound'); if (rEl) rEl.textContent = 'ROUND ' + S.round + '/' + S.rounds;
   const aEl = $('sumoAlive'); if (aEl) aEl.textContent = S.alive + ' LEFT';
   const pb = $('sumoPow'); if (pb) { pb.firstElementChild.style.width = Math.round(S.pow) + '%'; pb.classList.toggle('low', S.pow < 30); }
+  const hitOv = $('sumoHit'); if (hitOv) hitOv.style.opacity = (S.juice * 0.55).toFixed(3); /* gold flash while YOUR hits land */
   const pcd = $('sumoPunch'), pf = $('sumoPunchF');
   if (pcd) {
     const rdy = S.punchCd <= 0 && !S.freeze && !S.myOut;
     pcd.classList.toggle('rdy', rdy);
     pcd.classList.toggle('mega', S.mega > 0);
     if (pf) pf.style.width = Math.round(clamp(1 - S.punchCd / 2.4, 0, 1) * 100) + '%';
-    const lbl = $('sumoPunchL'); if (lbl) lbl.textContent = S.myOut ? 'OUT' : S.freeze ? 'WAIT' : rdy ? (S.mega ? 'MEGA PUNCH!' : 'PUNCH!') : 'PUNCH ' + S.punchCd.toFixed(1);
+    const lbl = $('sumoPunchL'); if (lbl) lbl.textContent = S.myOut ? 'OUT · ' + fmt0(Math.max(0, S.t)) : S.freeze ? 'GET READY' : rdy ? (S.mega ? 'MEGA PUNCH!' : 'PUNCH!') : 'PUNCH ' + S.punchCd.toFixed(1);
   }
   const board = $('sumoBoard');
   if (board) {

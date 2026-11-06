@@ -10,11 +10,14 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const TAU = Math.PI * 2;
 
-/* the three permanent arenas — the last two unlock with RESPECT levels */
+/* the three permanent arenas — the last two unlock with RESPECT levels.
+   `floor` is the bold deck colour: each tier looks like a DIFFERENT venue,
+   bright and saturated so skid marks, oil and cars all read instantly (the
+   reference sumo footage is a bright orange slab in full sun — never a void). */
 export const SUMO_ARENAS = [
-  { name: 'DOCKYARD RUMBLE', css: '#ff9a2f', rep: 0, t: 75, pay: 1.0, ai: [0.72, 0.78, 0.84, 0.88, 0.92], desc: 'WAREHOUSE DECK · CENTRAL PIT' },
-  { name: 'SKY DECK SHOWDOWN', css: '#2de2ff', rep: 1, t: 80, pay: 1.7, ai: [0.78, 0.84, 0.9, 0.95, 0.98], desc: 'TWIN ISLANDS · NARROW BRIDGES' },
-  { name: 'LEGEND SUMMIT', css: '#ff4dd8', rep: 3, t: 85, pay: 2.6, ai: [0.84, 0.9, 0.96, 1.0, 1.02], desc: 'THREE ISLANDS · ELITE CREW' }
+  { name: 'DOCKYARD RUMBLE', css: '#ff9a2f', floor: 0xe06428, rep: 0, t: 75, pay: 1.0, ai: [0.72, 0.78, 0.84, 0.88, 0.92], desc: 'WAREHOUSE DECK · CENTRAL PIT' },
+  { name: 'SKY DECK SHOWDOWN', css: '#2de2ff', floor: 0x18b0a8, rep: 1, t: 80, pay: 1.7, ai: [0.78, 0.84, 0.9, 0.95, 0.98], desc: 'TWIN ISLANDS · NARROW BRIDGES' },
+  { name: 'LEGEND SUMMIT', css: '#ff4dd8', floor: 0xd8479e, rep: 3, t: 85, pay: 2.6, ai: [0.84, 0.9, 0.96, 1.0, 1.02], desc: 'THREE ISLANDS · ELITE CREW' }
 ];
 const ROUNDS = 3;
 const NAMES = ['VEX', 'BRUTE', 'TANK', 'SLICK', 'HORN'];
@@ -38,7 +41,8 @@ export function createSumo(canvasTex, ctx) {
     tier: 0, rivals: 3, rounds: ROUNDS, round: 1, t: 75, phase: 'intro', phaseT: 2.2,
     alive: 4, freeze: true, myOut: false, spectate: false, matchOver: false,
     pow: 100, hitFlash: 0, punchCd: 0, mega: 0, shield: 0, myKO: 0, myRing: 0,
-    stars: {}, feed: [], msg: null, itemT: 6, env: 'day'
+    stars: {}, feed: [], msg: null, itemT: 6, env: 'day',
+    juice: 0, lastHitT: -99 /* juice = gold flash when YOU land a hit; lastHitT = time of the last hit you took */
   };
   let decks = [], ramps = [], walls = [], spawns = [];
   let tG = 0, roundWins = 0, myStars = 0, stripePulse = null, floodlights = [];
@@ -56,24 +60,36 @@ export function createSumo(canvasTex, ctx) {
 
   /* ---------- static sky dressing (built once) ---------- */
   {
-    /* clouds drifting UNDER the arena — you are fighting on top of the sky */
+    /* DAYLIGHT cloud sea UNDER the arena — you are fighting on top of the sky.
+       The old version had a near-black plane right under the deck: on camera the
+       whole venue read as a black void. Now: fat white clouds close below + a
+       horizon cloud bank + a pale haze floor far down. Bright, like the reference. */
     const cg = new THREE.PlaneGeometry(1, 1);
-    const cm = new THREE.MeshBasicMaterial({ map: glowTex, color: 0xdfe8ff, transparent: true, opacity: 0.5, depthWrite: false, fog: false });
-    const clouds = new THREE.InstancedMesh(cg, cm, 26);
-    for (let i = 0; i < 26; i++) {
-      dummy.position.set(rand(-700, 700), rand(-46, -20), rand(-700, 700));
+    const cm = new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, fog: false });
+    const clouds = new THREE.InstancedMesh(cg, cm, 34);
+    for (let i = 0; i < 34; i++) {
+      dummy.position.set(rand(-800, 800), rand(-58, -26), rand(-800, 800));
       dummy.rotation.set(-Math.PI / 2, 0, rand(0, TAU));
-      dummy.scale.set(rand(90, 240), rand(60, 160), 1); dummy.updateMatrix();
+      dummy.scale.set(rand(120, 300), rand(80, 200), 1); dummy.updateMatrix();
       clouds.setMatrixAt(i, dummy.matrix);
     }
     dummy.rotation.set(0, 0, 0); group.add(clouds);
-    const under = new THREE.Mesh(new THREE.PlaneGeometry(4200, 4200).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x0d1420 }));
-    under.position.y = -6; group.add(under);
+    const bank = new THREE.InstancedMesh(cg, cm, 16);
+    for (let i = 0; i < 16; i++) {
+      const a = i / 16 * TAU, r = rand(420, 760);
+      dummy.position.set(Math.cos(a) * r, rand(-36, -18), Math.sin(a) * r);
+      dummy.rotation.set(-Math.PI / 2, 0, rand(0, TAU));
+      dummy.scale.set(rand(260, 520), rand(140, 260), 1); dummy.updateMatrix();
+      bank.setMatrixAt(i, dummy.matrix);
+    }
+    dummy.scale.set(1, 1, 1); group.add(bank);
+    const under = new THREE.Mesh(new THREE.PlaneGeometry(4200, 4200).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xa8c4e2 }));
+    under.position.y = -90; group.add(under);
   }
   const skyRing = new THREE.Group(); group.add(skyRing);
   {
     /* far skyline ring, same trick as the free-roam city */
-    const sky = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x18202e, roughness: 1 }), 30);
+    const sky = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x33445e, roughness: 1 }), 30);
     for (let i = 0; i < 30; i++) {
       const a = i / 30 * TAU, r = rand(950, 1500), h = rand(50, 130), w = rand(40, 100);
       dummy.position.set(Math.cos(a) * r, h / 2 - 100, Math.sin(a) * r); dummy.rotation.set(0, rand(0, TAU), 0); dummy.scale.set(w, h, rand(40, 90)); dummy.updateMatrix();
@@ -147,6 +163,22 @@ export function createSumo(canvasTex, ctx) {
     }
   }
 
+  /* ---------- floor scuff texture: tyre streaks baked into every deck (the reference
+     arena is never flat — rubber, scuffs and patches make it a PLACE, not a plane) ---------- */
+  const scuffTex = canvasTex(256, 256, g => {
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 256, 256);
+    g.lineCap = 'round';
+    for (let i = 0; i < 26; i++) {
+      g.strokeStyle = `rgba(30,18,10,${rand(0.05, 0.16).toFixed(3)})`;
+      g.lineWidth = rand(5, 14);
+      const x = rand(0, 256), y = rand(0, 256), a = rand(0, TAU), l = rand(30, 110);
+      g.beginPath(); g.moveTo(x, y);
+      g.quadraticCurveTo(x + Math.cos(a) * l * 0.5 + rand(-20, 20), y + Math.sin(a) * l * 0.5 + rand(-20, 20), x + Math.cos(a) * l, y + Math.sin(a) * l);
+      g.stroke();
+    }
+    for (let i = 0; i < 220; i++) { g.fillStyle = `rgba(0,0,0,${rand(0.02, 0.07).toFixed(3)})`; g.fillRect(rand(0, 256), rand(0, 256), rand(2, 7), rand(2, 7)); }
+  });
+
   /* ---------- build / rebuild the arena meshes ---------- */
   let builtTier = -1;
   const edgeCols = [0xff9a2f, 0x35d16a, 0x2de2ff];
@@ -157,9 +189,14 @@ export function createSumo(canvasTex, ctx) {
     /* clear the old dynamic root */
     if (arenaRoot) { group.remove(arenaRoot); arenaRoot.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
     arenaRoot = new THREE.Group(); group.add(arenaRoot);
-    const deckMat = new THREE.MeshStandardMaterial({ color: 0x22262c, roughness: 0.9, metalness: 0.05 });
+    const deckMat = new THREE.MeshStandardMaterial({ color: 0x1d2126, roughness: 0.9, metalness: 0.05 });
     const topMat = new THREE.MeshStandardMaterial({ color: 0x2c3138, roughness: 0.85, metalness: 0.05 });
-    const geos = [], edgeGeos = [], rampGeos = [], wallGeos = [];
+    /* the BOLD tier floor sits on top of the dark structure: bright slab where you drive,
+       dark sides below so the platform still reads as a heavy man-made thing in the sky */
+    const FLOOR = SUMO_ARENAS[tier].floor || 0xe06428;
+    const floorMat = new THREE.MeshStandardMaterial({ color: FLOOR, roughness: 0.82, metalness: 0.06, map: scuffTex });
+    const pitMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(FLOOR).multiplyScalar(0.4), roughness: 0.92, metalness: 0.05, map: scuffTex });
+    const geos = [], floorGeos = [], pitGeos = [], edgeGeos = [], rampGeos = [], wallGeos = [];
     for (const d of decks) {
       /* a deck with a hole (the pit) is drawn as four frame boxes so the hole is REAL */
       const rects = d.hx0 !== undefined ? [
@@ -169,8 +206,11 @@ export function createSumo(canvasTex, ctx) {
       for (const [rx0, rx1, rz0, rz1] of rects) {
         const w = rx1 - rx0, dp = rz1 - rz0;
         if (w <= 0.4 || dp <= 0.4) continue;
-        const g = new THREE.BoxGeometry(w, 10, dp); g.translate((rx0 + rx1) / 2, d.y - 5, (rz0 + rz1) / 2);
+        const g = new THREE.BoxGeometry(w, 10, dp); g.translate((rx0 + rx1) / 2, d.y - 5.3, (rz0 + rz1) / 2);
         geos.push(g);
+        /* bright driving slab, top face flush with groundAt() so wheels sit ON it */
+        const fg = new THREE.BoxGeometry(w - 0.5, 0.3, dp - 0.5); fg.translate((rx0 + rx1) / 2, d.y - 0.15, (rz0 + rz1) / 2);
+        (d.y < -1 ? pitGeos : floorGeos).push(fg);
         const t = 0.55, ec = edgeGeos;
         ec.push(new THREE.BoxGeometry(w, t, t).translate((rx0 + rx1) / 2, d.y + 0.1, rz0 + t / 2));
         ec.push(new THREE.BoxGeometry(w, t, t).translate((rx0 + rx1) / 2, d.y + 0.1, rz1 - t / 2));
@@ -194,7 +234,9 @@ export function createSumo(canvasTex, ctx) {
     }
     const deckMesh = new THREE.Mesh(mergeAll(geos), deckMat);
     deckMesh.receiveShadow = true; arenaRoot.add(deckMesh);
-    if (rampGeos.length) { const rm = new THREE.Mesh(mergeAll(rampGeos), topMat); rm.receiveShadow = true; arenaRoot.add(rm); }
+    if (floorGeos.length) { const fm = new THREE.Mesh(mergeAll(floorGeos), floorMat); fm.receiveShadow = true; arenaRoot.add(fm); }
+    if (pitGeos.length) { const pm = new THREE.Mesh(mergeAll(pitGeos), pitMat); pm.receiveShadow = true; arenaRoot.add(pm); }
+    if (rampGeos.length) { const rm = new THREE.Mesh(mergeAll(rampGeos), floorMat); rm.receiveShadow = true; arenaRoot.add(rm); }
     if (wallGeos.length) { const wm = new THREE.Mesh(mergeAll(wallGeos), new THREE.MeshStandardMaterial({ color: 0x3a4150, roughness: 0.8, metalness: 0.15 })); wm.castShadow = wm.receiveShadow = true; arenaRoot.add(wm); }
     /* rim stripes: bright additive — the arena reads instantly from any angle */
     const stripe = new THREE.Mesh(mergeAll(edgeGeos), new THREE.MeshBasicMaterial({ color: edgeCols[tier % 3], toneMapped: false, transparent: true }));
@@ -373,6 +415,25 @@ export function createSumo(canvasTex, ctx) {
   }
   function stepRings(dt) { for (const r of rings) { if (r.t <= 0) continue; r.t -= dt * 2.4; r.m.scale.setScalar(1 + (1 - r.t) * 10); r.m.material.opacity = Math.max(0, r.t) * 0.85; if (r.t <= 0) r.m.visible = false; } }
 
+  /* ---------- floating PUNCH tag over your car (the reference game rides "PUNCH 0.8"
+     above the bumper — you read your cooldown without hunting the HUD) ---------- */
+  const tagCv = document.createElement('canvas'); tagCv.width = 224; tagCv.height = 56;
+  const tagG = tagCv.getContext('2d');
+  const tagTex = new THREE.CanvasTexture(tagCv);
+  const tagSpr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tagTex, transparent: true, depthWrite: false, fog: false, toneMapped: false }));
+  tagSpr.scale.set(7.4, 1.85, 1); tagSpr.visible = false; group.add(tagSpr);
+  let tagTxt = '';
+  function drawTag(txt, col) {
+    tagG.clearRect(0, 0, 224, 56);
+    tagG.font = '900 30px Segoe UI,Arial'; tagG.textAlign = 'center'; tagG.textBaseline = 'middle';
+    const w = Math.min(220, Math.ceil(tagG.measureText(txt).width) + 36), x0 = (224 - w) / 2;
+    tagG.fillStyle = 'rgba(7,11,20,.85)';
+    if (tagG.roundRect) { tagG.beginPath(); tagG.roundRect(x0, 6, w, 44, 11); tagG.fill(); tagG.strokeStyle = col; tagG.lineWidth = 3; tagG.stroke(); }
+    else tagG.fillRect(x0, 6, w, 44);
+    tagG.fillStyle = col; tagG.fillText(txt, 112, 30);
+    tagTex.needsUpdate = true;
+  }
+
   /* ---------- rivals ---------- */
   const RIV = [];
   function buildRivals(n, tier) {
@@ -388,7 +449,8 @@ export function createSumo(canvasTex, ctx) {
         mesh, name: NAMES[i], css: '#' + RCOL[i % 5].toString(16).padStart(6, '0'),
         x: 0, z: 0, y: 0, h: 0, speed: 0, vy: 0, vx: 0, vz: 0, fall: false, elim: false, how: '',
         hp: 100, dented: false, punchCd: rand(2, 4), boostCd: rand(2, 6), boostT: 0, stuck: 0, ramCd: 0,
-        skill: (SUMO_ARENAS[tier].ai[i] || 0.9), smokeT: 0, target: null, lastHitBy: ''
+        skill: (SUMO_ARENAS[tier].ai[i] || 0.9), smokeT: 0, target: null, lastHitBy: '',
+        grudge: 0, grudgeA: null /* grudge: seconds left hunting whoever hit them last — makes fights SPIRAL */
       });
     }
   }
@@ -409,7 +471,9 @@ export function createSumo(canvasTex, ctx) {
     (mesh.userData.origCols || []).forEach(({ m, arr }) => { m.geometry.attributes.color.array.set(arr); m.geometry.attributes.color.needsUpdate = true; });
   }
 
-  /* ---------- feed / messages ---------- */
+  /* ---------- feed / messages ----------
+     Attribution rule: a KO is ALWAYS credited to a NAME. "SOMEONE" reads like a bug —
+     if no car touched the victim, blame the arena itself instead. */
   function feed(txt, col) {
     S.feed.unshift({ txt, col, t: 4.5 });
     if (S.feed.length > 4) S.feed.pop();
@@ -420,6 +484,8 @@ export function createSumo(canvasTex, ctx) {
   function startRound(round) {
     S.round = round; S.phase = 'intro'; S.phaseT = round === 1 ? 2.4 : 2.2; S.freeze = true;
     S.t = SUMO_ARENAS[S.tier].t; S.itemT = rand(6, 9);
+    S.feed.length = 0; /* stale "VEX WINS THE ROUND" must not bleed into the next ROUND — FIGHT */
+    S.lastHitBy = ''; S.lastHitT = -99; S.juice = 0;
     clearItems();
     const sp = spawns;
     /* player spawn */
@@ -457,9 +523,11 @@ export function createSumo(canvasTex, ctx) {
     S.alive--;
     if (how === 'ring') { /* RING OUT: explosion + heavy shake at the lip they went over — the KO must FEEL heavy */
       ctx.beep(220, 0.3, 'sawtooth', 0.1); ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 9); ctx.shake(0.45); ringFX(r.x, r.y, r.z, 0xff5c5c);
-      if (byName === 'YOU') { S.myKO++; ctx.cash(600); feed('YOU PUSHED OFF ' + r.name, '#7dff8a'); } else feed(`${byName || 'SOMEONE'} PUSHED OFF ${r.name}`, r.css);
+      if (byName === 'YOU') { S.myKO++; S.juice = 1; ctx.cash(600); feed('YOU PUSHED ' + r.name + ' OFF', '#7dff8a'); }
+      else if (byName) feed(byName + ' PUSHED ' + r.name + ' OFF', r.css);
+      else feed(r.name + ' DROPPED OFF THE EDGE', r.css);
     }
-    else { ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 10); ctx.shake(0.4); if (byName === 'YOU') { S.myKO++; ctx.cash(500); feed('YOU WRECKED ' + r.name, '#7dff8a'); } else feed(`${byName || 'SOMEONE'} WRECKED ${r.name}`, r.css); }
+    else { ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 10); ctx.shake(0.4); if (byName === 'YOU') { S.myKO++; S.juice = 1; ctx.cash(500); feed('YOU WRECKED ' + r.name, '#7dff8a'); } else if (byName) feed(byName + ' WRECKED ' + r.name, r.css); else feed(r.name + ' IS WRECKED', r.css); }
     const left = RIV.filter(q => !q.elim);
     if (!left.length) { /* every rival is gone: the round is yours if you are still rolling */
       endRound(S.myOut ? 'NOBODY' : 'YOU', how);
@@ -469,7 +537,7 @@ export function createSumo(canvasTex, ctx) {
   function elimPlayer(how, byName) {
     if (S.myOut || S.phase !== 'fight') return;
     S.myOut = true; S.spectate = true; S.alive--;
-    if (how === 'ring') { S.myRing++; feed('YOU FELL OFF!', '#ff6b6b'); msg('RING OUT!', '#ff6b6b', 2.4); ctx.beep(180, 0.4, 'sawtooth', 0.12); }
+    if (how === 'ring') { S.myRing++; if (S.lastHitBy) feed(S.lastHitBy + ' SENT YOU OFF!', '#ff6b6b'); else feed('YOU FELL OFF!', '#ff6b6b'); msg('RING OUT!', '#ff6b6b', 2.4); ctx.beep(180, 0.4, 'sawtooth', 0.12); }
     else { feed(byName ? `${byName} WRECKED YOU` : 'YOU ARE WRECKED', '#ff6b6b'); msg('WRECKED!', '#ff6b6b', 2.4); ctx.boom(ctx.pPos(), 12); }
     ctx.shake(1);
     const left = RIV.filter(q => !q.elim);
@@ -497,7 +565,7 @@ export function createSumo(canvasTex, ctx) {
       const pw = (mega ? 30 : 21) * (0.8 + Math.min(1, 9 / d) * 0.4);
       r.vx = (r.vx || 0) + (dx / d) * pw; r.vz = (r.vz || 0) + (dz / d) * pw;
       r.vy = 4.5; r.airK = 0.4; r.stunT = 1.1; /* flung: the driver fights the wheel, badly */
-      r.lastHitBy = 'YOU';
+      r.lastHitBy = 'YOU'; r.grudge = 4; r.grudgeA = 'YOU'; /* hit a hornet: it hunts YOU now */
       r.h += rand(-0.5, 0.5);
       r.hp -= mega ? 30 : 14; r.smokeT = 1;
       hits++;
@@ -505,7 +573,7 @@ export function createSumo(canvasTex, ctx) {
       if (r.hp <= 0) { elimRival(r, 'wreck', 'YOU'); }
       else { dent(r.mesh); r.dented = true; feed('PUNCHED ' + r.name, '#ffffff'); }
     }
-    if (hits) ctx.puff(Pp, V3L(0, 1, 0), 1.6);
+    if (hits) { S.juice = 1; ctx.puff(Pp, V3L(0, 1, 0), 1.6); ctx.beep(1500, 0.05, 'square', 0.05); } /* top layer: a bright snap over the bass thud */
     else ctx.beep(210, 0.05, 'sine', 0.05); /* whiff: a soft air-cut so a miss never feels like a bug */
     return hits;
   }
@@ -514,7 +582,7 @@ export function createSumo(canvasTex, ctx) {
   /* ---------- player damage (rams & punches from rivals) ---------- */
   function hitPower(d, label) {
     if (S.shield > 0 || S.myOut || S.phase !== 'fight') return;
-    S.pow = clamp(S.pow - d, 0, 100); S.hitFlash = 1;
+    S.pow = clamp(S.pow - d, 0, 100); S.hitFlash = 1; S.lastHitT = tG;
     if (label) ctx.toast(label, '#ff6b6b');
     if (S.pow <= 0) elimPlayer('wreck', S.lastHitBy);
   }
@@ -542,6 +610,8 @@ export function createSumo(canvasTex, ctx) {
     S.hitFlash = Math.max(0, S.hitFlash - dt * 1.6);
     S.punchCd = Math.max(0, S.punchCd - dt);
     S.shield = Math.max(0, S.shield - dt);
+    S.juice = Math.max(0, S.juice - dt * 2.2);
+    if (S.lastHitBy && tG - S.lastHitT > 6) S.lastHitBy = ''; /* a hit 6s ago gets no credit for a fall now */
     if (S.msg) { S.msg.t -= dt; if (S.msg.t <= 0) S.msg = null; }
     S.feed.forEach(f => { f.t -= dt; });
     while (S.feed.length && S.feed[S.feed.length - 1].t <= 0) S.feed.pop();
@@ -595,6 +665,15 @@ export function createSumo(canvasTex, ctx) {
     if (!S.myOut && S.phase === 'fight' && ctx.pJy() < -30 && groundAt(Pp.x, Pp.z) === null) elimPlayer('ring');
     if (S.myOut && ctx.pJy() < -46 && !S.spectateCam) S.spectateCam = true;
 
+    /* floating punch tag: MEGA / countdown / READY — gold when it is time to swing */
+    if (S.phase === 'fight' && !S.myOut) {
+      const t2 = S.mega > 0 ? 'MEGA PUNCH!' : S.punchCd > 0.05 ? 'PUNCH ' + S.punchCd.toFixed(1) : 'PUNCH!';
+      const c2 = S.mega > 0 ? '#ff9a2f' : S.punchCd > 0.05 ? '#ffffff' : '#ffd166';
+      if (t2 !== tagTxt) { tagTxt = t2; drawTag(t2, c2); }
+      tagSpr.position.set(Pp.x, (ctx.pAlt() || 0) + 4.8, Pp.z);
+      tagSpr.visible = true;
+    } else if (tagSpr.visible) { tagSpr.visible = false; tagTxt = ''; }
+
     /* rivals */
     let aliveN = 0;
     for (const r of RIV) {
@@ -613,7 +692,7 @@ export function createSumo(canvasTex, ctx) {
       const gy = groundAt(r.x, r.z);
       if (gy === null) { /* over the edge: gravity takes over */
         r.fall = true; r.vy = 0; r.vx = Math.sin(r.h) * r.speed; r.vz = Math.cos(r.h) * r.speed;
-        elimRival(r, 'ring', r.lastHitBy || 'SOMEONE');
+        elimRival(r, 'ring', r.lastHitBy || ''); /* empty = nobody touched them: elimRival blames the edge, never "SOMEONE" */
         continue;
       }
       /* knockback velocity (from punches/rams) decays into the drive.
@@ -627,15 +706,24 @@ export function createSumo(canvasTex, ctx) {
       }
       r.stunT = Math.max(0, (r.stunT || 0) - dt);
       r.shieldT = Math.max(0, (r.shieldT || 0) - dt);
+      r.grudge = Math.max(0, r.grudge - dt);
       const flung = Math.abs(r.vx) + Math.abs(r.vz) > 5 || r.stunT > 0;
-      /* target: nearest alive car, player slightly preferred */
+      /* target: grudges first (hit a hornet, it hunts YOU — or the rival that punched it),
+         then nearest alive car with the player slightly preferred */
       let tx, tz, td = 1e9, tgtIsPlayer = false;
       const dP = Math.hypot(Pp.x - r.x, Pp.z - r.z);
-      if (!S.myOut && dP < 999) { td = dP * 0.85; tx = Pp.x; tz = Pp.z; tgtIsPlayer = true; }
-      for (const q of RIV) {
-        if (q === r || q.elim) continue;
-        const d = Math.hypot(q.x - r.x, q.z - r.z);
-        if (d < td) { td = d; tx = q.x; tz = q.z; tgtIsPlayer = false; }
+      if (r.grudge > 0 && r.grudgeA === 'YOU' && !S.myOut) { td = dP * 0.45; tx = Pp.x; tz = Pp.z; tgtIsPlayer = true; }
+      else if (r.grudge > 0 && r.grudgeA && r.grudgeA !== 'YOU') {
+        const gg = RIV.find(q => q.name === r.grudgeA && !q.elim);
+        if (gg) { const dg = Math.hypot(gg.x - r.x, gg.z - r.z); td = dg * 0.45; tx = gg.x; tz = gg.z; tgtIsPlayer = false; }
+      }
+      if (td === 1e9) {
+        if (!S.myOut && dP < 999) { td = dP * 0.85; tx = Pp.x; tz = Pp.z; tgtIsPlayer = true; }
+        for (const q of RIV) {
+          if (q === r || q.elim) continue;
+          const d = Math.hypot(q.x - r.x, q.z - r.z);
+          if (d < td) { td = d; tx = q.x; tz = q.z; tgtIsPlayer = false; }
+        }
       }
       if (tx === undefined) { tx = 0; tz = 0; tgtIsPlayer = false; }
       const want0 = Math.atan2(tx - r.x, tz - r.z);
@@ -656,7 +744,7 @@ export function createSumo(canvasTex, ctx) {
       const tgt = td < 26 ? top * 0.75 : top;
       r.speed += (tgt - r.speed) * Math.min(1, dt * 1.5);
       r.boostT = Math.max(0, r.boostT - dt); r.boostCd -= dt;
-      if (r.boostCd <= 0 && td > 34 && !unsafe) { r.boostT = 1.3; r.boostCd = rand(3.5, 7); }
+      if (r.boostCd <= 0 && !unsafe && (td > 34 || (r.grudge > 0 && td > 15))) { r.boostT = 1.3; r.boostCd = rand(3.5, 7); } /* grudges make them burn nitro to close in */
       if (r.speed < 5 && td > 12) { r.stuck += dt; if (r.stuck > 1.4) { r.h += rand(-2.2, 2.2); r.speed = -6; r.stuck = 0; } } else r.stuck = 0;
       r.x += Math.sin(r.h) * r.speed * dt; r.z += Math.cos(r.h) * r.speed * dt;
       const hit = collide(r, 1.9, r.y);
@@ -677,15 +765,15 @@ export function createSumo(canvasTex, ctx) {
           Pv.x += nx * pw; Pv.z += nz * pw; Pv.y = 0;
           hitPower(12, `${r.name} PUNCHES YOU!`);
           ctx.shake(0.5); ctx.thud();
-          S.lastHitBy = r.name;
-        } else { /* punched a rival: shove them */
+          S.lastHitBy = r.name; S.lastHitT = tG;
+        } else { /* punched a rival: shove them — and the victim holds a grudge, so the pack turns on itself */
           for (const q of RIV) {
             if (q === r || q.elim) continue;
             const dq = Math.hypot(q.x - r.x, q.z - r.z);
             if (dq > 8.5) continue;
             const pw = 21 * (0.75 + r.skill * 0.5);
             q.vx = (q.vx || 0) + (q.x - r.x) / Math.max(0.5, dq) * pw; q.vz = (q.vz || 0) + (q.z - r.z) / Math.max(0.5, dq) * pw;
-            q.hp -= 13; q.smokeT = 1; q.lastHitBy = r.name; q.stunT = 1;
+            q.hp -= 13; q.smokeT = 1; q.lastHitBy = r.name; q.stunT = 1; q.grudge = 3.5; q.grudgeA = r.name;
             if (q.hp <= 0) elimRival(q, 'wreck', r.name);
           }
         }
@@ -706,10 +794,10 @@ export function createSumo(canvasTex, ctx) {
         const mine = -closing; /* >0: YOU slammed into THEM */
         r.ramCd -= dt;
         if (mine > 7 && r.ramCd <= 0) { /* your bumper does the talking: fling them toward the edge */
-          r.ramCd = 0.6;
+          r.ramCd = 0.6; S.juice = Math.max(S.juice, 0.8);
           const pw = clamp(mine * 0.55, 8, 24);
           r.vx = (r.vx || 0) + nx * pw; r.vz = (r.vz || 0) + nz * pw;
-          r.vy = 3.5; r.stunT = 0.9; r.lastHitBy = 'YOU';
+          r.vy = 3.5; r.stunT = 0.9; r.lastHitBy = 'YOU'; r.grudge = 4; r.grudgeA = 'YOU';
           Pv.x -= nx * mine * 0.22; Pv.z -= nz * mine * 0.22;
           if (S.shield <= 0) { r.hp -= clamp(mine * 0.5, 4, 14); if (r.hp <= 0) { elimRival(r, 'wreck', 'YOU'); continue; } }
           ctx.onRam(-nx, -nz, clamp(mine * 0.2, 2, 7));
