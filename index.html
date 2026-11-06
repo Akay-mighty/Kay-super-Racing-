@@ -421,6 +421,14 @@ body.sumo.touch #sumoCar{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 272
 #bPunch{right:max(20px,env(safe-area-inset-right));bottom:calc(max(26px,env(safe-area-inset-bottom)) + 96px);width:76px;height:76px;border-color:#ff4dd8;color:#ffb3ec;font-size:13px;display:none}
 body.sumo.touch #bPunch{display:flex}
 body.sumo.touch #sumoPunch{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 186px)}
+
+/* ---- SUMO layout fixes: nothing overlaps on a phone ---- */
+body.sumo.touch #sumoHud{left:12px;transform:none;width:calc(100vw - 12px - 188px)}
+body.sumo #fuelHud{top:calc(max(10px,env(safe-area-inset-top)) + 76px)}
+body.sumo #sumoBoard{top:calc(max(10px,env(safe-area-inset-top)) + 118px)}
+body.sumo.touch #sumoFeed{right:124px;top:calc(max(10px,env(safe-area-inset-top)) + 62px);max-width:52vw}
+body.sumo.touch #bDrift{bottom:calc(max(30px,env(safe-area-inset-bottom)) + 196px)}
+body.sumo.touch #sumoCar{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 348px)}
 #sumoQuit{display:none}
 body.sumo #sumoQuit{display:block}
 body.sumo #pauseRetry{display:block}
