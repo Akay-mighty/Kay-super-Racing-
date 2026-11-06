@@ -411,6 +411,13 @@ body.sumo #sumoPunch{display:flex}
 #sumoPunch.rdy{border-color:rgba(255,209,102,.75);box-shadow:0 0 18px rgba(255,209,102,.28)}
 #sumoPunch.mega{border-color:rgba(255,122,26,.9);box-shadow:0 0 22px rgba(255,122,26,.5)}
 #sumoPunch.mega span{color:#ff9a2f}
+/* gold hit-flash: YOUR punches and rams light the screen edge for a beat — feedback the reference game never skips */
+#sumoHit{display:none;inset:0;pointer-events:none;box-shadow:inset 0 0 110px rgba(255,196,64,.6),inset 0 0 34px rgba(255,196,64,.35);opacity:0;z-index:4}
+body.sumo #sumoHit{display:block}
+/* car name chip, bottom-right like the reference ("VOLK MK1") — you always know what you brought */
+#sumoCar{display:none;right:16px;bottom:calc(max(26px,env(safe-area-inset-bottom)) + 132px);padding:5px 11px;border-radius:8px;background:rgba(7,11,20,.72);border:1px solid rgba(255,255,255,.22);font:800 11px var(--ft);letter-spacing:.16em;color:#fff;text-transform:uppercase}
+body.sumo #sumoCar{display:block}
+body.sumo.touch #sumoCar{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 272px)} /* portrait controls: clear of PUNCH + DRIFT/PUNCH */
 #bPunch{right:max(20px,env(safe-area-inset-right));bottom:calc(max(26px,env(safe-area-inset-bottom)) + 96px);width:76px;height:76px;border-color:#ff4dd8;color:#ffb3ec;font-size:13px;display:none}
 body.sumo.touch #bPunch{display:flex}
 body.sumo.touch #sumoPunch{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 186px)}
@@ -418,7 +425,7 @@ body.sumo.touch #sumoPunch{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 1
 body.sumo #sumoQuit{display:block}
 body.sumo #pauseRetry{display:block}
 body.sumo #advHud,body.sumo #advNav,body.sumo #advPrompt,body.sumo #advExit,body.sumo #wpnSwap,body.sumo #bShoot{display:none!important}
-body.menu #sumoHud,body.menu #sumoBoard,body.menu #sumoFeed,body.menu #sumoMsg,body.menu #sumoPunch{display:none!important}
+body.menu #sumoHud,body.menu #sumoBoard,body.menu #sumoFeed,body.menu #sumoMsg,body.menu #sumoPunch,body.menu #sumoHit,body.menu #sumoCar{display:none!important}
 .seg button.lock{opacity:.42;filter:grayscale(.7)}
 .mdCard.mc7{background:linear-gradient(155deg,rgba(64,16,52,.92),rgba(10,8,24,.96));border:1px solid rgba(255,77,216,.4)}
 #ncIntro{position:fixed;inset:0;z-index:7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at center,rgba(6,10,26,.86),rgba(2,3,8,.96));opacity:0;pointer-events:none;transition:opacity .45s}
@@ -1045,6 +1052,8 @@ body{font-family:var(--ft)}
 <div id="sumoFeed" class="hud"></div>
 <div id="sumoMsg" class="hud"></div>
 <div id="sumoPunch" class="hud"><span id="sumoPunchL">PUNCH!</span><div id="sumoPunchBar"><i id="sumoPunchF"></i></div></div>
+<div id="sumoHit" class="hud"></div>
+<div id="sumoCar" class="hud">KAY CRUISER</div>
 <button id="advExit" class="hud" type="button" data-act="advExit">EXIT</button>
 <button id="wpnSwap" class="hud" type="button" data-act="wpnSwap" title="Swap weapon (Q)">&#9876;&#65039; GUN</button>
 <div id="mpBoard" class="hud" style="display:none"></div>
