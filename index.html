@@ -347,6 +347,10 @@ body.adv #info{display:none}
 #bustBar i{display:block;height:100%;width:0%;background:#ff4d4d;box-shadow:0 0 8px rgba(255,77,77,.8)}
 #advNav{display:none;top:calc(max(10px,env(safe-area-inset-top)) + 128px);left:16px;align-items:center;gap:8px;padding:5px 12px;border-radius:16px;background:rgba(8,12,20,.62);border:1px solid rgba(90,170,255,.4);font:800 13px var(--fd);letter-spacing:.06em;color:#cfe3ff}
 #advArr{display:inline-block;font-size:15px;color:#5db8ff;transition:transform .12s linear;text-shadow:0 0 10px rgba(90,170,255,.8)}
+#advNavL{font-size:10px;font-weight:800;letter-spacing:.14em;color:#8fb4d8;max-width:92px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#advNav.sumoT{border-color:rgba(255,77,216,.55)}
+#advNav.sumoT #advArr{color:#ff4dd8;text-shadow:0 0 10px rgba(255,77,216,.85)}
+#advNav.sumoT #advNavL{color:#ffb3ec}
 #advPrompt{display:none;flex-direction:column;align-items:center;gap:5px;bottom:calc(max(30px,env(safe-area-inset-bottom)) + 196px);left:50%;transform:translateX(-50%);width:min(340px,88vw);padding:13px 16px 14px;border-radius:14px;background:rgba(7,11,20,.88);border:1px solid rgba(90,170,255,.5);backdrop-filter:blur(10px);box-shadow:0 8px 40px rgba(0,0,0,.5),0 0 24px rgba(46,107,255,.2);animation:advPulse 1.6s ease-in-out infinite}
 @keyframes advPulse{0%,100%{box-shadow:0 8px 40px rgba(0,0,0,.5),0 0 18px rgba(46,107,255,.18)}50%{box-shadow:0 8px 40px rgba(0,0,0,.5),0 0 30px rgba(46,107,255,.4)}}
 #apTitle{font:900 italic 21px var(--fd);letter-spacing:.05em;border-bottom:2px solid;padding:0 10px 4px}
@@ -379,6 +383,7 @@ body.touch #advNav{top:calc(max(10px,env(safe-area-inset-top)) + 112px);left:12p
 /* ---------- SUMO ARENA HUD ---------- */
 #sumoHud{display:none;top:calc(12px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(320px,86vw);padding:8px 14px 9px;border-radius:12px;background:rgba(7,11,20,.78);border:1px solid rgba(255,77,216,.45);backdrop-filter:blur(8px);box-shadow:0 4px 24px rgba(0,0,0,.45)}
 body.sumo #sumoHud{display:block}
+body.sumo #info{display:none} /* the sumo HUD owns the round/timer readout — no duplicate TT chip */
 #sumoHud .shRow{display:flex;align-items:center;justify-content:space-between;gap:10px;font:800 11px var(--ft);letter-spacing:.14em;color:#ffb3ec}
 #sumoHud .shRow b{font:900 italic 20px var(--fd);color:#fff;letter-spacing:.04em}
 #sumoPow{height:8px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:6px}
@@ -1029,7 +1034,7 @@ body{font-family:var(--ft)}
   <div class="aRow" style="margin-top:2px"><span id="advNext">NEXT RACE 0:05</span></div>
   <div id="bustWrap" style="display:none"><div class="aRow"><span>BUSTED IN&hellip;</span></div><div id="bustBar"><i></i></div></div>
 </div>
-<div id="advNav" class="hud"><span id="advArr">&#10148;</span><b id="advDist">0m</b></div>
+<div id="advNav" class="hud"><span id="advArr">&#10148;</span><span id="advNavL">RACE MARKER</span><b id="advDist">0m</b></div>
 <div id="advPrompt" class="hud" style="display:none"><b id="apTitle">STREET RACE</b><span id="apSub"></span><span id="apRew"></span><button type="button" data-act="advJoin">JOIN RACE</button></div>
 <!-- SUMO ARENA HUD -->
 <div id="sumoHud" class="hud">
@@ -1053,6 +1058,7 @@ body{font-family:var(--ft)}
     <div class="aiRow"><i>&#128680;</i><b>HEAT &amp; COPS</b><span>Speeding and crashing raise your HEAT. Stars are the cruisers on you. Get boxed in and you are BUSTED &mdash; you pay a fine. Fly or hide to lose them.</span></div>
     <div class="aiRow"><i>&#128099;</i><b>GANG TURF</b><span>Ram a roaming gang car or shoot one and the whole crew hunts you. Wreck them for cash &mdash; or they grind your POWER to zero and tow you.</span></div>
     <div class="aiRow"><i>&#127919;</i><b>POWER &amp; WEAPONS</b><span>POWER is your car's life. Buy weapons in GARAGE &rarr; ARSENAL, then hold SHOOT to fight back. Gold CRATES drop cash, ammo and nitro.</span></div>
+    <div class="aiRow"><i>&#129354;</i><b>SUMO ARENA</b><span>The pink beam on the skyline is the SUMO ARENA gate &mdash; the gold arrow leads you there when no race is calling. Step in and knock rivals off the sky decks. Wins build RESPECT and unlock bigger arenas.</span></div>
   </div>
   <div class="aiBtns">
     <button class="act" data-act="advIntroX" type="button">LET'S RIDE</button>
@@ -1124,10 +1130,10 @@ body{font-family:var(--ft)}
           <article class="mdCard mc1"><i>&#127937;</i><h3>QUICK RACE</h3><p>One fast race. Pick laps, rivals (1v1 duel!), difficulty and time of day.</p><div class="mdTags"><span>1V1 DUEL</span><span>1-5 LAPS</span><span>EASY &rarr; HARD</span></div><button class="act go" data-go="quick" type="button">PLAY</button></article>
           <article class="mdCard mc2"><i>&#127942;</i><h3>TOURNAMENT</h3><p>Five events in a row. Score points and take the crown.</p><div class="mdTags"><span>5 EVENTS</span><span>BIG CASH</span></div><button class="act go" data-go="tour" type="button">PLAY</button></article>
           <article class="mdCard mc3" id="nightTile"><i>&#127747;</i><h3>NIGHT CIRCUIT</h3><p id="nightSub">HARD &middot; RAIN &middot; NEON &middot; &times;1.8 CASH</p><div class="mdTags"><span>HARD</span><span>&times;1.8 CASH</span></div><button class="act go" data-go="night" data-act="nightTile" type="button">PLAY</button></article>
-          <article class="mdCard mc4"><i>&#128506;</i><h3>ADVENTURE</h3><p>Free roam the city. Drive to race markers and lose the cops.</p><div class="mdTags"><span>FREE ROAM</span><span>COPS</span></div><button class="act go" data-go="adv" type="button">PLAY</button></article>
+          <article class="mdCard mc4"><i>&#128506;</i><h3>ADVENTURE</h3><p>Free roam the open city. Find race markers, lose the cops, raid the pink SUMO ARENA gate.</p><div class="mdTags"><span>STREET LEGENDS</span><span>FREE ROAM</span><span>COPS</span></div><button class="act go" data-go="adv" type="button">PLAY</button></article>
           <article class="mdCard mc5"><i>&#128168;</i><h3>DRIFT ARENA</h3><p>Slide, smash cones and beat the clock for the top score.</p><div class="mdTags"><span>SCORE</span><span>90s</span></div><button class="act go" data-go="arena" type="button">PLAY</button></article>
           <article class="mdCard mc6"><i>&#9201;&#65039;</i><h3>TIME TRIAL</h3><p>Race alone against your own best ghost. Clean lines win.</p><div class="mdTags"><span>SOLO</span><span>GHOST</span></div><button class="act go" data-go="tt" type="button">PLAY</button></article>
-          <article class="mdCard mc7" id="sumoTile" style="display:none"><i>&#129354;</i><h3>SUMO ARENA</h3><p>Sky platforms. Punch rivals off the edge. Last car standing wins.</p><div class="mdTags"><span>3 ROUNDS</span><span>PUNCH</span><span>RESPECT</span></div><button class="act go" data-go="sumo" type="button">PLAY</button></article>
+          <article class="mdCard mc7" id="sumoTile"><i>&#129354;</i><h3>SUMO ARENA</h3><p>Sky platforms. Punch rivals off the edge. Last car standing wins.</p><div class="mdTags"><span>STREET LEGENDS</span><span>3 ROUNDS</span><span>PUNCH</span><span>RESPECT</span></div><button class="act go" data-go="sumo" type="button">PLAY</button></article>
         </div>
         <div class="mdDots" id="mdDots"></div>
       </div>
@@ -1204,7 +1210,7 @@ body{font-family:var(--ft)}
         <div id="sumoRepNote" class="lbl" style="text-transform:none;letter-spacing:.03em;font-weight:600;margin-top:6px"></div>
         <div class="lbl" style="text-transform:none;letter-spacing:.03em;font-weight:600">3 rounds on the sky decks. Ram rivals off the edge, PUNCH them (right mouse / E / PUNCH button), grab items, smash the props. Fall or run out of POWER and you are out of the round. Most round stars takes the match, cash and RESPECT.</div>
         <button class="act go" data-act="sumoGo" type="button">ENTER THE ARENA</button>
-        <div class="lbl" style="text-transform:none;letter-spacing:.03em;font-weight:600;margin-top:4px">You can also find the pink SUMO ARENA gate while free-roaming in Adventure.</div>
+        <div class="lbl" style="text-transform:none;letter-spacing:.03em;font-weight:600;margin-top:4px">Prefer the streets? Free-roam in ADVENTURE and follow the gold arrow to the pink SUMO ARENA gate &mdash; it is pinned to your map at all times.</div>
       </div>
     </section>
     <!-- MULTIPLAYER -->
