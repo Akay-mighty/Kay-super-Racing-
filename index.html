@@ -376,6 +376,46 @@ body.touch #advNav{top:calc(max(10px,env(safe-area-inset-top)) + 112px);left:12p
 #advIntro .aiBtns{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;align-items:center}
 #advIntro .aiBtns .act{width:auto;margin:0;padding:12px 26px;font-size:16px}
 #advIntro h1{font:900 italic clamp(34px,8vw,64px)/1 var(--fd);letter-spacing:.04em;background:linear-gradient(90deg,#ffd166,#ff7a1a 60%,#ff4d4d);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 24px rgba(255,179,71,.4))}
+/* ---------- SUMO ARENA HUD ---------- */
+#sumoHud{display:none;top:calc(12px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(320px,86vw);padding:8px 14px 9px;border-radius:12px;background:rgba(7,11,20,.78);border:1px solid rgba(255,77,216,.45);backdrop-filter:blur(8px);box-shadow:0 4px 24px rgba(0,0,0,.45)}
+body.sumo #sumoHud{display:block}
+#sumoHud .shRow{display:flex;align-items:center;justify-content:space-between;gap:10px;font:800 11px var(--ft);letter-spacing:.14em;color:#ffb3ec}
+#sumoHud .shRow b{font:900 italic 20px var(--fd);color:#fff;letter-spacing:.04em}
+#sumoPow{height:8px;border-radius:5px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:6px}
+#sumoPow i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#35d16a,#7dff8a);transition:width .18s}
+#sumoPow.low i{background:linear-gradient(90deg,#ff3b3b,#ff7a1a);animation:powPulse .7s ease-in-out infinite}
+#sumoBoard{display:none;top:calc(max(10px,env(safe-area-inset-top)) + 78px);left:16px;flex-direction:column;gap:4px;width:150px}
+body.sumo #sumoBoard{display:flex}
+#sumoBoard .sb{display:flex;align-items:center;gap:7px;padding:4px 8px;border-radius:8px;background:rgba(7,11,20,.72);border:1px solid rgba(255,255,255,.12);font:800 11px var(--ft);letter-spacing:.08em;color:#e8f0ff}
+#sumoBoard .sb i{width:9px;height:9px;border-radius:3px;flex:none}
+#sumoBoard .sb em{margin-left:auto;font-style:normal;color:#ffd166;font-size:12px}
+#sumoBoard .sb.out{opacity:.38;filter:saturate(.3)}
+#sumoBoard .sb.me{border-color:rgba(125,215,255,.6)}
+#sumoFeed{display:none;top:calc(max(10px,env(safe-area-inset-top)) + 62px);right:16px;flex-direction:column;gap:4px;align-items:flex-end;max-width:62vw}
+body.sumo #sumoFeed{display:flex}
+#sumoFeed .sf{padding:4px 9px;border-radius:7px;background:rgba(7,11,20,.78);border-right:3px solid #fff;font:800 10.5px var(--ft);letter-spacing:.07em;color:#fff}
+#sumoMsg{display:none;top:24%;left:50%;transform:translateX(-50%);font:900 italic clamp(26px,7.4vw,54px)/1 var(--fd);letter-spacing:.05em;text-align:center;text-shadow:0 3px 24px rgba(0,0,0,.7),0 0 30px rgba(255,77,216,.4);white-space:nowrap;animation:sumoPop .4s ease-out}
+#sumoMsg.show{display:block}
+@keyframes sumoPop{0%{transform:translateX(-50%) scale(.6);opacity:0}70%{transform:translateX(-50%) scale(1.08)}100%{transform:translateX(-50%) scale(1);opacity:1}}
+#sumoPunch{display:none;bottom:calc(max(26px,env(safe-area-inset-bottom)) + 18px);left:50%;transform:translateX(-50%);width:min(230px,64vw);padding:7px 12px 8px;border-radius:11px;background:rgba(7,11,20,.78);border:1px solid rgba(255,255,255,.25);backdrop-filter:blur(8px);flex-direction:column;gap:4px;pointer-events:none}
+body.sumo #sumoPunch{display:flex}
+#sumoPunch span{font:800 12px var(--ft);letter-spacing:.2em;color:#fff;text-align:center}
+#sumoPunchBar{height:7px;border-radius:4px;background:rgba(255,255,255,.14);overflow:hidden}
+#sumoPunchBar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#ff7a1a,#ffd166)}
+#sumoPunch.rdy span{color:#ffd166;text-shadow:0 0 12px rgba(255,209,102,.8)}
+#sumoPunch.rdy{border-color:rgba(255,209,102,.75);box-shadow:0 0 18px rgba(255,209,102,.28)}
+#sumoPunch.mega{border-color:rgba(255,122,26,.9);box-shadow:0 0 22px rgba(255,122,26,.5)}
+#sumoPunch.mega span{color:#ff9a2f}
+#bPunch{right:max(20px,env(safe-area-inset-right));bottom:calc(max(26px,env(safe-area-inset-bottom)) + 96px);width:76px;height:76px;border-color:#ff4dd8;color:#ffb3ec;font-size:13px;display:none}
+body.sumo.touch #bPunch{display:flex}
+body.sumo.touch #sumoPunch{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 186px)}
+#sumoQuit{display:none}
+body.sumo #sumoQuit{display:block}
+body.sumo #pauseRetry{display:block}
+body.sumo #advHud,body.sumo #advNav,body.sumo #advPrompt,body.sumo #advExit,body.sumo #wpnSwap,body.sumo #bShoot{display:none!important}
+body.menu #sumoHud,body.menu #sumoBoard,body.menu #sumoFeed,body.menu #sumoMsg,body.menu #sumoPunch{display:none!important}
+.seg button.lock{opacity:.42;filter:grayscale(.7)}
+.mdCard.mc7{background:linear-gradient(155deg,rgba(64,16,52,.92),rgba(10,8,24,.96));border:1px solid rgba(255,77,216,.4)}
 #ncIntro{position:fixed;inset:0;z-index:7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at center,rgba(6,10,26,.86),rgba(2,3,8,.96));opacity:0;pointer-events:none;transition:opacity .45s}
 #ncIntro.show{opacity:1}
 #ncIntro h1{font:900 italic clamp(40px,10vw,92px)/1 var(--fd);letter-spacing:.05em;background:linear-gradient(90deg,#2de2ff,#ff2dd8 55%,#ff9a2f);-webkit-background-clip:text;background-clip:text;color:transparent;animation:ncFlick 1.7s steps(1) infinite;filter:drop-shadow(0 0 30px rgba(45,226,255,.45))}
@@ -991,6 +1031,15 @@ body{font-family:var(--ft)}
 </div>
 <div id="advNav" class="hud"><span id="advArr">&#10148;</span><b id="advDist">0m</b></div>
 <div id="advPrompt" class="hud" style="display:none"><b id="apTitle">STREET RACE</b><span id="apSub"></span><span id="apRew"></span><button type="button" data-act="advJoin">JOIN RACE</button></div>
+<!-- SUMO ARENA HUD -->
+<div id="sumoHud" class="hud">
+  <div class="shRow"><span id="sumoRound">ROUND 1/3</span><b id="sumoTime">1:15</b><span id="sumoAlive">4 LEFT</span></div>
+  <div id="sumoPow"><i></i></div>
+</div>
+<div id="sumoBoard" class="hud"></div>
+<div id="sumoFeed" class="hud"></div>
+<div id="sumoMsg" class="hud"></div>
+<div id="sumoPunch" class="hud"><span id="sumoPunchL">PUNCH!</span><div id="sumoPunchBar"><i id="sumoPunchF"></i></div></div>
 <button id="advExit" class="hud" type="button" data-act="advExit">EXIT</button>
 <button id="wpnSwap" class="hud" type="button" data-act="wpnSwap" title="Swap weapon (Q)">&#9876;&#65039; GUN</button>
 <div id="mpBoard" class="hud" style="display:none"></div>
@@ -1031,6 +1080,7 @@ body{font-family:var(--ft)}
   <button class="tb" id="bFly" data-a="fly" type="button">FLY</button>
   <button class="tb" id="bFire" data-a="item" type="button">FIRE</button>
   <button class="tb" id="bShoot" data-a="shoot" type="button"><span>SHOOT</span><small>EMPTY</small></button>
+  <button class="tb" id="bPunch" data-a="punch" type="button">PUNCH</button>
   <button class="tb" id="bGas" data-a="gas" type="button">DRIVE</button>
 </section>
 
@@ -1077,6 +1127,7 @@ body{font-family:var(--ft)}
           <article class="mdCard mc4"><i>&#128506;</i><h3>ADVENTURE</h3><p>Free roam the city. Drive to race markers and lose the cops.</p><div class="mdTags"><span>FREE ROAM</span><span>COPS</span></div><button class="act go" data-go="adv" type="button">PLAY</button></article>
           <article class="mdCard mc5"><i>&#128168;</i><h3>DRIFT ARENA</h3><p>Slide, smash cones and beat the clock for the top score.</p><div class="mdTags"><span>SCORE</span><span>90s</span></div><button class="act go" data-go="arena" type="button">PLAY</button></article>
           <article class="mdCard mc6"><i>&#9201;&#65039;</i><h3>TIME TRIAL</h3><p>Race alone against your own best ghost. Clean lines win.</p><div class="mdTags"><span>SOLO</span><span>GHOST</span></div><button class="act go" data-go="tt" type="button">PLAY</button></article>
+          <article class="mdCard mc7" id="sumoTile" style="display:none"><i>&#129354;</i><h3>SUMO ARENA</h3><p>Sky platforms. Punch rivals off the edge. Last car standing wins.</p><div class="mdTags"><span>3 ROUNDS</span><span>PUNCH</span><span>RESPECT</span></div><button class="act go" data-go="sumo" type="button">PLAY</button></article>
         </div>
         <div class="mdDots" id="mdDots"></div>
       </div>
@@ -1140,8 +1191,20 @@ body{font-family:var(--ft)}
       <div class="ph"><button class="back" data-go="modes" type="button">&#9664;</button><div><h2>ADVENTURE</h2><p>FREE ROAM &middot; FIND RACES &middot; DODGE COPS</p></div></div>
       <div class="pbody">
         <div class="lbl">TIME OF DAY</div><div class="seg" data-k="advEnv"><button data-v="day" type="button">NOON</button><button data-v="dawn" type="button">DAWN</button><button data-v="sunset" type="button">SUNSET</button><button data-v="night" type="button">NIGHT</button><button data-v="nightRain" id="advNc" type="button" style="display:none">NIGHT CITY</button></div>
-        <div class="lbl" style="text-transform:none;letter-spacing:.03em;font-weight:600;margin-top:6px">Drive the open city. Glowing markers are street races — drive into one and hit JOIN RACE. Speeding, crashing and drifting near traffic raise your HEAT: cops will chase. Get caught and you pay a fine. Fly to escape or reach markers faster. The longer you stay free, the bigger the races that call you.</div>
+        <div class="lbl" style="text-transform:none;letter-spacing:.03em;font-weight:600;margin-top:6px">Live the street life: glowing markers call you to street races — the longer you stay free, the bigger the money. Speeding, drifting near traffic and crashing raise your HEAT and cops come running. Lose them for cash and RESPECT. Smash gang cars that pick a fight, grab supply crates, and visit the pink SUMO ARENA gate to fight rivals on the sky decks. RESPECT unlocks bigger arenas and bigger races.</div>
         <button class="act go" data-act="advGo" type="button">ENTER THE CITY</button>
+      </div>
+    </section>
+    <!-- SUMO ARENA -->
+    <section class="screen" data-s="sumo">
+      <div class="ph"><button class="back" data-go="modes" type="button">&#9664;</button><div><h2>SUMO ARENA</h2><p>PUNCH &#183; RAM &#183; RING OUT &#183; LAST CAR STANDING</p></div></div>
+      <div class="pbody">
+        <div class="lbl">ARENA &#183; BIGGER ONES UNLOCK WITH RESPECT</div><div class="seg" data-k="sumoTier"><button data-v="0" type="button">DOCKYARD RUMBLE</button><button data-v="1" type="button">SKY DECK SHOWDOWN</button><button data-v="2" type="button">LEGEND SUMMIT</button></div>
+        <div class="lbl">RIVALS ON THE DECK</div><div class="seg" data-k="sumoRivals"><button data-v="3" type="button">3</button><button data-v="4" type="button">4</button><button data-v="5" type="button">5</button></div>
+        <div id="sumoRepNote" class="lbl" style="text-transform:none;letter-spacing:.03em;font-weight:600;margin-top:6px"></div>
+        <div class="lbl" style="text-transform:none;letter-spacing:.03em;font-weight:600">3 rounds on the sky decks. Ram rivals off the edge, PUNCH them (right mouse / E / PUNCH button), grab items, smash the props. Fall or run out of POWER and you are out of the round. Most round stars takes the match, cash and RESPECT.</div>
+        <button class="act go" data-act="sumoGo" type="button">ENTER THE ARENA</button>
+        <div class="lbl" style="text-transform:none;letter-spacing:.03em;font-weight:600;margin-top:4px">You can also find the pink SUMO ARENA gate while free-roaming in Adventure.</div>
       </div>
     </section>
     <!-- MULTIPLAYER -->
@@ -1234,7 +1297,7 @@ body{font-family:var(--ft)}
     <section class="screen" data-s="how">
       <div class="ph"><button class="back" data-go="main" type="button">&#9664;</button><div><h2>HOW TO PLAY</h2><p>CONTROLS &amp; TIPS</p></div></div>
       <div class="pbody">
-        <p class="how"><span class="kb"><b>W</b>/<b>&#8593;</b> gas &middot; <b>S</b>/<b>&#8595;</b> brake &middot; <b>A D</b>/<b>&#8592; &#8594;</b> steer<br><b>Shift</b> nitro &middot; <b>Space</b> drift &middot; <b>F</b> take off / land &middot; <b>C</b> camera<br><b>Esc</b> pause &middot; <b>R</b> restart &middot; <b>T</b> respawn<br></span><span class="tk">Drag the left stick to steer. You accelerate automatically.<br>NITRO boosts, DRIFT slides, BRAKE slows, FLY takes off.<br></span>Overtake rivals to refill nitro. Drift to charge it. Flying cars drain nitro while airborne. Hit glowing pads for instant nitro. Gamepad supported.<br><br>Set your <b>DRIVER NAME</b> in Settings to save progress to the cloud and appear on the global leaderboard. In <b>ONLINE RIVALS</b> you can download the #1 player's ghost and race it head-to-head.</p>
+        <p class="how"><span class="kb"><b>W</b>/<b>&#8593;</b> gas &middot; <b>S</b>/<b>&#8595;</b> brake &middot; <b>A D</b>/<b>&#8592; &#8594;</b> steer<br><b>Shift</b> nitro &middot; <b>Space</b> drift &middot; <b>F</b> take off / land &middot; <b>C</b> camera<br><b>Esc</b> pause &middot; <b>R</b> restart &middot; <b>T</b> respawn<br><b>E</b> join race / fire / SUMO PUNCH &middot; right-click also punches in Sumo<br></span><span class="tk">Drag the left stick to steer. You accelerate automatically.<br>NITRO boosts, DRIFT slides, BRAKE slows, FLY takes off.<br>ADVENTURE: drive to glowing markers, dodge the cops, find the pink SUMO ARENA gate.<br>SUMO ARENA: punch rivals off the sky decks — last car standing wins.<br></span>Overtake rivals to refill nitro. Drift to charge it. Flying cars drain nitro while airborne. Hit glowing pads for instant nitro. Gamepad supported.<br><br>Set your <b>DRIVER NAME</b> in Settings to save progress to the cloud and appear on the global leaderboard. In <b>ONLINE RIVALS</b> you can download the #1 player's ghost and race it head-to-head.</p>
       </div>
     </section>
   </div>
@@ -1242,7 +1305,7 @@ body{font-family:var(--ft)}
 </div>
 
 <div id="pause" class="ov hide"><div class="ovwrap"><h1>PAUSED</h1>
-  <button class="act go" data-act="resume" type="button">RESUME</button><button class="act ghost" id="pauseRetry" data-act="retry" type="button">RESTART</button><button class="act ghost" id="advQuit" data-act="advExit" type="button">EXIT ADVENTURE</button><button class="act ghost" data-act="menu" type="button">QUIT TO MENU</button>
+  <button class="act go" data-act="resume" type="button">RESUME</button><button class="act ghost" id="pauseRetry" data-act="retry" type="button">RESTART</button><button class="act ghost" id="advQuit" data-act="advExit" type="button">EXIT ADVENTURE</button><button class="act ghost" id="sumoQuit" data-act="sumoQuit" type="button">LEAVE THE ARENA</button><button class="act ghost" data-act="menu" type="button">QUIT TO MENU</button>
 </div></div>
 
 <div id="finish" class="ov hide"><div class="ovwrap"><h1 id="fh">FINISH</h1><p id="fp"></p><div id="fres"></div><div id="fearn"></div><div id="fmis"></div><div id="fglobal" class="lbl"></div>
