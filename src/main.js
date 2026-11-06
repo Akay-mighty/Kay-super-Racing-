@@ -1693,6 +1693,7 @@ function resetWorld(c) {
   c = Object.assign({ type: 'race' }, c); cfg = c; TOTAL = c.laps || 1;
   if (c.type !== 'adv' && c.type !== 'sumo') ensureTrack(c.track || 'city'); /* free-roam has its own city, the arena floats in the sky */
   setEnv(c.env); AIs = AI.slice(0, c.ai);
+  if (c.type === 'sumo') { hemi.intensity *= 0.68; sun.intensity *= 1.22; bloomPass.strength = 0.14; } /* SUMO: calmer glow, punchier sun = readable shadows, no blown-out cars */
   const arenaOn = c.type === 'arena', advOn = c.type === 'adv', sumoOn = c.type === 'sumo';
   world.visible = !arenaOn && !advOn && !sumoOn; arena.group.visible = arenaOn; if (arenaOn) arena.reset();
   adv.group.visible = advOn; sumo.group.visible = sumoOn;
@@ -2276,7 +2277,7 @@ function stepPlayer(dt, racing) {
   car.updateMatrixWorld();
   if (!FL.on) {
     if ((Math.abs(slip) > 5 && sp > 22) || (boosting && Math.random() < 0.5)) for (const sx of [-1, 1]) if (Math.random() < 0.8) puff(car.localToWorld(V3(sx * 1.05, 0.3, -1.6)), P.vel, boosting ? 0.8 : 1.2);
-    if (Math.abs(slip) > 5 && sp > 22) [-1, 1].forEach((sx, i) => addSkid(car.localToWorld(V3(sx * 1.05, 0.3, -1.6)), i, car.position.y));
+    if (Math.abs(slip) > (cfg.type === 'sumo' ? 3 : 5) && sp > (cfg.type === 'sumo' ? 14 : 22)) [-1, 1].forEach((sx, i) => addSkid(car.localToWorld(V3(sx * 1.05, 0.3, -1.6)), i, car.position.y));
   }
   return { boosting, sp: P.vel.length(), slip };
 }
@@ -2360,11 +2361,11 @@ function stepAI(dt, racing) {
 
 function updateCamera(dt, boosting, sp) {
   camYaw += angDiff(P.h, camYaw) * (1 - Math.exp(-6 * dt));
-  const pk = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 0.9 : 1, d = (7.4 + sp * 0.025) * pk, want = V3(car.position.x - Math.sin(camYaw) * d, car.position.y + (3.0 + sp * 0.006) * Math.pow(pk, 0.7), car.position.z - Math.cos(camYaw) * d);
+  const pk = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 0.9 : 1, smk = cfg.type === 'sumo' ? 0.66 : 1, d = (7.4 + sp * 0.025) * pk * smk, want = V3(car.position.x - Math.sin(camYaw) * d, car.position.y + (3.0 + sp * 0.006) * Math.pow(pk, 0.7) * (cfg.type === 'sumo' ? 0.72 : 1), car.position.z - Math.cos(camYaw) * d);
   camera.position.lerp(want, 1 - Math.exp(-9 * dt));
   const sh = shake + clamp(sp - 40, 0, 70) * 0.0007 + (boosting ? 0.03 : 0);
   camera.position.x += rand(-1, 1) * sh; camera.position.y += rand(-1, 1) * sh;
-  camera.lookAt(car.position.x + Math.sin(camYaw) * 9, car.position.y + 1.4, car.position.z + Math.cos(camYaw) * 9);
+  const la = cfg.type === 'sumo' ? 7 : 9; camera.lookAt(car.position.x + Math.sin(camYaw) * la, car.position.y + 1.2, car.position.z + Math.cos(camYaw) * la);
   const fov = 62 + (camera.aspect < 1 ? (1 - camera.aspect) * 14 : 0) + clamp(sp - 30, 0, 80) * 0.22 + (boosting ? 9 : 0);
   camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt)); camera.updateProjectionMatrix();
   shake *= Math.exp(-6 * dt);

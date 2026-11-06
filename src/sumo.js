@@ -165,19 +165,27 @@ export function createSumo(canvasTex, ctx) {
 
   /* ---------- floor scuff texture: tyre streaks baked into every deck (the reference
      arena is never flat — rubber, scuffs and patches make it a PLACE, not a plane) ---------- */
-  const scuffTex = canvasTex(256, 256, g => {
-    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 256, 256);
+  const scuffTex = canvasTex(512, 512, g => {
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 1800; i++) { g.fillStyle = `rgba(0,0,0,${rand(0.015, 0.06).toFixed(3)})`; g.fillRect(rand(0, 512), rand(0, 512), rand(1, 4), rand(1, 4)); } /* concrete grain */
     g.lineCap = 'round';
-    for (let i = 0; i < 26; i++) {
-      g.strokeStyle = `rgba(30,18,10,${rand(0.05, 0.16).toFixed(3)})`;
-      g.lineWidth = rand(5, 14);
-      const x = rand(0, 256), y = rand(0, 256), a = rand(0, TAU), l = rand(30, 110);
+    for (let i = 0; i < 34; i++) { /* rubber streaks */
+      g.strokeStyle = `rgba(20,12,8,${rand(0.07, 0.2).toFixed(3)})`; g.lineWidth = rand(4, 12);
+      const x = rand(0, 512), y = rand(0, 512), a = rand(0, TAU), l = rand(60, 220);
       g.beginPath(); g.moveTo(x, y);
-      g.quadraticCurveTo(x + Math.cos(a) * l * 0.5 + rand(-20, 20), y + Math.sin(a) * l * 0.5 + rand(-20, 20), x + Math.cos(a) * l, y + Math.sin(a) * l);
+      g.quadraticCurveTo(x + Math.cos(a) * l * 0.5 + rand(-30, 30), y + Math.sin(a) * l * 0.5 + rand(-30, 30), x + Math.cos(a) * l, y + Math.sin(a) * l);
       g.stroke();
     }
-    for (let i = 0; i < 220; i++) { g.fillStyle = `rgba(0,0,0,${rand(0.02, 0.07).toFixed(3)})`; g.fillRect(rand(0, 256), rand(0, 256), rand(2, 7), rand(2, 7)); }
+    for (let k = 0; k <= 512; k += 128) { /* steel-plate seams every 4 m: dark groove + light edge */
+      g.fillStyle = 'rgba(0,0,0,.30)'; g.fillRect(k - 1.5, 0, 3, 512); g.fillRect(0, k - 1.5, 512, 3);
+      g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(k + 1.5, 0, 1.5, 512); g.fillRect(0, k + 1.5, 512, 1.5);
+    }
+    g.fillStyle = 'rgba(0,0,0,.28)'; /* bolts */
+    for (let x = 12; x < 512; x += 128) for (let y = 12; y < 512; y += 128) { g.fillRect(x, y, 5, 5); g.fillRect(x + 104, y, 5, 5); g.fillRect(x, y + 104, 5, 5); g.fillRect(x + 104, y + 104, 5, 5); }
   });
+  scuffTex.wrapS = scuffTex.wrapT = THREE.RepeatWrapping; scuffTex.anisotropy = 8;
+  /* BoxGeometry UVs stretch one texture over a whole deck (= a blurry smear). World-space UVs keep it sharp. */
+  function worldUV(g, tile) { const p = g.attributes.position, u = g.attributes.uv; for (let i = 0; i < p.count; i++) u.setXY(i, (p.getX(i) + p.getZ(i) * 0.0) / tile, p.getZ(i) / tile); return g; }
 
   /* ---------- build / rebuild the arena meshes ---------- */
   let builtTier = -1;
@@ -209,7 +217,7 @@ export function createSumo(canvasTex, ctx) {
         const g = new THREE.BoxGeometry(w, 10, dp); g.translate((rx0 + rx1) / 2, d.y - 5.3, (rz0 + rz1) / 2);
         geos.push(g);
         /* bright driving slab, top face flush with groundAt() so wheels sit ON it */
-        const fg = new THREE.BoxGeometry(w - 0.5, 0.3, dp - 0.5); fg.translate((rx0 + rx1) / 2, d.y - 0.15, (rz0 + rz1) / 2);
+        const fg = new THREE.BoxGeometry(w - 0.5, 0.3, dp - 0.5); fg.translate((rx0 + rx1) / 2, d.y - 0.15, (rz0 + rz1) / 2); worldUV(fg, 16);
         (d.y < -1 ? pitGeos : floorGeos).push(fg);
         const t = 0.55, ec = edgeGeos;
         ec.push(new THREE.BoxGeometry(w, t, t).translate((rx0 + rx1) / 2, d.y + 0.1, rz0 + t / 2));
@@ -225,7 +233,7 @@ export function createSumo(canvasTex, ctx) {
       if (r.a === 'x') g.rotateZ(Math.atan2(y1 - y0, w) * (r.d > 0 ? 1 : -1));
       else g.rotateX(-Math.atan2(y1 - y0, dp) * (r.d > 0 ? 1 : -1));
       g.translate((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2 - 0.2, (r.z0 + r.z1) / 2);
-      rampGeos.push(g);
+      worldUV(g, 16); rampGeos.push(g);
     }
     for (const wl of walls) {
       const g = new THREE.BoxGeometry(wl.x1 - wl.x0, wl.y1 - wl.y0, wl.z1 - wl.z0);
@@ -244,6 +252,10 @@ export function createSumo(canvasTex, ctx) {
     stripePulse = stripe.material; /* the rim breathes in tick() — the edge reads as DANGER from any angle */
     const stripe2 = stripe.clone(); stripe2.material = new THREE.MeshBasicMaterial({ color: 0x141821, toneMapped: false });
     stripe2.position.y = -0.9; stripe2.scale.set(1.004, 1, 1.004); arenaRoot.add(stripe2);
+    /* concrete support pillars under every deck corner: the arena stands on something, like the reference */
+    { const pg = [], pilMat = new THREE.MeshStandardMaterial({ color: 0x59606c, roughness: 0.9, metalness: 0.05 });
+      for (const d of decks) if (d.y > -1) for (const [px, pz] of [[d.x0 + 5, d.z0 + 5], [d.x1 - 5, d.z0 + 5], [d.x0 + 5, d.z1 - 5], [d.x1 - 5, d.z1 - 5]]) pg.push(new THREE.BoxGeometry(5.5, 70, 5.5).translate(px, d.y - 10.3 - 35, pz));
+      if (pg.length) { const pm = new THREE.Mesh(mergeAll(pg), pilMat); pm.castShadow = pm.receiveShadow = true; arenaRoot.add(pm); } }
     buildProps(tier);
     buildLights(tier);
     buildMiniBase(tier);
@@ -417,11 +429,11 @@ export function createSumo(canvasTex, ctx) {
 
   /* ---------- floating PUNCH tag over your car (the reference game rides "PUNCH 0.8"
      above the bumper — you read your cooldown without hunting the HUD) ---------- */
-  const tagCv = document.createElement('canvas'); tagCv.width = 224; tagCv.height = 56;
-  const tagG = tagCv.getContext('2d');
+  const tagCv = document.createElement('canvas'); tagCv.width = 896; tagCv.height = 224; /* 4x: stays crisp when the camera is close */
+  const tagG = tagCv.getContext('2d'); tagG.scale(4, 4);
   const tagTex = new THREE.CanvasTexture(tagCv);
   const tagSpr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tagTex, transparent: true, depthWrite: false, fog: false, toneMapped: false }));
-  tagSpr.scale.set(7.4, 1.85, 1); tagSpr.visible = false; group.add(tagSpr);
+  tagSpr.scale.set(4.6, 1.15, 1); tagSpr.visible = false; group.add(tagSpr);
   let tagTxt = '';
   function drawTag(txt, col) {
     tagG.clearRect(0, 0, 224, 56);
@@ -670,7 +682,7 @@ export function createSumo(canvasTex, ctx) {
       const t2 = S.mega > 0 ? 'MEGA PUNCH!' : S.punchCd > 0.05 ? 'PUNCH ' + S.punchCd.toFixed(1) : 'PUNCH!';
       const c2 = S.mega > 0 ? '#ff9a2f' : S.punchCd > 0.05 ? '#ffffff' : '#ffd166';
       if (t2 !== tagTxt) { tagTxt = t2; drawTag(t2, c2); }
-      tagSpr.position.set(Pp.x, (ctx.pAlt() || 0) + 4.8, Pp.z);
+      tagSpr.position.set(Pp.x, (ctx.pAlt() || 0) + 3.4, Pp.z);
       tagSpr.visible = true;
     } else if (tagSpr.visible) { tagSpr.visible = false; tagTxt = ''; }
 
