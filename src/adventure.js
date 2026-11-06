@@ -22,7 +22,7 @@ const TIERS = [
 
 export function createAdventure(canvasTex, ctx) {
   const group = new THREE.Group(); group.visible = false;
-  const S = { heat: 0, freeT: 0, bust: 0, slow: 0, env: 'day', near: null, navD: 0, navA: 0, nextIn: 5, police: 0, pow: 100, powCd: 9, hitFlash: 0, rep: 0, repLvl: 0, crT: 12, smT: 0 };
+  const S = { heat: 0, heatPeak: 0, freeT: 0, bust: 0, slow: 0, env: 'day', near: null, navD: 0, navA: 0, navKind: null, nextIn: 5, police: 0, pow: 100, powCd: 9, hitFlash: 0, rep: 0, repLvl: 0, crT: 12, smT: 0, sumoD: 0, sumoNear: false };
   let retPos = null, cashPend = 0, cashT = 0, lowT = 0, hadPolice = false, sirT = 0, sirHi = false, spawnCd = 0, tG = 0;
   const dummy = new THREE.Object3D();
 
@@ -378,6 +378,7 @@ export function createAdventure(canvasTex, ctx) {
   }
   function spawnMarker(px, pz) {
     const tier = pickTier(), T = TIERS[tier];
+    ctx.toast('NEW RACE MARKER DROPPED \u00b7 ' + T.name, T.css); ctx.beep(660, 0.07, 'square', 0.06);
     for (let t = 0; t < 40; t++) {
       const kx = ((Math.random() * (2 * KMAX + 1)) | 0) - KMAX, kz = ((Math.random() * (2 * KMAX + 1)) | 0) - KMAX;
       const x = kx * PITCH, z = kz * PITCH;
@@ -627,14 +628,14 @@ export function createAdventure(canvasTex, ctx) {
     const amt = Math.min(money, Math.min(5000, 300 + Math.round(S.heat * 40)));
     if (amt > 0) ctx.busted(amt); else ctx.busted(0);
     if (byPower) ctx.toast('WRECKED! THE COPS TOTALED YOUR RIDE', '#ff6b6b');
-    S.heat = 20; S.freeT = 0; S.bust = 0; S.slow = 7; S.pow = 100; S.powCd = 9;
+    S.heat = 20; S.freeT = 0; S.bust = 0; S.slow = 7; S.pow = 100; S.powCd = 9; S.heatPeak = 0;
     POL.forEach(polOff); hadPolice = false; lowT = 0;
   }
   function hitPower(d, label, src) {
     if (S.slow > 0) return; /* no damage while serving a bust */
     S.pow = clamp(S.pow - d, 0, 100); S.powCd = 0; S.hitFlash = 1;
     if (label) ctx.toast(label, '#ff6b6b');
-    if (S.pow <= 0) { if (src === 'gang') gangWreck(); else busted(true); }
+    if (S.pow <= 0) { if (src === 'gang') gangWreck(); else busted(true); S.heatPeak = 0; }
   }
 
   /* ---------- RESPECT: the city remembers you ----------
@@ -739,12 +740,14 @@ export function createAdventure(canvasTex, ctx) {
       mc.fillStyle = g.mode === 'hunt' ? '#ff4dd8' : '#a06bff'; mc.beginPath(); mc.arc(x, y, 5, 0, 7); mc.fill();
       mc.strokeStyle = '#000'; mc.lineWidth = 2; mc.stroke();
     }
-    { /* the SUMO ARENA gate: pink square on the map */
+    { /* the SUMO ARENA gate: pink square, PINNED to the map edge when it is far away —
+         the arena is a permanent destination, so it never leaves the map */
       const [x, y] = P2S(SUMO_SITE.x, SUMO_SITE.z);
-      if (x > 4 && x < w - 4 && y > 4 && y < h - 4) {
-        mc.fillStyle = '#ff4dd8'; mc.fillRect(x - 6, y - 6, 12, 12);
-        mc.strokeStyle = '#fff'; mc.lineWidth = 2; mc.strokeRect(x - 6, y - 6, 12, 12);
-      }
+      const mx = clamp(x, 9, w - 9), my = clamp(y, 9, h - 9), off = mx !== x || my !== y;
+      mc.globalAlpha = off ? 0.6 : 1;
+      mc.fillStyle = '#ff4dd8'; mc.fillRect(mx - 6, my - 6, 12, 12);
+      mc.strokeStyle = '#fff'; mc.lineWidth = 2; mc.strokeRect(mx - 6, my - 6, 12, 12);
+      mc.globalAlpha = 1;
     }
     mc.save(); mc.translate(w / 2, h / 2); mc.rotate(Math.PI - hdg);
     mc.fillStyle = '#fff'; mc.beginPath(); mc.moveTo(0, -9); mc.lineTo(6.5, 7); mc.lineTo(0, 3.6); mc.lineTo(-6.5, 7); mc.closePath(); mc.fill();
@@ -819,6 +822,8 @@ export function createAdventure(canvasTex, ctx) {
     if (dh > 0) S.heat += dh * dt;
     else S.heat += (alt > 6 ? -7 : sp < 45 ? -5 : -2) * dt;
     S.heat = clamp(S.heat, 0, 100);
+    /* remember how hot the pursuit got — the ESCAPE bonus pays out on it */
+    if (S.police > 0) S.heatPeak = Math.max(S.heatPeak, S.heat); else S.heatPeak = Math.max(0, S.heatPeak - 9 * dt);
 
     /* markers */
     S.nextIn -= dt;
@@ -839,13 +844,23 @@ export function createAdventure(canvasTex, ctx) {
       else if (d < bestD) { bestD = d; bestM = m; }
     }
     /* the SUMO gate: step in and the arena calls you */
-    S.sumoNear = Math.hypot(SUMO_SITE.x - px, SUMO_SITE.z - pz) < 17;
+    S.sumoD = Math.hypot(SUMO_SITE.x - px, SUMO_SITE.z - pz);
+    S.sumoNear = S.sumoD < 17;
     sumoGrp.children[1].rotation.z += dt * 1.8; /* gate ring spins */
     sumoGrp.children[0].material.opacity = 0.34 + Math.sin(tG * 2.4) * 0.1;
-    if (!S.near && bestM) {
-      S.navD = bestD;
-      S.navA = -angDiff(Math.atan2(bestM.x - px, bestM.z - pz), o.h);
-    }
+    sumoGrp.children[2].material.opacity = 0.5 + Math.sin(tG * 3.1) * 0.22;
+    /* WAYFINDING: a race marker in range leads the way; otherwise the pink
+       SUMO gate is the permanent destination — nobody gets lost in the city */
+    S.navKind = null;
+    if (!S.near) {
+      if (bestM && (bestD < S.sumoD * 0.75 || S.sumoNear)) {
+        S.navD = bestD; S.navKind = 'race';
+        S.navA = -angDiff(Math.atan2(bestM.x - px, bestM.z - pz), o.h);
+      } else if (!S.sumoNear) {
+        S.navD = S.sumoD; S.navKind = 'sumo';
+        S.navA = -angDiff(Math.atan2(SUMO_SITE.x - px, SUMO_SITE.z - pz), o.h);
+      } else S.navD = 0;
+    } else S.navD = 0;
     /* traffic */
     trafficTick(dt, px, pz);
     /* player vs traffic — a real crash sends the other car FLYING, maybe onto its roof */
@@ -917,7 +932,7 @@ export function createAdventure(canvasTex, ctx) {
       }
       const want = Math.atan2(dx, dz), rate = 3.0 / (1 + Math.abs(p.speed) / 55);
       p.h += clamp(angDiff(want, p.h), -rate * dt, rate * dt);
-      const ptop = top * 0.9 * (dist > 70 ? 1.18 : 1);
+      const ptop = top * 0.9 * (dist > 70 ? 1.12 : 1); /* pursuit cars: a hair quicker far away, never a rubber-band wall */
       /* brake when close so the cruiser swings AT you instead of flying past —
          that pass-through-through-the-player look is exactly what this kills */
       const ptop2 = dist < 34 ? Math.min(ptop, 15 + dist * 0.62) : ptop;
@@ -966,7 +981,14 @@ export function createAdventure(canvasTex, ctx) {
     if (anyClose) S.bust += dt; else S.bust = Math.max(0, S.bust - dt * 0.5);
     if (S.bust >= 2.6) busted(false);
     if (S.heat < 15) { lowT += dt; if (lowT > 6) { POL.forEach(polOff); lowT = 0; } } else lowT = 0;
-    if (hadPolice && S.police === 0 && S.heat < 10) { hadPolice = false; respect(15); ctx.escape(); }
+    /* clean getaway: the hotter the pursuit was, the fatter the reward */
+    if (hadPolice && S.police === 0 && S.heat < 10) {
+      hadPolice = false;
+      const peak = Math.round(S.heatPeak);
+      respect(10 + Math.round(peak / 8));
+      ctx.escape(peak);
+      S.heatPeak = 0;
+    }
     /* supply crates: cash, ammo and nitro drop around the city */
     stepCrates(dt, px, pz, alt);
     /* siren */

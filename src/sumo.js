@@ -41,7 +41,7 @@ export function createSumo(canvasTex, ctx) {
     stars: {}, feed: [], msg: null, itemT: 6, env: 'day'
   };
   let decks = [], ramps = [], walls = [], spawns = [];
-  let tG = 0, roundWins = 0, myStars = 0;
+  let tG = 0, roundWins = 0, myStars = 0, stripePulse = null, floodlights = [];
 
   /* ---------- shared textures ---------- */
   const glowTex = canvasTex(64, 64, (g) => { const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,.95)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); });
@@ -197,12 +197,35 @@ export function createSumo(canvasTex, ctx) {
     if (rampGeos.length) { const rm = new THREE.Mesh(mergeAll(rampGeos), topMat); rm.receiveShadow = true; arenaRoot.add(rm); }
     if (wallGeos.length) { const wm = new THREE.Mesh(mergeAll(wallGeos), new THREE.MeshStandardMaterial({ color: 0x3a4150, roughness: 0.8, metalness: 0.15 })); wm.castShadow = wm.receiveShadow = true; arenaRoot.add(wm); }
     /* rim stripes: bright additive — the arena reads instantly from any angle */
-    const stripe = new THREE.Mesh(mergeAll(edgeGeos), new THREE.MeshBasicMaterial({ color: edgeCols[tier % 3], toneMapped: false }));
+    const stripe = new THREE.Mesh(mergeAll(edgeGeos), new THREE.MeshBasicMaterial({ color: edgeCols[tier % 3], toneMapped: false, transparent: true }));
     arenaRoot.add(stripe);
+    stripePulse = stripe.material; /* the rim breathes in tick() — the edge reads as DANGER from any angle */
     const stripe2 = stripe.clone(); stripe2.material = new THREE.MeshBasicMaterial({ color: 0x141821, toneMapped: false });
     stripe2.position.y = -0.9; stripe2.scale.set(1.004, 1, 1.004); arenaRoot.add(stripe2);
     buildProps(tier);
+    buildLights(tier);
     buildMiniBase(tier);
+  }
+  /* ---------- corner floodlight towers: the stadium reads at a glance and every tier gets its own colour ---------- */
+  function buildLights(tier) {
+    floodlights.forEach(f => arenaRoot.remove(f.grp)); floodlights = [];
+    const col = new THREE.Color(SUMO_ARENAS[tier].css);
+    for (const [lx, lz] of [[-118, -118], [118, -118], [118, 118], [-118, 118]]) {
+      const grp = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.9, 30, 8), new THREE.MeshStandardMaterial({ color: 0x39404d, roughness: 0.7, metalness: 0.4 }));
+      pole.position.y = 15; grp.add(pole);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(7, 2.4, 1.6), new THREE.MeshStandardMaterial({ color: 0x22262e, roughness: 0.5, metalness: 0.5 }));
+      head.position.y = 30.5; head.lookAt(0, 20, 0); grp.add(head);
+      for (let i = 0; i < 3; i++) {
+        const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.5, 0.4), new THREE.MeshBasicMaterial({ color: col.clone().multiplyScalar(2.2), toneMapped: false }));
+        lamp.position.set((i - 1) * 2.2, 30.5, 0.6); head.add(lamp);
+      }
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: col, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+      glow.scale.set(16, 16, 1); glow.position.y = 30.5; grp.add(glow);
+      /* aim the head at the arena middle */
+      grp.position.set(lx, 0, lz); grp.lookAt(0, 6, 0); grp.rotation.x = 0; grp.rotation.z = 0;
+      arenaRoot.add(grp); floodlights.push({ grp, glow });
+    }
   }
   function mergeAll(list) { return list.length > 1 ? mergeGeos(list) : list[0]; }
   let arenaRoot = null;
@@ -414,7 +437,7 @@ export function createSumo(canvasTex, ctx) {
     });
     S.alive = RIV.length + 1;
     S.myOut = false; S.spectate = false; S.pow = 100; S.punchCd = 0; S.mega = 0; S.shield = 0;
-    msg(S.round === 1 ? 'ROUND 1 — FIGHT!' : `ROUND ${S.round} — FIGHT!`, '#ffd166', 2.2);
+    msg(S.round === 1 ? 'ROUND 1' : `ROUND ${S.round}`, '#ffd166', 2.2);
     ctx.beep(520, 0.1, 'square', 0.09); setTimeout(() => ctx.beep(760, 0.14, 'square', 0.1), 160);
   }
   function endRound(winnerName, how) {
@@ -432,8 +455,11 @@ export function createSumo(canvasTex, ctx) {
     r.elim = true; r.fall = how === 'ring'; r.how = how; r.mesh.visible = true;
     S.stars[r.name] = S.stars[r.name] || 0;
     S.alive--;
-    if (how === 'ring') { ctx.beep(220, 0.3, 'sawtooth', 0.1); if (byName === 'YOU') { S.myKO++; ctx.cash(600); feed('YOU PUSHED OFF ' + r.name, '#7dff8a'); } else feed(`${byName || 'SOMEONE'} PUSHED OFF ${r.name}`, r.css); }
-    else { ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 10); if (byName === 'YOU') { S.myKO++; ctx.cash(500); feed('YOU WRECKED ' + r.name, '#7dff8a'); } else feed(`${byName || 'SOMEONE'} WRECKED ${r.name}`, r.css); }
+    if (how === 'ring') { /* RING OUT: explosion + heavy shake at the lip they went over — the KO must FEEL heavy */
+      ctx.beep(220, 0.3, 'sawtooth', 0.1); ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 9); ctx.shake(0.45); ringFX(r.x, r.y, r.z, 0xff5c5c);
+      if (byName === 'YOU') { S.myKO++; ctx.cash(600); feed('YOU PUSHED OFF ' + r.name, '#7dff8a'); } else feed(`${byName || 'SOMEONE'} PUSHED OFF ${r.name}`, r.css);
+    }
+    else { ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 10); ctx.shake(0.4); if (byName === 'YOU') { S.myKO++; ctx.cash(500); feed('YOU WRECKED ' + r.name, '#7dff8a'); } else feed(`${byName || 'SOMEONE'} WRECKED ${r.name}`, r.css); }
     const left = RIV.filter(q => !q.elim);
     if (!left.length) { /* every rival is gone: the round is yours if you are still rolling */
       endRound(S.myOut ? 'NOBODY' : 'YOU', how);
@@ -475,10 +501,12 @@ export function createSumo(canvasTex, ctx) {
       r.h += rand(-0.5, 0.5);
       r.hp -= mega ? 30 : 14; r.smokeT = 1;
       hits++;
+      ctx.puff(V3L(r.x, (r.y || 0) + 1, r.z), V3L(0, 1, 0), 1.5); /* impact sparks ON the victim */
       if (r.hp <= 0) { elimRival(r, 'wreck', 'YOU'); }
       else { dent(r.mesh); r.dented = true; feed('PUNCHED ' + r.name, '#ffffff'); }
     }
     if (hits) ctx.puff(Pp, V3L(0, 1, 0), 1.6);
+    else ctx.beep(210, 0.05, 'sine', 0.05); /* whiff: a soft air-cut so a miss never feels like a bug */
     return hits;
   }
   const V3L = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -499,7 +527,7 @@ export function createSumo(canvasTex, ctx) {
     if (S.phase !== 'fight') {
       S.phaseT -= dt;
       if (S.phaseT <= 0) {
-        if (S.phase === 'intro') { S.phase = 'fight'; S.freeze = false; }
+        if (S.phase === 'intro') { S.phase = 'fight'; S.freeze = false; msg('FIGHT!', '#7dff8a', 1.2); ctx.beep(1040, 0.16, 'square', 0.12); ctx.shake(0.3); }
         else if (S.phase === 'end' && !S.matchOver) startRound(S.round + 1);
       }
     } else {
@@ -539,7 +567,29 @@ export function createSumo(canvasTex, ctx) {
       }
     }
 
+    /* elite rivals fight for the crates too — high tiers feel ALIVE and a bit unfair (on purpose) */
+    if (S.phase === 'fight') {
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i];
+        if (it.def.id !== 'repair' && it.def.id !== 'shield') continue;
+        for (const r of RIV) {
+          if (r.elim || (r.skill || 0) < 0.8 || (r.shieldT || 0) > 0) continue;
+          if (Math.hypot(r.x - it.x, r.z - it.z) < 3.2 && Math.abs((r.y || 0) - it.y) < 3) {
+            if (it.def.id === 'repair') r.hp = Math.min(100, r.hp + 35);
+            else r.shieldT = 3.5;
+            feed(r.name + ' GRAB ' + it.def.name, r.css);
+            arenaRoot.remove(it.grp); items.splice(i, 1);
+            break;
+          }
+        }
+      }
+    }
+
     stepProps(dt); stepRings(dt);
+    /* rim stripes breathe: slow pulse keeps the DROP ZONE loud even in calm moments */
+    if (stripePulse) stripePulse.opacity = 0.68 + Math.sin(tG * 2.8) * 0.32;
+    /* floodlight glow drifts a touch — the arena never feels frozen */
+    for (const f of floodlights) f.glow.material.opacity = 0.62 + Math.sin(tG * 1.7 + f.grp.position.x) * 0.14;
 
     /* player ground / fall (physics is in main.js stepPlayer — this is the death check) */
     if (!S.myOut && S.phase === 'fight' && ctx.pJy() < -30 && groundAt(Pp.x, Pp.z) === null) elimPlayer('ring');
@@ -576,6 +626,7 @@ export function createSumo(canvasTex, ctx) {
         if (hit2.hit) { r.vx *= -0.3; r.vz *= -0.3; }
       }
       r.stunT = Math.max(0, (r.stunT || 0) - dt);
+      r.shieldT = Math.max(0, (r.shieldT || 0) - dt);
       const flung = Math.abs(r.vx) + Math.abs(r.vz) > 5 || r.stunT > 0;
       /* target: nearest alive car, player slightly preferred */
       let tx, tz, td = 1e9, tgtIsPlayer = false;
@@ -642,6 +693,7 @@ export function createSumo(canvasTex, ctx) {
       /* smoke when hurt */
       r.smokeT = Math.max(0, r.smokeT - dt);
       if (r.hp < 45 && Math.random() < dt * 4) ctx.puff(r.mesh.position, V3L(0, 0.9, 0), 0.9);
+      if (r.shieldT > 0 && Math.random() < dt * 8) ctx.puff(V3L(r.x, (r.y || 0) + 1.2, r.z), V3L(0, 0.6, 0), 0.5);
       /* metal-on-metal with the player: real shoving — closing speed hurts you BOTH */
       if (!S.myOut && dP < 3.9) {
         const nx = (Pp.x - r.x) / Math.max(0.01, dP), nz = (Pp.z - r.z) / Math.max(0.01, dP);

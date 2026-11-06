@@ -1562,7 +1562,10 @@ const adv = createAdventure(canvasTex, {
   nitroAdd: n => { P.nitro = Math.min(1, P.nitro + n); },
   onRam: (nx, nz, imp) => { P.vel.x += nx * imp; P.vel.z += nz * imp; shake = Math.max(shake, 0.45); sfxThud(); },
   busted: amt => { if (amt > 0) economy.spend(amt); toast(amt > 0 ? `BUSTED!  -$${amt.toLocaleString()}` : 'BUSTED!', '#ff6b6b'); shake = 1; sfxThud(); },
-  escape: () => { economy.add(500); toast('LOST THE COPS!  +$500', '#7dff8a'); missionEvent('escape', 1); confetti(24); },
+  escape: peak => { /* the getaway bonus scales with how hot the pursuit got */
+    const cash = 700 + Math.round((peak || 20) * 45);
+    economy.add(cash); toast(`LOST THE COPS!  +$${cash.toLocaleString()}`, '#7dff8a'); missionEvent('escape', 1); confetti(24);
+  },
   spark: n => confetti(n),
   crateCash: n => { economy.add(n); toast('SUPPLY CRATE  +$' + n.toLocaleString(), '#7dff8a'); sfxCoin(); },
   crateAmmo: () => {
@@ -1590,7 +1593,8 @@ const sumo = createSumo(canvasTex, {
   nitroAdd: n => { P.nitro = Math.min(1, P.nitro + n); },
   cash: n => { economy.add(n); sfxCoin(); },
   pPos: () => P.pos, pVel: () => P.vel, pJy: () => P.jy, pFly: () => FL.on, pH: () => P.h,
-  pAlt: () => (sumo.groundAt(P.pos.x, P.pos.z) ?? 0) + P.jy + FL.alt
+  pAlt: () => (sumo.groundAt(P.pos.x, P.pos.z) ?? 0) + P.jy + FL.alt,
+  onRam: (nx, nz, imp) => { P.vel.x += nx * imp; P.vel.z += nz * imp; shake = Math.max(shake, 0.45); sfxThud(); } /* was missing: rival rams threw and killed the tick */
 });
 sumo.setMerge(mergeGeometries);
 scene.add(sumo.group);
@@ -1710,6 +1714,7 @@ function resetWorld(c) {
     const sp = sumo.enter(c.tier || 0, c.rivals || 3);
     sumoLastRound = sumo.S.round;
     g = { p: V3(sp.x, sp.y, sp.z) }; P.pos.set(sp.x, 0, sp.z); P.h = sp.h; P.idx = 0;
+    car.visible = true;
   }
   else { const slot = c.ai + (c.netSlot || 0); g = sample(-(slot + 1) * 2.4, slot % 2 ? 4 : -4); P.pos.copy(g.p); P.h = Math.atan2(g.t.x, g.t.z); P.idx = (N - Math.round((slot + 1) * 2.4)) % N; }
   P.vel.set(0, 0, 0); P.jy = 0; P.jv = 0; P.spin = 0; P.crosses = 0; P.nitro = 1; P.fuel = flyCap(); P.finished = false; P.rank = c.ai + (c.netSlot || 0) + 1; P.prog = 0; P.scOn = false; P.scI = 0; scCdT = 0;
@@ -1717,6 +1722,8 @@ function resetWorld(c) {
     scHinted = false;
     if (!store.get('ksr.advIntro', 0)) setTimeout(() => { if (cfg.type === 'adv' && state !== 'menu') show('advIntro', true); }, 800);
     if (touch.active && !store.get('ksr.gasHint', 0)) { store.set('ksr.gasHint', 1); setTimeout(() => toast('HOLD DRIVE TO ACCELERATE \u00b7 TAP SHOOT TO FIGHT BACK', '#8df'), 2400); }
+    /* first ride: point the driver at the pink SUMO ARENA gate so the sky fights are never a secret */
+    if (!store.get('ksr.sumo', 0)) setTimeout(() => { if (cfg.type === 'adv' && state === 'race') toast('THE PINK BEAM IS THE SUMO ARENA \u00b7 FOLLOW THE ARROW', '#ff9ae8'); }, 6000);
   }
   /* HARD was overtuned: rivals sat at 89-96% of your top speed AND rubberbanded
      AND kept nitro-bursting. Now 84-92%, softer catch-up, rarer bursts. */
@@ -1947,6 +1954,10 @@ function act(a) {
     startRace({ mode: 'sumo', type: 'sumo', laps: 1, diff: 1, ai: 0, env: 'day', tier, rivals: opt.sumoRivals || 3, fromAdv: true, title: SUMO_ARENAS[tier].name });
   }
   else if (a === 'sumoQuit') { if (cfg.fromAdv) act('advBack'); else toMenu(); }
+  else if (a === 'sumoAgain') { /* REMATCH straight back into the same arena */
+    const tier = clamp((cfg.tier || 0) | 0, 0, SUMO_ARENAS.length - 1);
+    startRace({ mode: 'sumo', type: 'sumo', laps: 1, diff: 1, ai: 0, env: 'day', tier, rivals: cfg.rivals || 3, title: SUMO_ARENAS[tier].name });
+  }
   else if (a === 'wpnSwap') cycleWeapon();
   else if (a === 'advIntroX') { store.set('ksr.advIntro', 1); show('advIntro', false); sfxPad(); }
   else if (a === 'advArsenal') { store.set('ksr.advIntro', 1); show('advIntro', false); toMenu(); showScreen('garage'); const tb = document.querySelector('.gTab[data-gt="arsenal"]'); if (tb) tb.click(); }
@@ -2035,9 +2046,10 @@ $('bShoot').addEventListener('click', () => { if (cfg.type === 'adv' && !wsel) a
 addEventListener('mousedown', e => { /* SUMO: right mouse button = PUNCH (like the real sumo games) */
   if (e.button === 2 && cfg.type === 'sumo' && state === 'race' && !P.finished) sumo.punch();
 });
-/* SUMO menu: show the tile once unlocked, grey out arenas still locked by RESPECT */
+/* SUMO menu: the tile is ALWAYS in the rail now — it is a permanent Street Legends mode.
+   Arenas above your RESPECT level show a lock right on the picker. */
 function updateSumoMenu() {
-  const tile = $('sumoTile'); if (tile) tile.style.display = store.get('ksr.sumo', 0) ? '' : 'none';
+  const tile = $('sumoTile'); if (tile) tile.style.display = '';
   const rep = repLvlOf();
   document.querySelectorAll('[data-s="sumo"] .seg[data-k="sumoTier"] button').forEach(b => {
     const i = +b.dataset.v, locked = i > rep;
@@ -2171,8 +2183,10 @@ function stepPlayer(dt, racing) {
       const dd = Math.hypot(P.pos.x, P.pos.z);
       if (dd > 150) { P.vel.x -= (P.pos.x / dd) * 34 * dt; P.vel.z -= (P.pos.z / dd) * 34 * dt; }
     } else {
-      /* OFF THE EDGE: gravity takes over — jy counts down below deck level */
+      /* OFF THE EDGE: gravity takes over — jy counts down below deck level.
+         Deep enough, the car is gone from view: pure spectator mode. */
       P.jy += P.jv * dt; P.jv -= 30 * dt;
+      if (P.jy < -85) car.visible = false;
       y = 62; pitch = 0;
     }
   } else {
@@ -2420,8 +2434,18 @@ function advUI(dt) {
   if (ah) ah.classList.toggle('hurt', S.hitFlash > 0.45);
   const pp = $('powPct'); if (pp) pp.textContent = Math.round(S.pow) + '%';
   const fr = $('advFree'); if (fr) fr.textContent = 'FREE ' + fmt0(S.freeT);
-  const nx = $('advNext'); if (nx) nx.textContent = S.near ? 'RACE MARKER AHEAD — E / TAP JOIN' : adv.gangWar ? ' GANG FIGHT! WRECK THEM OR RUN' : 'NEXT RACE ' + fmt0(S.nextIn);
-  const rp = $('advRep'); if (rp) rp.textContent = 'LV ' + ((adv.repLvl || 0) + 1);
+  /* the coaching line: what to do NEXT, always — markers live, cops on you, or the wait */
+  const nx = $('advNext'); if (nx) nx.textContent = S.near ? 'RACE MARKER AHEAD — E / TAP JOIN'
+    : S.police > 0 ? 'LOSE THE COPS · SLOW DOWN, HIDE OR FLY!'
+    : adv.gangWar ? 'GANG FIGHT! WRECK THEM OR RUN'
+    : (adv.markers.length ? adv.markers.length + ' MARKER' + (adv.markers.length > 1 ? 'S' : '') + ' ON THE MAP · ' : '') + 'NEXT RACE ' + fmt0(S.nextIn);
+  /* RESPECT progress: the player should always see how far the next level is */
+  const rp = $('advRep');
+  if (rp) {
+    const lv = repLvlOf(), rep0 = store.get('ksr.rep', 0) || 0;
+    const lo = 60 * lv * lv, hi = 60 * (lv + 1) * (lv + 1);
+    rp.textContent = 'LV ' + (lv + 1) + ' · ' + Math.round(clamp((rep0 - lo) / Math.max(1, hi - lo), 0, 1) * 100) + '%';
+  }
   const bw = $('bustWrap');
   if (bw) {
     if (S.bust > 0.05) { bw.style.display = 'block'; if ($('bustBar')) $('bustBar').firstElementChild.style.width = Math.round(clamp(S.bust / 2.6, 0, 1) * 100) + '%'; }
@@ -2449,8 +2473,10 @@ function advUI(dt) {
   }
   const nv = $('advNav');
   if (nv) {
-    if (S.navD > 4 && !S.near && state === 'race') {
+    if (S.navD > 4 && !S.near && state === 'race' && S.navKind) {
       nv.style.display = 'flex';
+      nv.classList.toggle('sumoT', S.navKind === 'sumo');
+      const nm = $('advNavL'); if (nm) nm.textContent = S.navKind === 'sumo' ? 'SUMO ARENA' : 'RACE MARKER';
       const ds2 = $('advDist'); if (ds2) ds2.textContent = Math.round(S.navD) + 'm';
       const ar = $('advArr'); if (ar) ar.style.transform = `rotate(${S.navA}rad)`;
     } else nv.style.display = 'none';
@@ -2458,6 +2484,7 @@ function advUI(dt) {
 }
 
 /* SUMO ARENA HUD: round timer, alive count, power, punch gauge, live scoreboard, kill feed */
+let sumoBoardHTML = '';
 function sumoUI(dt) {
   const S = sumo.S;
   const tEl = $('sumoTime'); if (tEl) tEl.textContent = fmt0(Math.max(0, S.t));
@@ -2477,7 +2504,8 @@ function sumoUI(dt) {
     const rows = [{ name: 'YOU', css: '#7dd7ff', out: S.myOut, stars: S.stars.YOU || 0 },
       ...sumo.RIV.map(r => ({ name: r.name, css: r.css, out: r.elim, stars: S.stars[r.name] || 0 }))]
       .sort((a, b) => b.stars - a.stars || (a.name === 'YOU' ? -1 : b.name === 'YOU' ? 1 : 0));
-    board.innerHTML = rows.map(r => `<div class="sb${r.out ? ' out' : ''}${r.name === 'YOU' ? ' me' : ''}"><i style="background:${r.css}"></i><b>${r.name}</b><em>${r.stars ? '\u2605'.repeat(r.stars) : '&middot;'}</em></div>`).join('');
+    const html = rows.map(r => `<div class="sb${r.out ? ' out' : ''}${r.name === 'YOU' ? ' me' : ''}"><i style="background:${r.css}"></i><b>${r.name}</b><em>${r.stars ? '\u2605'.repeat(r.stars) : '&middot;'}</em></div>`).join('');
+    if (html !== sumoBoardHTML) { board.innerHTML = html; sumoBoardHTML = html; } /* DOM write only when a star or KO actually changes */
   }
   const feedEl = $('sumoFeed');
   if (feedEl) feedEl.innerHTML = S.feed.map(f => `<div class="sf" style="border-color:${f.col}">${esc(f.txt)}</div>`).join('');
@@ -3039,11 +3067,12 @@ function frameBody(now) {
   if (cfg.type === 'adv' && state === 'race' && !P.finished) { adv.tick(dt, { slip: out.slip, sp: out.sp, boosting: out.boosting, alt: FL.alt + P.jy, h: P.h }); stepPvP(dt); }
   if (cfg.type === 'sumo' && state === 'race') {
     sumo.tick(dt, { sp: out.sp, boosting: out.boosting, h: P.h });
-    if (sumo.S.round !== sumoLastRound && !sumo.S.matchOver) { /* next round: back to the grid */
+    if (sumo.S.round !== sumoLastRound && !sumo.S.matchOver) { /* next round: back to the grid, tank topped up */
       sumoLastRound = sumo.S.round;
       const sp2 = sumo.S.spawn;
       P.pos.set(sp2.x, 0, sp2.z); P.h = sp2.h; P.vel.set(0, 0, 0); P.jy = 0; P.jv = 0; P.spin = 0; camYaw = P.h;
       FL.on = false; FL.land = false; FL.alt = 0; document.body.classList.remove('flying');
+      P.nitro = 1; P.fuel = flyCap(); car.visible = true;
       camera.position.set(sp2.x - Math.sin(P.h) * 9, sp2.y + 4 + 62, sp2.z - Math.cos(P.h) * 9);
     }
     if (sumo.S.matchOver && !P.finished) finishSumo();
