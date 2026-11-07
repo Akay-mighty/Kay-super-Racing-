@@ -24,7 +24,8 @@ export function loadGlbCar(def, maxAniso = 8) {
         gltf.scene.traverse(o => {
           if (!o.isMesh) return;
           const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld);
-          for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
+          for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv' && k !== 'color') g.deleteAttribute(k);
+          if (!g.attributes.color) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3));
           if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
           if (g.index) { const n = g.toNonIndexed(); g.dispose(); geos.push(n); } else geos.push(g);
           if (!mat) mat = o.material;
@@ -38,7 +39,7 @@ export function loadGlbCar(def, maxAniso = 8) {
         geo.translate(-(b2.min.x + b2.max.x) / 2, -b2.min.y + (def.lift || 0), -(b2.min.z + b2.max.z) / 2);
         geo.setAttribute('partId', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count), 1)); /* all body */
         geo.computeBoundingBox(); geo.computeBoundingSphere();
-        const m = new THREE.MeshStandardMaterial({ map: mat && mat.map || null, color: 0xffffff, roughness: def.rough ?? 0.45, metalness: def.metal ?? 0.35, envMapIntensity: 1.1 });
+        const m = new THREE.MeshStandardMaterial({ map: mat && mat.map || null, vertexColors: !(mat && mat.map), side: THREE.DoubleSide, color: 0xffffff, roughness: def.rough ?? 0.4, metalness: def.metal ?? 0.25, envMapIntensity: 1.0 });
         if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = maxAniso; m.map.needsUpdate = true; }
         const out = { geo, mat: m }; cache.set(def.url, out); resolve(out);
       } catch (e) { cache.delete(def.url); reject(e); }

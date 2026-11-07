@@ -442,6 +442,45 @@ export function createSumo(canvasTex, ctx) {
   }
   function clearItems() { items.forEach(it => { arenaRoot.remove(it.grp); it.grp.traverse(o => { if (o.geometry && o.geometry !== propGeo.plank) o.geometry.dispose(); }); }); items.length = 0; }
 
+
+  /* ---------- SPRING PUNCH: a coil shoots out of the car's nose and shoves what it hits ---------- */
+  const coilGeo = (() => {
+    const pts = [], TURNS = 7, N = 90;
+    for (let i = 0; i <= N; i++) { const a = i / N * TURNS * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * 0.3, Math.sin(a) * 0.3, i / N)); }
+    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.055, 6, false);
+  })();
+  const coilMat = new THREE.MeshStandardMaterial({ color: 0xdfe6ee, metalness: 0.85, roughness: 0.25, emissive: 0x222a33 });
+  const fistMat = new THREE.MeshStandardMaterial({ color: 0xff7a1a, metalness: 0.3, roughness: 0.35, emissive: 0x7a2a00 });
+  const springs = [];
+  for (let i = 0; i < 4; i++) {
+    const g = new THREE.Group(), coil = new THREE.Mesh(coilGeo, coilMat), fist = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.18, 16).rotateX(Math.PI / 2), fistMat);
+    coil.frustumCulled = false; g.add(coil); g.add(fist); g.visible = false; group.add(g);
+    springs.push({ g, coil, fist, t: 0, own: null, big: false });
+  }
+  const SP_T = 0.5, SP_LEN = 3.4;
+  function springFire(own, big) {
+    const sp = springs.find(q => q.t <= 0) || springs[0];
+    sp.t = SP_T; sp.own = own; sp.big = !!big; sp.g.visible = true;
+    sp.fist.material = big ? fistMat : fistMat;
+  }
+  function stepSprings(dt) {
+    for (const sp of springs) {
+      if (sp.t <= 0) continue;
+      sp.t -= dt; const k = 1 - Math.max(0, sp.t) / SP_T; /* 0..1 */
+      /* fast out (first 28%), brief hold, quick wobbly retract */
+      const e = k < 0.28 ? 1 - Math.pow(1 - k / 0.28, 3) : k < 0.5 ? 1 : Math.max(0, 1 - (k - 0.5) / 0.5);
+      const wob = k > 0.28 && k < 0.5 ? Math.sin((k - 0.28) * 90) * 0.04 : 0;
+      const len = Math.max(0.05, (e + wob) * SP_LEN * (sp.big ? 1.25 : 1));
+      let x, y, z, h;
+      if (sp.own === 'P') { const Pp = ctx.pPos(); h = ctx.pH(); x = Pp.x; z = Pp.z; y = ctx.pAlt ? ctx.pAlt() : 0.6; }
+      else { x = sp.own.x; z = sp.own.z; y = sp.own.y; h = sp.own.h; }
+      const fx = Math.sin(h), fz = Math.cos(h);
+      sp.g.position.set(x + fx * 2.1, y + 0.62, z + fz * 2.1); sp.g.rotation.set(0, h, 0);
+      sp.coil.scale.set(1, 1, len); sp.fist.position.z = len + 0.09;
+      if (sp.t <= 0) sp.g.visible = false;
+    }
+  }
+
   /* ---------- punch shockwave visuals ---------- */
   const rings = [];
   for (let i = 0; i < 4; i++) {
@@ -604,6 +643,7 @@ export function createSumo(canvasTex, ctx) {
     const Pp = ctx.pPos(), h = ctx.pH(), Pv = ctx.pVel();
     const fx = Math.sin(h), fz = Math.cos(h);
     const mega = S.mega > 0; if (mega) S.mega = 0;
+    springFire('P', mega);
     ringFX(Pp.x + fx * 2.4, ctx.pAlt ? ctx.pAlt() : 0.6, Pp.z + fz * 2.4, mega ? 0xff9a2f : 0xffffff);
     ctx.beep(mega ? 120 : 150, 0.1, 'square', 0.13); ctx.thud(); ctx.shake(mega ? 0.6 : 0.35);
     let hits = 0;
@@ -714,7 +754,7 @@ export function createSumo(canvasTex, ctx) {
       }
     }
 
-    stepProps(dt); stepRings(dt);
+    stepProps(dt); stepRings(dt); stepSprings(dt);
     /* rim stripes breathe: slow pulse keeps the DROP ZONE loud even in calm moments */
     if (stripePulse) stripePulse.opacity = 0.68 + Math.sin(tG * 2.8) * 0.32;
     /* floodlight glow drifts a touch — the arena never feels frozen */
@@ -815,6 +855,7 @@ export function createSumo(canvasTex, ctx) {
       r.punchCd -= dt;
       if (td < 8.5 && r.punchCd <= 0 && Math.abs(angDiff(Math.atan2(tx - r.x, tz - r.z), r.h)) < 0.6) {
         r.punchCd = rand(2.6, 4.2) / (0.7 + r.skill * 0.5);
+        springFire(r, false);
         ringFX(r.x + Math.sin(r.h) * 2.4, r.y, r.z + Math.cos(r.h) * 2.4, 0xffffff);
         ctx.puff(r.mesh.position, V3L(0, 0.8, 0), 1.2);
         ctx.beep(130, 0.09, 'square', 0.08);
