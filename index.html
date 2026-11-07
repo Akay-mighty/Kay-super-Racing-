@@ -422,13 +422,18 @@ body.sumo.touch #sumoCar{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 272
 body.sumo.touch #bPunch{display:flex}
 body.sumo.touch #sumoPunch{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 186px)}
 
-/* ---- SUMO layout fixes: nothing overlaps on a phone ---- */
+/* ---- SUMO layout: manual GAS, no nitro / drift. Right thumb zone, nothing overlaps ---- */
 body.sumo.touch #sumoHud{left:12px;transform:none;width:calc(100vw - 12px - 188px)}
 body.sumo #fuelHud{top:calc(max(10px,env(safe-area-inset-top)) + 76px)}
 body.sumo #sumoBoard{top:calc(max(10px,env(safe-area-inset-top)) + 118px)}
 body.sumo.touch #sumoFeed{right:124px;top:calc(max(10px,env(safe-area-inset-top)) + 62px);max-width:52vw}
-body.sumo.touch #bDrift{bottom:calc(max(30px,env(safe-area-inset-bottom)) + 196px)}
-body.sumo.touch #sumoCar{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 348px)}
+body.sumo #bBoost,body.sumo #bDrift{display:none!important}
+body.sumo.touch #bGas{display:flex;right:max(18px,env(safe-area-inset-right));bottom:max(28px,env(safe-area-inset-bottom));width:104px;height:104px;font-size:19px;border-color:#7dff8a}
+body.sumo.touch #bBrake{right:calc(max(18px,env(safe-area-inset-right)) + 118px);bottom:max(28px,env(safe-area-inset-bottom));width:76px;height:76px}
+body.sumo.touch #bPunch{right:max(24px,env(safe-area-inset-right));bottom:calc(max(28px,env(safe-area-inset-bottom)) + 120px);width:84px;height:84px;font-size:14px}
+body.sumo.touch #bFly{right:calc(max(18px,env(safe-area-inset-right)) + 124px);bottom:calc(max(28px,env(safe-area-inset-bottom)) + 96px);width:64px;height:64px}
+body.sumo.touch #sumoPunch{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 246px)}
+body.sumo.touch #sumoCar{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 300px)}
 #sumoQuit{display:none}
 body.sumo #sumoQuit{display:block}
 body.sumo #pauseRetry{display:block}
