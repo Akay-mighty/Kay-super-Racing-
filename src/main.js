@@ -1707,6 +1707,7 @@ function resetWorld(c) {
   document.body.classList.toggle('arena', arenaOn && c.mode !== 'menu');
   document.body.classList.toggle('adv', advOn && c.mode !== 'menu');
   document.body.classList.toggle('sumo', sumoOn && c.mode !== 'menu');
+  { const gb = $('bGas'); if (gb) gb.textContent = sumoOn && c.mode !== 'menu' ? 'GAS' : 'DRIVE'; }
   if (!sumoOn) sumoLastRound = 0;
   if (!advOn) { /* leaving free-roam: every adventure overlay MUST go away — the stuck JOIN RACE banner */
     ['advPrompt', 'advNav', 'bustWrap'].forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
@@ -2070,8 +2071,9 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) pause
 function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
 
 function stepPlayer(dt, racing) {
-  const advGas = cfg.type === 'adv' && touch.gasEver; /* after the first DRIVE tap, the pedal rules the throttle */
-  const k = { up: keys.KeyW || keys.ArrowUp || gp.up || ((touch.active && !touch.down) && !advGas) || (advGas && touch.gas > 0), down: keys.KeyS || keys.ArrowDown || gp.down || touch.down, left: keys.KeyA || keys.ArrowLeft, right: keys.KeyD || keys.ArrowRight, boost: keys.ShiftLeft || keys.ShiftRight || gp.boost || touch.boost, drift: keys.Space || gp.drift || touch.drift };
+  const sumoMode = cfg.type === 'sumo';
+  const advGas = (cfg.type === 'adv' && touch.gasEver) || sumoMode; /* ADV: after the first DRIVE tap the pedal rules; SUMO: you ALWAYS drive yourself (GAS button), never auto-drive */
+  const k = { up: keys.KeyW || keys.ArrowUp || gp.up || ((touch.active && !touch.down) && !advGas) || (advGas && touch.gas > 0), down: keys.KeyS || keys.ArrowDown || gp.down || touch.down, left: keys.KeyA || keys.ArrowLeft, right: keys.KeyD || keys.ArrowRight, boost: !sumoMode && (keys.ShiftLeft || keys.ShiftRight || gp.boost || touch.boost), drift: !sumoMode && (keys.Space || gp.drift || touch.drift) }; /* no nitro / drift in the sumo arena */
   const f = V3(Math.sin(P.h), 0, Math.cos(P.h)), rt = V3(-f.z, 0, f.x);
   const fwd = P.vel.dot(f), sp = P.vel.length();
   const can = racing && !P.finished && !(cfg.type === 'sumo' && (sumo.S.freeze || sumo.S.myOut));
@@ -2398,7 +2400,7 @@ function hud(dt, sp, boosting) {
   const kph = Math.round(sp * 3.6); $('spd').textContent = kph;
   $('ring').style.strokeDashoffset = 389.6 * (1 - clamp(kph / (CS.top * 3.6 + 48), 0, 1));
   $('ring').style.stroke = boosting ? '#7ff' : '#3cf';
-  $('nit').textContent = `NITRO ${Math.round(P.nitro * 100)}%`;
+  $('nit').textContent = cfg.type === 'sumo' ? '' : `NITRO ${Math.round(P.nitro * 100)}%`;
   const fh = $('fuelHud');
   if (fh) {
     const on = !!CS.fly && cfg.type !== 'arena' && (state === 'race' || state === 'count');

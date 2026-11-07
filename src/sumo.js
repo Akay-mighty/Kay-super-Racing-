@@ -20,6 +20,7 @@ export const SUMO_ARENAS = [
   { name: 'LEGEND SUMMIT', css: '#ff4dd8', floor: 0xd8479e, rep: 3, t: 85, pay: 2.6, ai: [0.84, 0.9, 0.96, 1.0, 1.02], desc: 'THREE ISLANDS · ELITE CREW' }
 ];
 const ROUNDS = 3;
+const ROUND_COLS = [0x48b556, 0xe8683a, 0x2fa9dc]; /* the slab is repainted every round: green, orange, blue — like the reference */
 const NAMES = ['VEX', 'BRUTE', 'TANK', 'SLICK', 'HORN'];
 const RCOL = [0xff5c8a, 0x9d5cff, 0x35d16a, 0xff7a2a, 0x2de2ff];
 const RID = ['blaze', 'titan', 'cab', 'volt', 'sultan'];
@@ -28,8 +29,7 @@ export const SUMO_RIVAL_IDS = RID;
 const ITEMS = [
   { id: 'repair', name: 'REPAIR', col: 0x35d16a },
   { id: 'mega', name: 'MEGA PUNCH', col: 0xff9a2f },
-  { id: 'shield', name: 'SHIELD', col: 0x2de2ff },
-  { id: 'nitro', name: 'NITRO', col: 0xffd166 }
+  { id: 'shield', name: 'SHIELD', col: 0x2de2ff }
 ];
 
 export function createSumo(canvasTex, ctx) {
@@ -165,27 +165,23 @@ export function createSumo(canvasTex, ctx) {
 
   /* ---------- floor scuff texture: tyre streaks baked into every deck (the reference
      arena is never flat — rubber, scuffs and patches make it a PLACE, not a plane) ---------- */
-  const scuffTex = canvasTex(512, 512, g => {
-    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 1800; i++) { g.fillStyle = `rgba(0,0,0,${rand(0.015, 0.06).toFixed(3)})`; g.fillRect(rand(0, 512), rand(0, 512), rand(1, 4), rand(1, 4)); } /* concrete grain */
-    g.lineCap = 'round';
-    for (let i = 0; i < 34; i++) { /* rubber streaks */
-      g.strokeStyle = `rgba(20,12,8,${rand(0.07, 0.2).toFixed(3)})`; g.lineWidth = rand(4, 12);
-      const x = rand(0, 512), y = rand(0, 512), a = rand(0, TAU), l = rand(60, 220);
-      g.beginPath(); g.moveTo(x, y);
-      g.quadraticCurveTo(x + Math.cos(a) * l * 0.5 + rand(-30, 30), y + Math.sin(a) * l * 0.5 + rand(-30, 30), x + Math.cos(a) * l, y + Math.sin(a) * l);
-      g.stroke();
+  const scuffTex = canvasTex(1024, 1024, g => {
+    /* clean painted slab like the reference: flat colour, soft grain, big swooping tyre arcs (drawn dark, multiplied over the paint) */
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 1024, 1024);
+    for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(0,0,0,${rand(0.008, 0.03).toFixed(3)})`; g.fillRect(rand(0, 1024), rand(0, 1024), rand(2, 6), rand(2, 6)); }
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    for (let i = 0; i < 16; i++) { /* long arcs = donuts and drifts */
+      const cx = rand(0, 1024), cy = rand(0, 1024), r = rand(120, 380), a0 = rand(0, TAU), a1 = a0 + rand(0.9, 2.6);
+      for (const off of [-9, 9]) { g.strokeStyle = `rgba(10,30,14,${rand(0.10, 0.2).toFixed(3)})`; g.lineWidth = rand(7, 12); g.beginPath(); g.arc(cx, cy, r + off, a0, a1); g.stroke(); }
     }
-    for (let k = 0; k <= 512; k += 128) { /* steel-plate seams every 4 m: dark groove + light edge */
-      g.fillStyle = 'rgba(0,0,0,.30)'; g.fillRect(k - 1.5, 0, 3, 512); g.fillRect(0, k - 1.5, 512, 3);
-      g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(k + 1.5, 0, 1.5, 512); g.fillRect(0, k + 1.5, 512, 1.5);
+    for (let i = 0; i < 12; i++) { /* straight skids */
+      const x = rand(0, 1024), y = rand(0, 1024), a = rand(0, TAU), l = rand(180, 420);
+      for (const off of [-8, 8]) { g.strokeStyle = `rgba(10,24,12,${rand(0.08, 0.16).toFixed(3)})`; g.lineWidth = rand(6, 10); g.beginPath(); g.moveTo(x + Math.cos(a + 1.57) * off, y + Math.sin(a + 1.57) * off); g.lineTo(x + Math.cos(a) * l + Math.cos(a + 1.57) * off, y + Math.sin(a) * l + Math.sin(a + 1.57) * off); g.stroke(); }
     }
-    g.fillStyle = 'rgba(0,0,0,.28)'; /* bolts */
-    for (let x = 12; x < 512; x += 128) for (let y = 12; y < 512; y += 128) { g.fillRect(x, y, 5, 5); g.fillRect(x + 104, y, 5, 5); g.fillRect(x, y + 104, 5, 5); g.fillRect(x + 104, y + 104, 5, 5); }
   });
   scuffTex.wrapS = scuffTex.wrapT = THREE.RepeatWrapping; scuffTex.anisotropy = 8;
   /* BoxGeometry UVs stretch one texture over a whole deck (= a blurry smear). World-space UVs keep it sharp. */
-  function worldUV(g, tile) { const p = g.attributes.position, u = g.attributes.uv; for (let i = 0; i < p.count; i++) u.setXY(i, (p.getX(i) + p.getZ(i) * 0.0) / tile, p.getZ(i) / tile); return g; }
+  function worldUV(g, tile) { const p = g.attributes.position, u = g.attributes.uv; for (let i = 0; i < p.count; i++) u.setXY(i, p.getX(i) / tile, p.getZ(i) / tile); return g; }
 
   /* ---------- build / rebuild the arena meshes ---------- */
   let builtTier = -1;
@@ -197,13 +193,15 @@ export function createSumo(canvasTex, ctx) {
     /* clear the old dynamic root */
     if (arenaRoot) { group.remove(arenaRoot); arenaRoot.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
     arenaRoot = new THREE.Group(); group.add(arenaRoot);
-    const deckMat = new THREE.MeshStandardMaterial({ color: 0x1d2126, roughness: 0.9, metalness: 0.05 });
+    const deckMat = new THREE.MeshStandardMaterial({ color: 0x474c55, roughness: 0.9, metalness: 0.05 });
     const topMat = new THREE.MeshStandardMaterial({ color: 0x2c3138, roughness: 0.85, metalness: 0.05 });
     /* the BOLD tier floor sits on top of the dark structure: bright slab where you drive,
        dark sides below so the platform still reads as a heavy man-made thing in the sky */
     const FLOOR = SUMO_ARENAS[tier].floor || 0xe06428;
-    const floorMat = new THREE.MeshStandardMaterial({ color: FLOOR, roughness: 0.82, metalness: 0.06, map: scuffTex });
-    const pitMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(FLOOR).multiplyScalar(0.4), roughness: 0.92, metalness: 0.05, map: scuffTex });
+    const floorMat = new THREE.MeshStandardMaterial({ color: ROUND_COLS[0], roughness: 0.9, metalness: 0.0, map: scuffTex });
+    floorMatRef = floorMat;
+    const pitMat = new THREE.MeshStandardMaterial({ color: 0xe4e7ec, roughness: 0.95, metalness: 0.0, map: scuffTex }); /* pale pit bottom: you SEE the drop */
+    const rampMat = new THREE.MeshStandardMaterial({ color: 0x3a3f47, roughness: 0.9, metalness: 0.05, map: scuffTex }); /* dark ramps */
     const geos = [], floorGeos = [], pitGeos = [], edgeGeos = [], rampGeos = [], wallGeos = [];
     for (const d of decks) {
       /* a deck with a hole (the pit) is drawn as four frame boxes so the hole is REAL */
@@ -217,7 +215,7 @@ export function createSumo(canvasTex, ctx) {
         const g = new THREE.BoxGeometry(w, 10, dp); g.translate((rx0 + rx1) / 2, d.y - 5.3, (rz0 + rz1) / 2);
         geos.push(g);
         /* bright driving slab, top face flush with groundAt() so wheels sit ON it */
-        const fg = new THREE.BoxGeometry(w - 0.5, 0.3, dp - 0.5); fg.translate((rx0 + rx1) / 2, d.y - 0.15, (rz0 + rz1) / 2); worldUV(fg, 16);
+        const fg = new THREE.BoxGeometry(w - 0.5, 0.3, dp - 0.5); fg.translate((rx0 + rx1) / 2, d.y - 0.15, (rz0 + rz1) / 2); worldUV(fg, 48);
         (d.y < -1 ? pitGeos : floorGeos).push(fg);
         const t = 0.55, ec = edgeGeos;
         ec.push(new THREE.BoxGeometry(w, t, t).translate((rx0 + rx1) / 2, d.y + 0.1, rz0 + t / 2));
@@ -233,9 +231,10 @@ export function createSumo(canvasTex, ctx) {
       if (r.a === 'x') g.rotateZ(Math.atan2(y1 - y0, w) * (r.d > 0 ? 1 : -1));
       else g.rotateX(-Math.atan2(y1 - y0, dp) * (r.d > 0 ? 1 : -1));
       g.translate((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2 - 0.2, (r.z0 + r.z1) / 2);
-      worldUV(g, 16); rampGeos.push(g);
+      worldUV(g, 48); rampGeos.push(g);
     }
     for (const wl of walls) {
+      if (wl.hide) continue;
       const g = new THREE.BoxGeometry(wl.x1 - wl.x0, wl.y1 - wl.y0, wl.z1 - wl.z0);
       g.translate((wl.x0 + wl.x1) / 2, (wl.y0 + wl.y1) / 2, (wl.z0 + wl.z1) / 2);
       wallGeos.push(g);
@@ -244,29 +243,57 @@ export function createSumo(canvasTex, ctx) {
     deckMesh.receiveShadow = true; arenaRoot.add(deckMesh);
     if (floorGeos.length) { const fm = new THREE.Mesh(mergeAll(floorGeos), floorMat); fm.receiveShadow = true; arenaRoot.add(fm); }
     if (pitGeos.length) { const pm = new THREE.Mesh(mergeAll(pitGeos), pitMat); pm.receiveShadow = true; arenaRoot.add(pm); }
-    if (rampGeos.length) { const rm = new THREE.Mesh(mergeAll(rampGeos), floorMat); rm.receiveShadow = true; arenaRoot.add(rm); }
-    if (wallGeos.length) { const wm = new THREE.Mesh(mergeAll(wallGeos), new THREE.MeshStandardMaterial({ color: 0x3a4150, roughness: 0.8, metalness: 0.15 })); wm.castShadow = wm.receiveShadow = true; arenaRoot.add(wm); }
+    if (rampGeos.length) { const rm = new THREE.Mesh(mergeAll(rampGeos), rampMat); rm.receiveShadow = true; arenaRoot.add(rm); }
+    if (wallGeos.length) { const wm = new THREE.Mesh(mergeAll(wallGeos), new THREE.MeshStandardMaterial({ color: 0x626976, roughness: 0.85, metalness: 0.1 })); wm.castShadow = wm.receiveShadow = true; arenaRoot.add(wm); }
     /* rim stripes: bright additive — the arena reads instantly from any angle */
-    const stripe = new THREE.Mesh(mergeAll(edgeGeos), new THREE.MeshBasicMaterial({ color: edgeCols[tier % 3], toneMapped: false, transparent: true }));
-    arenaRoot.add(stripe);
-    stripePulse = stripe.material; /* the rim breathes in tick() — the edge reads as DANGER from any angle */
-    const stripe2 = stripe.clone(); stripe2.material = new THREE.MeshBasicMaterial({ color: 0x141821, toneMapped: false });
-    stripe2.position.y = -0.9; stripe2.scale.set(1.004, 1, 1.004); arenaRoot.add(stripe2);
+    const stripe = new THREE.Mesh(mergeAll(edgeGeos), new THREE.MeshStandardMaterial({ color: 0x30343b, roughness: 0.85, metalness: 0.05 }));
+    stripe.receiveShadow = true; arenaRoot.add(stripe);
+    stripePulse = { opacity: 1 }; /* the rim breathes in tick() — the edge reads as DANGER from any angle */
+    
     /* concrete support pillars under every deck corner: the arena stands on something, like the reference */
     { const pg = [], pilMat = new THREE.MeshStandardMaterial({ color: 0x59606c, roughness: 0.9, metalness: 0.05 });
       for (const d of decks) if (d.y > -1) for (const [px, pz] of [[d.x0 + 5, d.z0 + 5], [d.x1 - 5, d.z0 + 5], [d.x0 + 5, d.z1 - 5], [d.x1 - 5, d.z1 - 5]]) pg.push(new THREE.BoxGeometry(5.5, 70, 5.5).translate(px, d.y - 10.3 - 35, pz));
       if (pg.length) { const pm = new THREE.Mesh(mergeAll(pg), pilMat); pm.castShadow = pm.receiveShadow = true; arenaRoot.add(pm); } }
+    buildScaffolds(tier);
     buildProps(tier);
     buildLights(tier);
     buildMiniBase(tier);
   }
+  /* ---------- scaffold towers (steel pipes + wooden plank decks), like the reference ---------- */
+  const SCAF = [
+    [[-92, 92], [92, -92], [92, 92]],
+    [[-92, -72], [-92, 72], [92, -72], [92, 72]],
+    [[-92, 96], [92, 96], [-92, -100], [92, -100]]
+  ];
+  function buildScaffolds(tier) {
+    const steel = [], wood = [], H = 13, Wd = 9;
+    const bx = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
+    for (const [cx, cz] of SCAF[tier] || SCAF[0]) {
+      const g0 = groundAt(cx, cz); if (g0 === null) continue;
+      const y0 = g0, h = Wd / 2;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) steel.push(bx(0.5, H, 0.5, cx + sx * h, y0 + H / 2, cz + sz * h));
+      for (const ly of [0.3, 4.6, 8.9, H - 0.2]) {
+        for (const sz of [-1, 1]) steel.push(bx(Wd, 0.3, 0.3, cx, y0 + ly, cz + sz * h));
+        for (const sx of [-1, 1]) steel.push(bx(0.3, 0.3, Wd, cx + sx * h, y0 + ly, cz));
+      }
+      for (const sz of [-1, 1]) for (let l = 0; l < 3; l++) { /* X braces on the long faces */
+        const ya = y0 + 0.3 + l * 4.3, len = Math.hypot(Wd, 4.3), ang = Math.atan2(4.3, Wd);
+        for (const sg of [-1, 1]) { const br = new THREE.BoxGeometry(len, 0.2, 0.2); br.rotateZ(sg * ang); br.translate(cx, ya + 2.15, cz + sz * h); steel.push(br); }
+      }
+      for (let i = 0; i < 6; i++) wood.push(bx(Wd + 0.6, 0.18, 1.3, cx, y0 + H, cz - h + 0.75 + i * 1.5)); /* top planks */
+      for (let i = 0; i < 5; i++) wood.push(bx(Wd - 0.6, 0.16, 1.2, cx, y0 + 6.5 + i * 0.004, cz - h + 0.9 + i * 1.7)); /* mid planks */
+      walls.push({ x0: cx - h, x1: cx + h, z0: cz - h, z1: cz + h, y0: y0, y1: y0 + H, hide: true }); /* solid footprint */
+    }
+    if (steel.length) { const m = new THREE.Mesh(mergeAll(steel), new THREE.MeshStandardMaterial({ color: 0x9aa3ad, roughness: 0.55, metalness: 0.6 })); m.castShadow = m.receiveShadow = true; arenaRoot.add(m); }
+    if (wood.length) { const m = new THREE.Mesh(mergeAll(wood), new THREE.MeshStandardMaterial({ color: 0xc98f4e, roughness: 0.9 })); m.castShadow = m.receiveShadow = true; arenaRoot.add(m); }
+  }
   /* ---------- corner floodlight towers: the stadium reads at a glance and every tier gets its own colour ---------- */
   function buildLights(tier) {
     floodlights.forEach(f => arenaRoot.remove(f.grp)); floodlights = [];
-    const col = new THREE.Color(SUMO_ARENAS[tier].css);
+    const col = new THREE.Color(0xfff3d6);
     for (const [lx, lz] of [[-118, -118], [118, -118], [118, 118], [-118, 118]]) {
       const grp = new THREE.Group();
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.9, 30, 8), new THREE.MeshStandardMaterial({ color: 0x39404d, roughness: 0.7, metalness: 0.4 }));
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, 30, 8), new THREE.MeshStandardMaterial({ color: 0x15181d, roughness: 0.7, metalness: 0.4 }));
       pole.position.y = 15; grp.add(pole);
       const head = new THREE.Mesh(new THREE.BoxGeometry(7, 2.4, 1.6), new THREE.MeshStandardMaterial({ color: 0x22262e, roughness: 0.5, metalness: 0.5 }));
       head.position.y = 30.5; head.lookAt(0, 20, 0); grp.add(head);
@@ -274,15 +301,15 @@ export function createSumo(canvasTex, ctx) {
         const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.5, 0.4), new THREE.MeshBasicMaterial({ color: col.clone().multiplyScalar(2.2), toneMapped: false }));
         lamp.position.set((i - 1) * 2.2, 30.5, 0.6); head.add(lamp);
       }
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: col, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-      glow.scale.set(16, 16, 1); glow.position.y = 30.5; grp.add(glow);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: col, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+      glow.scale.set(11, 11, 1); glow.position.y = 30.5; grp.add(glow);
       /* aim the head at the arena middle */
       grp.position.set(lx, 0, lz); grp.lookAt(0, 6, 0); grp.rotation.x = 0; grp.rotation.z = 0;
       arenaRoot.add(grp); floodlights.push({ grp, glow });
     }
   }
   function mergeAll(list) { return list.length > 1 ? mergeGeos(list) : list[0]; }
-  let arenaRoot = null;
+  let arenaRoot = null, floorMatRef = null;
   let mergeGeos = null; /* injected via ctx to avoid the addon import here */
 
   /* ---------- ground & wall queries ---------- */
@@ -341,14 +368,14 @@ export function createSumo(canvasTex, ctx) {
   };
   function buildProps(tier) {
     props.forEach(p => arenaRoot.remove(p.mesh)); props.length = 0;
-    const N = 30 + tier * 8;
+    const N = 56 + tier * 8;
     for (let i = 0; i < N; i++) {
       for (let t = 0; t < 24; t++) {
         const x = rand(-100, 100), z = rand(-100, 100);
         const g = groundAt(x, z);
         if (g === null || g < -1) continue;
         if (inAnyWall(x, z, 2)) continue;
-        const kind = ['plank', 'plank', 'pole', 'barrel', 'crate'][(Math.random() * 5) | 0];
+        const kind = ['plank', 'plank', 'plank', 'pole', 'pole', 'barrel', 'crate'][(Math.random() * 7) | 0];
         const mesh = new THREE.Mesh(propGeo[kind], propMat[kind]);
         mesh.castShadow = true; mesh.position.set(x, g + (kind === 'plank' || kind === 'pole' ? 0.4 : 0.65), z);
         mesh.rotation.y = rand(0, TAU); arenaRoot.add(mesh);
@@ -494,6 +521,7 @@ export function createSumo(canvasTex, ctx) {
 
   /* ---------- round flow ---------- */
   function startRound(round) {
+    if (floorMatRef) floorMatRef.color.setHex(ROUND_COLS[(round - 1) % ROUND_COLS.length]); /* repaint the slab every round */
     S.round = round; S.phase = 'intro'; S.phaseT = round === 1 ? 2.4 : 2.2; S.freeze = true;
     S.t = SUMO_ARENAS[S.tier].t; S.itemT = rand(6, 9);
     S.feed.length = 0; /* stale "VEX WINS THE ROUND" must not bleed into the next ROUND — FIGHT */
@@ -671,7 +699,7 @@ export function createSumo(canvasTex, ctx) {
     /* rim stripes breathe: slow pulse keeps the DROP ZONE loud even in calm moments */
     if (stripePulse) stripePulse.opacity = 0.68 + Math.sin(tG * 2.8) * 0.32;
     /* floodlight glow drifts a touch — the arena never feels frozen */
-    for (const f of floodlights) f.glow.material.opacity = 0.62 + Math.sin(tG * 1.7 + f.grp.position.x) * 0.14;
+    for (const f of floodlights) f.glow.material.opacity = 0.34 + Math.sin(tG * 1.7 + f.grp.position.x) * 0.06;
 
     /* player ground / fall (physics is in main.js stepPlayer — this is the death check) */
     if (!S.myOut && S.phase === 'fight' && ctx.pJy() < -30 && groundAt(Pp.x, Pp.z) === null) elimPlayer('ring');
@@ -683,7 +711,7 @@ export function createSumo(canvasTex, ctx) {
       const c2 = S.mega > 0 ? '#ff9a2f' : S.punchCd > 0.05 ? '#ffffff' : '#ffd166';
       if (t2 !== tagTxt) { tagTxt = t2; drawTag(t2, c2); }
       tagSpr.position.set(Pp.x, (ctx.pAlt() || 0) + 3.4, Pp.z);
-      tagSpr.visible = true;
+      tagSpr.visible = false; /* the HUD punch bar says it already — a giant floating plate blocked the view */
     } else if (tagSpr.visible) { tagSpr.visible = false; tagTxt = ''; }
 
     /* rivals */
