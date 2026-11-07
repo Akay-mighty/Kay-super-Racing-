@@ -31,7 +31,7 @@ export function loadGlbCar(def, maxAniso = 8) {
           if (!mat) mat = o.material;
         });
         const geo = mergeGeometries(geos); if (!geo) throw new Error('empty model');
-        geo.rotateY(def.rotY || 0);
+        geo.rotateY((def.rotY || 0) + Math.PI); /* new GLB nose points -Z */
         geo.computeBoundingBox(); const b = geo.boundingBox;
         const k = (def.len || 4.5) / (b.max.z - b.min.z);
         geo.scale(k, k, k);

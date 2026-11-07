@@ -446,14 +446,14 @@ export function createSumo(canvasTex, ctx) {
   /* ---------- SPRING PUNCH: a coil shoots out of the car's nose and shoves what it hits ---------- */
   const coilGeo = (() => {
     const pts = [], TURNS = 7, N = 90;
-    for (let i = 0; i <= N; i++) { const a = i / N * TURNS * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * 0.3, Math.sin(a) * 0.3, i / N)); }
-    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.055, 6, false);
+    for (let i = 0; i <= N; i++) { const a = i / N * TURNS * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * 0.42, Math.sin(a) * 0.42, i / N)); }
+    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.1, 8, false);
   })();
-  const coilMat = new THREE.MeshStandardMaterial({ color: 0xdfe6ee, metalness: 0.85, roughness: 0.25, emissive: 0x222a33 });
-  const fistMat = new THREE.MeshStandardMaterial({ color: 0xff7a1a, metalness: 0.3, roughness: 0.35, emissive: 0x7a2a00 });
+  const coilMat = new THREE.MeshStandardMaterial({ color: 0xdfe6ee, metalness: 0.85, roughness: 0.25, emissive: 0x4a5a6a });
+  const fistMat = new THREE.MeshStandardMaterial({ color: 0xff7a1a, metalness: 0.3, roughness: 0.35, emissive: 0xaa3a00 });
   const springs = [];
   for (let i = 0; i < 4; i++) {
-    const g = new THREE.Group(), coil = new THREE.Mesh(coilGeo, coilMat), fist = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.18, 16).rotateX(Math.PI / 2), fistMat);
+    const g = new THREE.Group(), coil = new THREE.Mesh(coilGeo, coilMat), fist = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.22, 20).rotateX(Math.PI / 2), fistMat);
     coil.frustumCulled = false; g.add(coil); g.add(fist); g.visible = false; group.add(g);
     springs.push({ g, coil, fist, t: 0, own: null, big: false });
   }
@@ -1014,7 +1014,7 @@ export function createSumo(canvasTex, ctx) {
 
   return {
     group, S, SUMO_ARENAS, RIV,
-    enter, tick, punch, hitPower, groundAt, collide, slopeAt, drawMini, respawnAt,
+    springs, enter, tick, punch, hitPower, groundAt, collide, slopeAt, drawMini, respawnAt,
     setMerge(f) { mergeGeos = f; },
     get myStars() { return myStars; },
     get roundWins() { return roundWins; },
