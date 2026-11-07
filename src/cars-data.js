@@ -83,6 +83,16 @@ export const CARS = [
     stats: { top: 138, accel: 74, steer: 2.2, drift: 1.8, fly: false }
   },
   {
+    id: 'ferrari', name: 'FERRARI', price: 2500000, tag: 'DREAM CAR',
+    desc: 'The real thing. A true supercar model: low, wide and ferociously quick.',
+    glb: { url: '/models/ferrari-lite.glb', len: 4.5, rotY: 0 },
+    spec: cloneSport(s => {
+      s.name = 'ferrari'; s.halfWidth = s.halfWidth.map(([z, v]) => [z, v * 1.1]); s.wheelX *= 1.1;
+      s.cabin.roofY = s.cabin.roofY.map(([z, v]) => [z, v * 0.8]); s.chrome = false; s.wheelRadius = 0.38;
+    }),
+    stats: { top: 140, accel: 76, steer: 2.2, drift: 1.8, fly: false }
+  },
+  {
     id: 'ghost', name: 'GHOST X PROTO', price: 1000000, tag: 'FLYING \u2708 KING', fly: true,
     desc: 'The endgame. Fastest car in the game AND it flies.',
     spec: cloneSport(s => {

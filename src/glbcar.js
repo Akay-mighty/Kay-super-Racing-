@@ -1,0 +1,49 @@
+// Kay Super Racing — loads a real 3D model (.glb) as a drop-in car body.
+// The model is merged into ONE geometry (so the rest of the game — shadows, tattoos
+// guard, garage preview — treats it like any other car body), fitted to the same size
+// and ground line as the built-in cars, and cached. Heavy models must be pre-decimated.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+const cache = new Map(); /* url -> {geo, mat} | Promise */
+let loader = null;
+
+export function glbCarReady(url) { const v = cache.get(url); return v && !(v instanceof Promise) ? v : null; }
+
+export function loadGlbCar(def, maxAniso = 8) {
+  const hit = cache.get(def.url);
+  if (hit) return hit instanceof Promise ? hit : Promise.resolve(hit);
+  if (!loader) { loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder); }
+  const p = new Promise((resolve, reject) => {
+    loader.load(def.url, gltf => {
+      try {
+        gltf.scene.updateMatrixWorld(true);
+        const geos = []; let mat = null;
+        gltf.scene.traverse(o => {
+          if (!o.isMesh) return;
+          const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld);
+          for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
+          if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+          if (g.index) { const n = g.toNonIndexed(); g.dispose(); geos.push(n); } else geos.push(g);
+          if (!mat) mat = o.material;
+        });
+        const geo = mergeGeometries(geos); if (!geo) throw new Error('empty model');
+        geo.rotateY(def.rotY || 0);
+        geo.computeBoundingBox(); const b = geo.boundingBox;
+        const k = (def.len || 4.5) / (b.max.z - b.min.z);
+        geo.scale(k, k, k);
+        geo.computeBoundingBox(); const b2 = geo.boundingBox;
+        geo.translate(-(b2.min.x + b2.max.x) / 2, -b2.min.y + (def.lift || 0), -(b2.min.z + b2.max.z) / 2);
+        geo.setAttribute('partId', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count), 1)); /* all body */
+        geo.computeBoundingBox(); geo.computeBoundingSphere();
+        const m = new THREE.MeshStandardMaterial({ map: mat && mat.map || null, color: 0xffffff, roughness: def.rough ?? 0.45, metalness: def.metal ?? 0.35, envMapIntensity: 1.1 });
+        if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = maxAniso; m.map.needsUpdate = true; }
+        const out = { geo, mat: m }; cache.set(def.url, out); resolve(out);
+      } catch (e) { cache.delete(def.url); reject(e); }
+    }, undefined, e => { cache.delete(def.url); reject(e); });
+  });
+  cache.set(def.url, p);
+  return p;
+}
