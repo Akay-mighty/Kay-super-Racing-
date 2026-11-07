@@ -414,6 +414,9 @@ body.sumo #sumoPunch{display:flex}
 /* gold hit-flash: YOUR punches and rams light the screen edge for a beat — feedback the reference game never skips */
 #sumoHit{display:none;inset:0;pointer-events:none;box-shadow:inset 0 0 110px rgba(255,196,64,.6),inset 0 0 34px rgba(255,196,64,.35);opacity:0;z-index:4}
 body.sumo #sumoHit{display:block}
+/* heat vignette: cops on your tail paint the screen edges red — the pursuit is something you FEEL */
+#heatVig{display:none;inset:0;pointer-events:none;box-shadow:inset 0 0 130px rgba(255,44,44,.55),inset 0 0 44px rgba(255,24,24,.3);opacity:0;transition:opacity .35s;z-index:4}
+body.adv #heatVig{display:block}
 /* car name chip, bottom-right like the reference ("VOLK MK1") — you always know what you brought */
 #sumoCar{display:none;right:16px;bottom:calc(max(26px,env(safe-area-inset-bottom)) + 132px);padding:5px 11px;border-radius:8px;background:rgba(7,11,20,.72);border:1px solid rgba(255,255,255,.22);font:800 11px var(--ft);letter-spacing:.16em;color:#fff;text-transform:uppercase}
 body.sumo #sumoCar{display:block}
@@ -1066,6 +1069,7 @@ body{font-family:var(--ft)}
 <div id="sumoMsg" class="hud"></div>
 <div id="sumoPunch" class="hud"><span id="sumoPunchL">PUNCH!</span><div id="sumoPunchBar"><i id="sumoPunchF"></i></div></div>
 <div id="sumoHit" class="hud"></div>
+<div id="heatVig" class="hud"></div>
 <div id="sumoCar" class="hud">KAY CRUISER</div>
 <button id="advExit" class="hud" type="button" data-act="advExit">EXIT</button>
 <button id="wpnSwap" class="hud" type="button" data-act="wpnSwap" title="Swap weapon (Q)">&#9876;&#65039; GUN</button>
@@ -1149,13 +1153,14 @@ body{font-family:var(--ft)}
         <button class="mdArr l" data-mdnav="-1" type="button" aria-label="Previous mode">&#9664;</button>
         <button class="mdArr r" data-mdnav="1" type="button" aria-label="Next mode">&#9654;</button>
         <div class="mdRail" id="mdRail">
+          <!-- STREET LEGENDS first: the newest, loudest modes are the first thing you see -->
+          <article class="mdCard mc7" id="sumoTile"><i>&#129354;</i><h3>SUMO ARENA</h3><p>Sky platforms. Punch rivals off the edge. Last car standing wins.</p><div class="mdTags"><span>STREET LEGENDS</span><span>3 ROUNDS</span><span>PUNCH</span><span>RESPECT</span></div><button class="act go" data-go="sumo" type="button">PLAY</button></article>
+          <article class="mdCard mc4"><i>&#128506;</i><h3>ADVENTURE</h3><p>Free roam the open city. Find race markers, lose the cops, raid the pink SUMO ARENA gate.</p><div class="mdTags"><span>STREET LEGENDS</span><span>FREE ROAM</span><span>COPS</span></div><button class="act go" data-go="adv" type="button">PLAY</button></article>
           <article class="mdCard mc1"><i>&#127937;</i><h3>QUICK RACE</h3><p>One fast race. Pick laps, rivals (1v1 duel!), difficulty and time of day.</p><div class="mdTags"><span>1V1 DUEL</span><span>1-5 LAPS</span><span>EASY &rarr; HARD</span></div><button class="act go" data-go="quick" type="button">PLAY</button></article>
           <article class="mdCard mc2"><i>&#127942;</i><h3>TOURNAMENT</h3><p>Five events in a row. Score points and take the crown.</p><div class="mdTags"><span>5 EVENTS</span><span>BIG CASH</span></div><button class="act go" data-go="tour" type="button">PLAY</button></article>
           <article class="mdCard mc3" id="nightTile"><i>&#127747;</i><h3>NIGHT CIRCUIT</h3><p id="nightSub">HARD &middot; RAIN &middot; NEON &middot; &times;1.8 CASH</p><div class="mdTags"><span>HARD</span><span>&times;1.8 CASH</span></div><button class="act go" data-go="night" data-act="nightTile" type="button">PLAY</button></article>
-          <article class="mdCard mc4"><i>&#128506;</i><h3>ADVENTURE</h3><p>Free roam the open city. Find race markers, lose the cops, raid the pink SUMO ARENA gate.</p><div class="mdTags"><span>STREET LEGENDS</span><span>FREE ROAM</span><span>COPS</span></div><button class="act go" data-go="adv" type="button">PLAY</button></article>
           <article class="mdCard mc5"><i>&#128168;</i><h3>DRIFT ARENA</h3><p>Slide, smash cones and beat the clock for the top score.</p><div class="mdTags"><span>SCORE</span><span>90s</span></div><button class="act go" data-go="arena" type="button">PLAY</button></article>
           <article class="mdCard mc6"><i>&#9201;&#65039;</i><h3>TIME TRIAL</h3><p>Race alone against your own best ghost. Clean lines win.</p><div class="mdTags"><span>SOLO</span><span>GHOST</span></div><button class="act go" data-go="tt" type="button">PLAY</button></article>
-          <article class="mdCard mc7" id="sumoTile"><i>&#129354;</i><h3>SUMO ARENA</h3><p>Sky platforms. Punch rivals off the edge. Last car standing wins.</p><div class="mdTags"><span>STREET LEGENDS</span><span>3 ROUNDS</span><span>PUNCH</span><span>RESPECT</span></div><button class="act go" data-go="sumo" type="button">PLAY</button></article>
         </div>
         <div class="mdDots" id="mdDots"></div>
       </div>
