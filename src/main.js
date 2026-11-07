@@ -8,6 +8,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildCarGeometry, SPORT } from './car-geometry.js';
 import { vehicleContact, resolveVehicleContact } from './vehicle-physics.js';
+import { createJuice } from './juice.js';
 import { touch, setControl } from './touch.js';
 import { createArena } from './arena.js';
 import { createAdventure } from './adventure.js';
@@ -1431,6 +1432,10 @@ AI.forEach(a => { a.latT = a.lat; });
 
 /* ---------- particles ---------- */
 const smokeTex = canvasTex(64, 64, (g, w, h) => { const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
+/* JUICE: hit stop + spark bursts (src/juice.js) — every punch, ram, KO and hard
+   landing calls into this. It is what makes impacts feel HEAVY instead of papery. */
+const juice = createJuice(scene, smokeTex);
+let fovKick = 0, wasBoost = false; /* fovKick: quick FOV punch on big hits; wasBoost: boost ignition edge */
 const smoke = Array.from({ length: 110 }, () => {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, color: 0xe4e8ee, transparent: true, depthWrite: false, opacity: 0 }));
   s.visible = false; scene.add(s); return { s, life: 0, max: 1, vel: V3() };
@@ -1563,6 +1568,8 @@ const adv = createAdventure(canvasTex, {
   wreck: amt => { if (amt > 0) economy.spend(amt); toast(amt > 0 ? 'WRECKED BY THE GANG · TOWED  -$' + amt.toLocaleString() : 'WRECKED BY THE GANG', '#ff6b6b'); shake = 1; sfxThud(); },
   gshot: (x, z, mine) => beep(mine ? 620 : 240 + Math.random() * 60, 0.05, 'sawtooth', mine ? 0.08 : 0.05),
   pSpin: v => { P.spin = clamp(P.spin + v, -3, 3); },
+  hitStop: s => juice.hitStop(s),
+  sparks: (x, y, z, n, c, s, up) => juice.burst(x, y, z, n, c, s, up),
   trackName: id => (TRACKS[id] || TRACKS.city).name,
   nitroAdd: n => { P.nitro = Math.min(1, P.nitro + n); },
   onRam: (nx, nz, imp) => { P.vel.x += nx * imp; P.vel.z += nz * imp; shake = Math.max(shake, 0.45); sfxThud(); },
@@ -1587,20 +1594,30 @@ const adv = createAdventure(canvasTex, {
 scene.add(adv.group);
 
 /* ---------- SUMO ARENA — knockout battles in the sky (Street Legends) ---------- */
-const sumo = createSumo(canvasTex, {
+/* The arena group floats at SUMO_ALT, but sumo.js passes DECK-LOCAL heights into
+   this ctx. Every global-scene effect (puff / boom / sparks) must be lifted by the
+   arena altitude or it spawns ~61 m UNDER the deck where nobody can see it — that
+   is why punches used to feel like they did nothing. */
+const SUMO_ALT = 62;
+const sumoW = v => { v.y += cfg.type === 'sumo' ? SUMO_ALT : 0; return v; };
+const sumoCtx = {
   mkRival: i => makeCar(SUMO_RIVAL_COLS[i % 5], carGeo(SUMO_RIVAL_IDS[i % 5]), getCar(SUMO_RIVAL_IDS[i % 5]).tint || null),
   beep: (f, d, t, v) => beep(f, d, t, v),
   thud: () => sfxThud(),
   toast: (t, c) => toast(t, c),
   shake: v => { shake = Math.max(shake, v); },
-  puff: (p, v, k) => puff(p, v, k),
-  boom: (p, n) => boomFX(p, n),
+  puff: (p, v, k) => puff(sumoW(V3(p.x, p.y, p.z)), v, k),
+  boom: (p, n) => boomFX(sumoW(V3(p.x, p.y, p.z)), n),
+  sparks: (x, y, z, n, c, s, up) => juice.burst(x, y + (cfg.type === 'sumo' ? SUMO_ALT : 0), z, n, c, s, up),
+  hitStop: s2 => juice.hitStop(s2),
+  fovKick: v => { fovKick = Math.max(fovKick, v); },
   nitroAdd: n => { P.nitro = Math.min(1, P.nitro + n); },
   cash: n => { economy.add(n); sfxCoin(); },
   pPos: () => P.pos, pVel: () => P.vel, pJy: () => P.jy, pFly: () => FL.on, pH: () => P.h,
   pAlt: () => (sumo.groundAt(P.pos.x, P.pos.z) ?? 0) + P.jy + FL.alt,
   onRam: (nx, nz, imp) => { P.vel.x += nx * imp; P.vel.z += nz * imp; shake = Math.max(shake, 0.45); sfxThud(); } /* was missing: rival rams threw and killed the tick */
-});
+};
+const sumo = createSumo(canvasTex, sumoCtx);
 sumo.setMerge(mergeGeometries);
 scene.add(sumo.group);
 const repLvlOf = () => Math.floor(Math.sqrt((store.get('ksr.rep', 0) || 0) / 60));
@@ -1746,6 +1763,7 @@ function resetWorld(c) {
   pads.forEach(p => { p.userData.cd = 0; p.userData.flash = 0; });
   resetPickups(); resetTraffic();
   resetSkids();
+  juice.reset(); fovKick = 0; wasBoost = false;
   if (advOn) wpnReset(); else updateWpnHud();
   raceT = 0; shake = 0; lastRank = c.ai + 1; ovCool = 0; goT = 0; prevCrosses = 0; lapStart = 0; bestLap = Infinity; camYaw = P.h;
   camera.position.set(g.p.x - Math.sin(P.h) * 9, g.p.y + 4 + (sumoOn ? 62 : 0), g.p.z - Math.cos(P.h) * 9);
@@ -2106,11 +2124,19 @@ function stepPlayer(dt, racing) {
     P.fuel = Math.max(0, P.fuel - (cfg.env === 'nightRain' ? 1.3 : 1) * dt); /* thrusters burn the flight tank (not nitro) */
     if (P.fuel <= 0 && !FL.land) { FL.land = true; toast('TANK EMPTY \u00b7 LANDING', '#ff8a6b'); }
     FL.time += dt;
-    if (FL.land && FL.alt <= 0.35) { FL.on = false; FL.land = false; FL.alt = 0; document.body.classList.remove('flying'); sfxThud(); shake = Math.max(shake, 0.18); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 1.6); }
+    if (FL.land && FL.alt <= 0.35) { FL.on = false; FL.land = false; FL.alt = 0; document.body.classList.remove('flying'); sfxThud(); shake = Math.max(shake, 0.18); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 1.6); juice.burst(car.position.x, car.position.y + 0.25, car.position.z, 10, 0xcfd6de, 6, 1, 10); }
   }
   const gas = k.up || FL.on;
   const busted = cfg.type === 'adv' && adv.S.slow > 0; /* just got busted: top speed cut, no nitro */
   const boosting = can && k.boost && P.nitro > 0.02 && gas && !busted;
+  /* BOOST IGNITION: the first frame of a burn gets its own moment — a backwards
+     cyan spark kick, a thump and a small FOV lurch. Nitro should feel like
+     lighting a rocket, not like a flag quietly flipping to true. */
+  if (boosting && !wasBoost) {
+    juice.burst(car.position.x - f.x * 2.2, car.position.y + 0.55, car.position.z - f.z * 2.2, 16, 0x66d9ff, 8, 1.2, 5);
+    shake = Math.max(shake, 0.16); fovKick = Math.max(fovKick, 4); beep(150, 0.14, 'sawtooth', 0.11);
+  }
+  wasBoost = boosting;
   /* FIRE input: in ADVENTURE it fires the weapon bought in the ARSENAL (hold the
      button — the machine gun keeps biting). Everywhere else it fires the power-up. */
   const fireEdge = (gp.item && !padItemPrev) || ((!!touch.item || !!touch.shoot) && !touchItemPrev) || (keys.KeyG && !fireKeyPrev);
@@ -2186,7 +2212,7 @@ function stepPlayer(dt, racing) {
     }
     if (gh !== null) {
       y = 62 + gh; pitch = sumo.slopeAt(P.pos.x, P.pos.z, P.h);
-      if (P.jy < 0) { P.jy = 0; P.jv = 0; shake = Math.max(shake, 0.4); sfxThud(); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 1.8); toast('BACK ON THE DECK', '#8df'); } /* a flying save */
+      if (P.jy < 0) { P.jy = 0; P.jv = 0; shake = Math.max(shake, 0.4); sfxThud(); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 1.8); juice.burst(car.position.x, car.position.y + 0.25, car.position.z, 10, 0xd9cdb0, 6, 1.2, 10); toast('BACK ON THE DECK', '#8df'); } /* a flying save */
     } else if (FL.on) {
       y = 62; /* airborne over the void: the thrusters hold you — get back or fall */
       const dd = Math.hypot(P.pos.x, P.pos.z);
@@ -2275,7 +2301,7 @@ function stepPlayer(dt, racing) {
   }
 
   /* mesh */
-  if (cfg.type !== 'sumo' && P.jy > 0) { P.jy += P.jv * dt; P.jv -= 30 * dt; if (P.jy <= 0) { P.jy = 0; P.jv = 0; shake = Math.max(shake, 0.7); sfxThud(); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 2.2); toast('LANDED', '#8df'); } }
+  if (cfg.type !== 'sumo' && P.jy > 0) { P.jy += P.jv * dt; P.jv -= 30 * dt; if (P.jy <= 0) { P.jy = 0; P.jv = 0; shake = Math.max(shake, 0.7); sfxThud(); puff(car.localToWorld(V3(0, 0.3, -1)), P.vel, 2.2); juice.burst(car.position.x, car.position.y + 0.25, car.position.z, 14, 0xd9cdb0, 7, 1.4, 10); toast('LANDED', '#8df'); } }
   car.position.set(P.pos.x, y + 0.04 + FL.alt + P.jy, P.pos.z);
   car.rotation.y = P.h;
   car.rotation.x = pitch - (P.jy > 0 ? clamp(P.jv * 0.011, -0.3, 0.3) : 0) + (FL.on ? clamp((FL.tgt - FL.alt) * 0.014, -0.12, 0.16) - 0.05 : 0);
@@ -2361,6 +2387,7 @@ function stepAI(dt, racing) {
         P.vel.set(pb.vx, 0, pb.vz); P.spin = clamp(pb.angularVel, -2.5, 2.5);
         a.speed = clamp(ab.vx * g.t.x + ab.vz * g.t.z, 25, a.hard ? 150 : 95); a.lat += clamp((ab.vx * g.r.x + ab.vz * g.r.z) * 0.06, -2, 2);
         shake = Math.max(shake, clamp(closing / 14, 0.15, 1));
+        if (closing > 10) { juice.burst(ct.x, car.position.y + 0.7, ct.z, 10, 0xfff0b0, 8, 2); fovKick = Math.max(fovKick, 3.5); } /* metal-on-metal: sparks at the contact point */
       }
     }
   });
@@ -2373,8 +2400,15 @@ function updateCamera(dt, boosting, sp) {
   const sh = shake + clamp(sp - 40, 0, 70) * 0.0007 + (boosting ? 0.03 : 0);
   camera.position.x += rand(-1, 1) * sh; camera.position.y += rand(-1, 1) * sh;
   const la = cfg.type === 'sumo' ? 7 : 9; camera.lookAt(car.position.x + Math.sin(camYaw) * la, car.position.y + 1.2, car.position.z + Math.cos(camYaw) * la);
-  const fov = 62 + (camera.aspect < 1 ? (1 - camera.aspect) * 14 : 0) + clamp(sp - 30, 0, 80) * 0.22 + (boosting ? 9 : 0);
+  /* IMPACT WOBBLE: position jitter alone reads as static. A short smooth roll +
+     pitch wobble scaled by the same shake value makes the chassis feel like it
+     has MASS — the camera is being thrown around by the hit, not twitching. */
+  const tN = performance.now() * 0.001;
+  camera.rotation.z += (Math.sin(tN * 21) * 0.6 + Math.sin(tN * 47) * 0.4) * sh * 0.045;
+  camera.rotation.x += Math.sin(tN * 31) * sh * 0.02;
+  const fov = 62 + (camera.aspect < 1 ? (1 - camera.aspect) * 14 : 0) + clamp(sp - 30, 0, 80) * 0.22 + (boosting ? 9 : 0) + fovKick;
   camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt)); camera.updateProjectionMatrix();
+  fovKick *= Math.exp(-6 * dt); /* the FOV punch snaps in fast, decays fast */
   shake *= Math.exp(-6 * dt);
   sky.position.copy(camera.position);
   followSun();
@@ -2459,6 +2493,13 @@ function advUI(dt) {
   if (bw) {
     if (S.bust > 0.05) { bw.style.display = 'block'; if ($('bustBar')) $('bustBar').firstElementChild.style.width = Math.round(clamp(S.bust / 2.6, 0, 1) * 100) + '%'; }
     else bw.style.display = 'none';
+  }
+  /* HEAT VIGNETTE: when the pursuit is on, the screen edges pulse red — tension
+     you can feel in your peripheral vision, gone the moment you lose them. */
+  const hv = $('heatVig');
+  if (hv) {
+    const hot = S.police > 0 ? clamp((S.heat - 50) / 50, 0, 1) : 0;
+    hv.style.opacity = (hot * (0.55 + (S.heat > 82 ? Math.sin(performance.now() * 0.008) * 0.2 : 0))).toFixed(3);
   }
   const pr = $('advPrompt');
   if (pr) {
@@ -3058,7 +3099,11 @@ function frame(now) {
   try { frameBody(now); } catch (err) { console.error(err); if (performance.now() - errT > 3000) { errT = performance.now(); toast('ENGINE ERROR · AUTO-RECOVERED', '#ffd166'); } }
 }
 function frameBody(now) {
-  const raw = (now - last) / 1000, dt = Math.min(TURBO ? 1 : 0.05, raw); last = now;
+  const raw = (now - last) / 1000; last = now;
+  const dtRaw = Math.min(TURBO ? 1 : 0.05, raw);
+  /* HIT STOP: during a heavy impact the sim runs at ~18% speed for a beat.
+     Only while racing — menus and the pause screen never stutter. */
+  const dt = dtRaw * (state === 'race' ? juice.scale() : 1);
   if (state === 'paused') { composer.render(); return; }
   if (state === 'race') {
     fAcc += raw; fN++;
@@ -3098,6 +3143,7 @@ function frameBody(now) {
     if (!P.finished && P.crosses >= TOTAL + 1) finishRace();
   }
   smoke.forEach(o => { if (o.life > 0) { o.life -= dt; o.s.position.addScaledVector(o.vel, dt); o.s.scale.addScalar(dt * 3.5); o.s.material.opacity = Math.max(0, o.life / o.max) * 0.4; if (o.life <= 0) o.s.visible = false; } });
+  juice.update(dt);
   pollPad();
   stepTraffic(dt, racing);
   if (itemsOn()) stepPickups(dt, racing);

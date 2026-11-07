@@ -453,10 +453,12 @@ export function createAdventure(canvasTex, ctx) {
   function gangHit(g, dmg, nx, nz) { /* your weapons chew gang HP — a wreck goes up in flames and pays */
     if (!g.on || g.mode === 'wrecked') return;
     g.hp -= dmg; g.hitT = 1; g.calm = 0;
+    ctx.sparks(g.x, 0.9, g.z, 7, 0xffd060, 8, 2); /* rounds biting metal */
     GANG.forEach(o => { if (o.on && o.mode !== 'wrecked' && Math.hypot(o.x - g.x, o.z - g.z) < 220) o.mode = 'hunt'; });
     if (g.hp <= 0) {
       const cash = 1500 + ((Math.random() * 4) | 0) * 500;
       ctx.boom(g.grp.position, 14);
+      ctx.hitStop(0.1); ctx.sparks(g.x, 1, g.z, 20, 0xffa040, 12, 3);
       ctx.gangCash(cash);
       respect(8);
       const dl = Math.hypot(nx || rand(-1, 1), nz || rand(-1, 1));
@@ -496,6 +498,7 @@ export function createAdventure(canvasTex, ctx) {
   function bulletBoom(b) { /* rockets: splash damage all around */
     const P = new THREE.Vector3(b.x, 0.7, b.z);
     ctx.boom(P, 16);
+    ctx.hitStop(0.08); ctx.sparks(b.x, 1, b.z, 18, 0xffc060, 12, 3);
     let hitAny = false;
     for (const g of GANG) if (g.on && g.mode !== 'wrecked') { const d = Math.hypot(g.x - b.x, g.z - b.z); if (d < 10) { gangHit(g, 58 - d * 2.6, (g.x - b.x) / Math.max(0.6, d), (g.z - b.z) / Math.max(0.6, d)); hitAny = true; } }
     if (!hitAny) for (const g of GANG) if (g.on && g.mode !== 'wrecked' && Math.hypot(g.x - b.x, g.z - b.z) < 80) { gangAggro('YOU SHOT AT THE GANG!'); break; } /* near miss still starts the fight */
@@ -522,7 +525,7 @@ export function createAdventure(canvasTex, ctx) {
         if (collide({ x: b.x, z: b.z }, 0.3, b.y).hit) dead = true;
         else if (b.from === 'G' && alt < 4) { /* gang tracers grind your POWER down */
           const dx = px - b.x, dz = pz - b.z;
-          if (dx * dx + dz * dz < 4.6) { hitPower(b.dmg, null, 'gang'); ctx.shake(0.25); dead = true; }
+          if (dx * dx + dz * dz < 4.6) { hitPower(b.dmg, null, 'gang'); ctx.shake(0.25); ctx.hitStop(0.04); ctx.sparks(px, 0.9, pz, 6, 0xff5050, 7, 2); dead = true; }
         }
         else if (b.from === 'P') {
           for (const g of GANG) {
@@ -614,6 +617,7 @@ export function createAdventure(canvasTex, ctx) {
       }
       if (boom) {
         ctx.boom(new THREE.Vector3(m.x, 0.6, m.z), 18);
+        ctx.hitStop(0.09); ctx.sparks(m.x, 0.9, m.z, 22, 0xff9040, 13, 3);
         for (const g of GANG) if (g.on && g.mode !== 'wrecked') { const d = Math.hypot(g.x - m.x, g.z - m.z); if (d < 9) gangHit(g, 62 - d * 3.2, (g.x - m.x) / Math.max(0.6, d), (g.z - m.z) / Math.max(0.6, d)); }
         for (const p of POL) if (p.on) { const d = Math.hypot(p.x - m.x, p.z - m.z); if (d < 9) { p.speed = -6; p.h += rand(-0.6, 0.6); S.heat = clamp(S.heat + 12, 0, 100); } }
         const Pp = ctx.pPos(), dp = Math.hypot(Pp.x - m.x, Pp.z - m.z);
@@ -628,6 +632,7 @@ export function createAdventure(canvasTex, ctx) {
     const amt = Math.min(money, Math.min(5000, 300 + Math.round(S.heat * 40)));
     if (amt > 0) ctx.busted(amt); else ctx.busted(0);
     if (byPower) ctx.toast('WRECKED! THE COPS TOTALED YOUR RIDE', '#ff6b6b');
+    ctx.hitStop(0.12); /* getting busted is the biggest single beat in the mode — let it land */
     S.heat = 20; S.freeT = 0; S.bust = 0; S.slow = 7; S.pow = 100; S.powCd = 9; S.heatPeak = 0;
     POL.forEach(polOff); hadPolice = false; lowT = 0;
   }
@@ -880,6 +885,7 @@ export function createAdventure(canvasTex, ctx) {
         hitPower(3);
         cashPend += 15; ctx.nitroAdd(0.04);
         ctx.shake(0.85); ctx.puff(Pp, 1.8); ctx.thud();
+        ctx.hitStop(0.06); ctx.sparks((px + gp.x) / 2, 0.9, (pz + gp.z) / 2, 14, 0xffb050, 9, 2); /* glass and metal at the contact point */
         if (S.smT <= 0) { S.smT = 2.2; ctx.toast('SMASHED!', '#ffd166'); }
       } else {
         Pp.x += nx * (3.2 - d); Pp.z += nz * (3.2 - d);
@@ -889,6 +895,7 @@ export function createAdventure(canvasTex, ctx) {
         S.heat = clamp(S.heat + 14, 0, 100);
         hitPower(2);
         ctx.shake(0.6); ctx.puff(Pp, 1.4); ctx.thud();
+        ctx.sparks((px + gp.x) / 2, 0.9, (pz + gp.z) / 2, 6, 0xd9d9d9, 7, 2);
       }
       break;
     }
@@ -965,6 +972,7 @@ export function createAdventure(canvasTex, ctx) {
           p.speed *= -0.35; /* recoil: the cruiser bounces back off your bumper */
           p.h += rand(-0.12, 0.12);
           ctx.onRam(nx, nz, 8); ctx.puff(Pp, 1.6);
+          ctx.hitStop(0.07); ctx.sparks((px + p.x) / 2, 0.9, (pz + p.z) / 2, 12, 0xfff0b0, 9, 2); /* the PIT has teeth now */
           hitPower(5 + 8 * (S.heat / 100) + S.police * 1.2, S.police > 1 ? 'PIT MANEUVER!' : 'RAMMED BY POLICE!');
         }
       }

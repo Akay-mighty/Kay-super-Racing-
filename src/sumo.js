@@ -488,6 +488,7 @@ export function createSumo(canvasTex, ctx) {
         mesh, name: NAMES[i], css: '#' + RCOL[i % 5].toString(16).padStart(6, '0'),
         x: 0, z: 0, y: 0, h: 0, speed: 0, vy: 0, vx: 0, vz: 0, fall: false, elim: false, how: '',
         hp: 100, dented: false, punchCd: rand(2, 4), boostCd: rand(2, 6), boostT: 0, stuck: 0, ramCd: 0,
+        hopY: 0, hopV: 0, /* knock-up: punched cars briefly leave the deck */
         skill: (SUMO_ARENAS[tier].ai[i] || 0.9), smokeT: 0, target: null, lastHitBy: '',
         grudge: 0, grudgeA: null /* grudge: seconds left hunting whoever hit them last — makes fights SPIRAL */
       });
@@ -539,6 +540,7 @@ export function createSumo(canvasTex, ctx) {
       r.mesh.rotation.set(0, r.h, 0); undent(r.mesh);
       r.mesh.rotation.x = 0; r.mesh.rotation.z = 0;
       r.punchCd = rand(2.5, 4.5); r.boostCd = rand(2, 6); r.boostT = 0; r.stuck = 0; r.ramCd = 0;
+      r.hopY = 0; r.hopV = 0;
       r.mesh.visible = group.visible; r.mesh.position.set(r.x, r.y + 0.04, r.z); r.mesh.rotation.set(0, r.h, 0);
     });
     S.alive = RIV.length + 1;
@@ -550,7 +552,12 @@ export function createSumo(canvasTex, ctx) {
     if (S.phase === 'end') return;
     S.phase = 'end'; S.phaseT = 2.6; S.freeze = true;
     S.stars[winnerName] = (S.stars[winnerName] || 0) + 1;
-    if (winnerName === 'YOU') { myStars++; roundWins++; feed('YOU WIN THE ROUND', '#7dff8a'); msg('ROUND WON!', '#7dff8a', 2.4); ctx.beep(980, 0.16, 'triangle', 0.12); }
+    if (winnerName === 'YOU') {
+      myStars++; roundWins++; feed('YOU WIN THE ROUND', '#7dff8a'); msg('ROUND WON!', '#7dff8a', 2.4); ctx.beep(980, 0.16, 'triangle', 0.12);
+      /* CEREMONY: the round-winning moment freezes and erupts — the payoff beat */
+      const Pp = ctx.pPos();
+      ctx.hitStop(0.18); ctx.fovKick(6); ctx.sparks(Pp.x, 1.2, Pp.z, 30, 0xffd166, 11, 4);
+    }
     else { feed(`${winnerName} WINS THE ROUND`, '#ffd166'); msg(`${winnerName} TAKES THE ROUND`, '#ffd166', 2.4); }
     if (S.round >= S.rounds) { S.matchOver = true; }
   }
@@ -563,11 +570,13 @@ export function createSumo(canvasTex, ctx) {
     S.alive--;
     if (how === 'ring') { /* RING OUT: explosion + heavy shake at the lip they went over — the KO must FEEL heavy */
       ctx.beep(220, 0.3, 'sawtooth', 0.1); ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 9); ctx.shake(0.45); ringFX(r.x, r.y, r.z, 0xff5c5c);
+      ctx.hitStop(0.15); ctx.fovKick(6); /* the world holds its breath as they drop */
+      ctx.sparks(r.x, (r.y || 0) + 1.2, r.z, 22, 0xff5c3c, 13, 3);
       if (byName === 'YOU') { S.myKO++; S.juice = 1; ctx.cash(600); feed('YOU PUSHED ' + r.name + ' OFF', '#7dff8a'); }
       else if (byName) feed(byName + ' PUSHED ' + r.name + ' OFF', r.css);
       else feed(r.name + ' DROPPED OFF THE EDGE', r.css);
     }
-    else { ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 10); ctx.shake(0.4); if (byName === 'YOU') { S.myKO++; S.juice = 1; ctx.cash(500); feed('YOU WRECKED ' + r.name, '#7dff8a'); } else if (byName) feed(byName + ' WRECKED ' + r.name, r.css); else feed(r.name + ' IS WRECKED', r.css); }
+    else { ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 10); ctx.shake(0.4); ctx.hitStop(0.12); ctx.fovKick(5); ctx.sparks(r.x, (r.y || 0) + 1, r.z, 18, 0xffa040, 11, 3); if (byName === 'YOU') { S.myKO++; S.juice = 1; ctx.cash(500); feed('YOU WRECKED ' + r.name, '#7dff8a'); } else if (byName) feed(byName + ' WRECKED ' + r.name, r.css); else feed(r.name + ' IS WRECKED', r.css); }
     const left = RIV.filter(q => !q.elim);
     if (!left.length) { /* every rival is gone: the round is yours if you are still rolling */
       endRound(S.myOut ? 'NOBODY' : 'YOU', how);
@@ -579,6 +588,8 @@ export function createSumo(canvasTex, ctx) {
     S.myOut = true; S.spectate = true; S.alive--;
     if (how === 'ring') { S.myRing++; if (S.lastHitBy) feed(S.lastHitBy + ' SENT YOU OFF!', '#ff6b6b'); else feed('YOU FELL OFF!', '#ff6b6b'); msg('RING OUT!', '#ff6b6b', 2.4); ctx.beep(180, 0.4, 'sawtooth', 0.12); }
     else { feed(byName ? `${byName} WRECKED YOU` : 'YOU ARE WRECKED', '#ff6b6b'); msg('WRECKED!', '#ff6b6b', 2.4); ctx.boom(ctx.pPos(), 12); }
+    ctx.hitStop(0.16); ctx.fovKick(7); /* your own demise gets the longest freeze */
+    const Pp2 = ctx.pPos(); ctx.sparks(Pp2.x, 1.2, Pp2.z, 24, 0xff5c5c, 12, 3);
     ctx.shake(1);
     const left = RIV.filter(q => !q.elim);
     if (left.length === 1) endRound(left[0].name, how);
@@ -608,12 +619,20 @@ export function createSumo(canvasTex, ctx) {
       r.lastHitBy = 'YOU'; r.grudge = 4; r.grudgeA = 'YOU'; /* hit a hornet: it hunts YOU now */
       r.h += rand(-0.5, 0.5);
       r.hp -= mega ? 30 : 14; r.smokeT = 1;
+      r.hopY = 0.02; r.hopV = mega ? 5.6 : 4.2; /* knocked UP: the hit visibly lifts the car */
       hits++;
-      ctx.puff(V3L(r.x, (r.y || 0) + 1, r.z), V3L(0, 1, 0), 1.5); /* impact sparks ON the victim */
+      ctx.sparks(r.x, (r.y || 0) + 1, r.z, mega ? 24 : 13, mega ? 0xff9a2f : 0xffd166, 10, 2.5); /* impact sparks ON the victim */
+      ctx.puff(V3L(r.x, (r.y || 0) + 1, r.z), V3L(0, 1, 0), 1.5);
       if (r.hp <= 0) { elimRival(r, 'wreck', 'YOU'); }
       else { dent(r.mesh); r.dented = true; feed('PUNCHED ' + r.name, '#ffffff'); }
     }
-    if (hits) { S.juice = 1; ctx.puff(Pp, V3L(0, 1, 0), 1.6); ctx.beep(1500, 0.05, 'square', 0.05); } /* top layer: a bright snap over the bass thud */
+    if (hits) {
+      /* THE HIT: gold screen flash + hit stop + FOV punch. The 80-130 ms the world
+         freezes is what sells the power — everything after it lands harder. */
+      S.juice = 1; ctx.puff(Pp, V3L(0, 1, 0), 1.6); ctx.beep(1500, 0.05, 'square', 0.05); /* top layer: a bright snap over the bass thud */
+      ctx.hitStop(mega ? 0.13 : Math.min(0.115, 0.08 + hits * 0.012));
+      ctx.fovKick(mega ? 7 : 4.5);
+    }
     else ctx.beep(210, 0.05, 'sine', 0.05); /* whiff: a soft air-cut so a miss never feels like a bug */
     return hits;
   }
@@ -804,6 +823,8 @@ export function createSumo(canvasTex, ctx) {
           const pw = 17 * (0.75 + r.skill * 0.5);
           Pv.x += nx * pw; Pv.z += nz * pw; Pv.y = 0;
           hitPower(12, `${r.name} PUNCHES YOU!`);
+          ctx.sparks((Pp.x + r.x) / 2, (r.y || 0) + 1, (Pp.z + r.z) / 2, 11, 0xff5c5c, 9, 2);
+          ctx.hitStop(0.07); ctx.fovKick(4);
           ctx.shake(0.5); ctx.thud();
           S.lastHitBy = r.name; S.lastHitT = tG;
         } else { /* punched a rival: shove them — and the victim holds a grudge, so the pack turns on itself */
@@ -838,9 +859,12 @@ export function createSumo(canvasTex, ctx) {
           const pw = clamp(mine * 0.55, 8, 24);
           r.vx = (r.vx || 0) + nx * pw; r.vz = (r.vz || 0) + nz * pw;
           r.vy = 3.5; r.stunT = 0.9; r.lastHitBy = 'YOU'; r.grudge = 4; r.grudgeA = 'YOU';
+          r.hopY = 0.02; r.hopV = 3.4; /* rammed: they skip off the ground */
           Pv.x -= nx * mine * 0.22; Pv.z -= nz * mine * 0.22;
           if (S.shield <= 0) { r.hp -= clamp(mine * 0.5, 4, 14); if (r.hp <= 0) { elimRival(r, 'wreck', 'YOU'); continue; } }
           ctx.onRam(-nx, -nz, clamp(mine * 0.2, 2, 7));
+          ctx.sparks((Pp.x + r.x) / 2, (r.y || 0) + 0.8, (Pp.z + r.z) / 2, 12, 0xfff0c0, 9, 2); /* metal sparks at the contact point */
+          ctx.hitStop(0.07); ctx.fovKick(3.5);
           ctx.puff(V3L(r.x, r.y + 0.8, r.z), V3L(0, 1, 0), 1.4);
           ctx.thud(); ctx.shake(0.4);
         }
@@ -852,11 +876,23 @@ export function createSumo(canvasTex, ctx) {
           hitPower(clamp(closing * 0.42, 2, 10), null);
           S.lastHitBy = r.name;
           ctx.onRam(nx, nz, clamp(closing * 0.28, 3, 9));
+          ctx.sparks((Pp.x + r.x) / 2, (r.y || 0) + 0.8, (Pp.z + r.z) / 2, 9, 0xffb060, 8, 2);
+          ctx.hitStop(0.05);
           ctx.puff(Pp, V3L(0, 0.7, 0), 1.4);
           ctx.thud();
         }
       }
-      r.mesh.position.set(r.x, r.y + 0.04, r.z);
+      /* KNOCK-UP: punched / rammed cars briefly leave the deck. Seeing a rival's
+         wheels leave the ground is the difference between "I hit them" and "I
+         LAUNCHED them". */
+      if (r.hopY > 0 || r.hopV > 0) {
+        r.hopY += r.hopV * dt; r.hopV -= 24 * dt;
+        if (r.hopY <= 0) {
+          if (r.hopV < -4) { ctx.puff(V3L(r.x, (r.y || 0) + 0.4, r.z), V3L(0, 0.5, 0), 0.9); ctx.thud(); ctx.shake(0.12); }
+          r.hopY = 0; r.hopV = 0;
+        }
+      }
+      r.mesh.position.set(r.x, r.y + 0.04 + r.hopY, r.z);
       r.mesh.rotation.y = r.h;
     }
     S.alive = aliveN + (S.myOut ? 0 : 1);
