@@ -472,7 +472,8 @@ export function createSumo(canvasTex, ctx) {
       const wob = k > 0.28 && k < 0.5 ? Math.sin((k - 0.28) * 90) * 0.04 : 0;
       const len = Math.max(0.05, (e + wob) * SP_LEN * (sp.big ? 1.25 : 1));
       let x, y, z, h;
-      if (sp.own === 'P') { const Pp = ctx.pPos(); h = ctx.pH(); x = Pp.x; z = Pp.z; y = ctx.pAlt ? ctx.pAlt() : 0.6; }
+      if (!sp.own) { sp.t = 0; sp.g.visible = false; continue; }
+      if (sp.own === 'P') { const Pp = ctx.pPos(); if (!Pp) { sp.t = 0; sp.g.visible = false; continue; } h = ctx.pH(); x = Pp.x; z = Pp.z; y = ctx.pAlt ? ctx.pAlt() : 0.6; }
       else { x = sp.own.x; z = sp.own.z; y = sp.own.y; h = sp.own.h; }
       const fx = Math.sin(h), fz = Math.cos(h);
       sp.g.position.set(x + fx * 2.1, y + 0.62, z + fz * 2.1); sp.g.rotation.set(0, h, 0);
