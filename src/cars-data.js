@@ -1,7 +1,7 @@
 // Kay Super Racing — car catalog: 8 cars built from the procedural loft system in car-geometry.js.
 // Stats are tuned against main.js physics: max speed (units/s), accel, steering rate, drift grip.
 import * as THREE from 'three';
-import { BODY_SPECS, buildCarGeometry, SPORT } from './car-geometry.js';
+import { BODY_SPECS, buildCarGeometry, buildWheelGeos, SPORT } from './car-geometry.js';
 
 const cloneSport = mut => { const s = JSON.parse(JSON.stringify(SPORT)); if (mut) mut(s); return s; };
 
@@ -85,7 +85,7 @@ export const CARS = [
   {
     id: 'ferrari', name: 'FERRARI', price: 2500000, tag: 'DREAM CAR',
     desc: 'The real thing. A true supercar model: low, wide and ferociously quick.',
-    glb: { url: '/models/ferrari-lite.glb', len: 4.5, rotY: 0 },
+    glb: { url: '/models/ferrari-lite.glb', len: 4.5, rotY: 0, paintFrom: [0.608, 0.02, 0.027], wheels: { r: 0.375, y: 0.37, zf: 1.17, zr: -1.49, xin: 0.55 } },
     spec: cloneSport(s => {
       s.name = 'ferrari'; s.halfWidth = s.halfWidth.map(([z, v]) => [z, v * 1.1]); s.wheelX *= 1.1;
       s.cabin.roofY = s.cabin.roofY.map(([z, v]) => [z, v * 0.8]); s.chrome = false; s.wheelRadius = 0.38;
@@ -95,9 +95,23 @@ export const CARS = [
   {
     id: 'overlander', name: 'OVERLANDER', price: 900000, tag: 'SUMO BRUTE',
     desc: 'A heavy expedition truck with big off-road wheels. Built to shove rivals off the arena.',
-    glb: { url: '/models/overlander.glb', len: 3.9, rotY: -Math.PI / 2, rough: 0.6, metal: 0.05, nearest: true },
+    glb: { url: '/models/overlander.glb', len: 3.9, rotY: -Math.PI / 2, rough: 0.6, metal: 0.05, nearest: true, paintFrom: [0.91, 0.68, 0.54], wheels: { r: 0.37, y: 0.37, zf: 1.27, zr: -0.68, xin: 0.6 } },
     spec: cloneSport(s => { s.name = 'overlander'; s.wheelRadius = 0.45; s.chrome = false; }),
     stats: { top: 125, accel: 70, steer: 2.3, drift: 1.7, fly: false }
+  },
+  {
+    id: 'venom', name: 'VENOM GT', price: 450000, tag: 'REAL MODEL',
+    desc: 'A low, wide grand tourer with a real-model body. Paint it any colour.',
+    glb: { url: '/models/venom.glb', len: 4.5, rotY: 0, rough: 0.35, metal: 0.3, paintFrom: [0.8, 0.8, 0.8], wheels: { r: 0.3, y: 0.29, zf: 1.25, zr: -1.22, xin: 0.62 } },
+    spec: cloneSport(s => { s.name = 'venom'; s.chrome = false; s.wheelRadius = 0.3; }),
+    stats: { top: 118, accel: 64, steer: 2.2, drift: 1.8, fly: false }
+  },
+  {
+    id: 'stallion', name: 'STALLION', price: 300000, tag: 'MUSCLE',
+    desc: 'Long hood, loud attitude. Muscle-car model, ready for any paint job.',
+    glb: { url: '/models/stallion.glb', len: 4.5, rotY: 0, rough: 0.35, metal: 0.3, paintFrom: [0.8, 0.8, 0.8], wheels: { r: 0.31, y: 0.32, zf: 1.3, zr: -1.26, xin: 0.65 } },
+    spec: cloneSport(s => { s.name = 'stallion'; s.chrome = false; s.wheelRadius = 0.31; }),
+    stats: { top: 112, accel: 62, steer: 2.15, drift: 1.85, fly: false }
   },
   {
     id: 'ghost', name: 'GHOST X PROTO', price: 1000000, tag: 'FLYING \u2708 KING', fly: true,
@@ -113,6 +127,22 @@ export const CARS = [
 export const getCar = id => CARS.find(c => c.id === id) || CARS[0];
 export const carGeo = id => (carGeoCache[id] || (carGeoCache[id] = buildCarGeometry(getCar(id).spec)));
 const carGeoCache = {};
+/* body WITHOUT wheels (wheels are separate meshes so they can roll + steer) */
+const bodyCache = {};
+export const carBodyGeo = id => {
+  if (!bodyCache[id]) { const g = buildCarGeometry(getCar(id).spec, false); g.userData.carId = id; bodyCache[id] = g; }
+  return bodyCache[id];
+};
+const wheelCache = {};
+/* procedural wheel set: [{geo, x, y, z, front, r}] — geo is origin-centred, spin about X */
+export const carWheelSet = id => {
+  if (!wheelCache[id]) {
+    const sp = getCar(id).spec, w = buildWheelGeos(sp), out = [];
+    for (const side of [-1, 1]) for (const z of [sp.wheelZ, -sp.wheelZ]) out.push({ geo: w[side], x: side * sp.wheelX, y: sp.wheelRadius, z, front: z > 0, r: sp.wheelRadius });
+    wheelCache[id] = out;
+  }
+  return wheelCache[id];
+};
 
 /* recolor specific procedural parts after colorize() (e.g. yellow taxi sign = part 6) */
 export function tintPart(geo, partId, hex) {

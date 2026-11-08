@@ -842,4 +842,11 @@ function makeSport() {
   return s;
 }
 export const SPORT = makeSport();
-export { CAR_PARTS, BODY_SPECS, buildCarGeometry };
+/* origin-centred coloured wheel geometry per side, for separate spinning wheel meshes */
+const wheelGeoCache = new Map();
+function buildWheelGeos(spec) {
+  const key = spec.wheelRadius;
+  if (!wheelGeoCache.has(key)) wheelGeoCache.set(key, { '-1': buildSteerableWheelGeo(spec, -1), 1: buildSteerableWheelGeo(spec, 1) });
+  return wheelGeoCache.get(key);
+}
+export { CAR_PARTS, BODY_SPECS, buildCarGeometry, buildWheelGeos };

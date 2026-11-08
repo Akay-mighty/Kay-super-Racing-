@@ -6,14 +6,14 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { buildCarGeometry, SPORT } from './car-geometry.js';
+import { SPORT } from './car-geometry.js';
 import { vehicleContact, resolveVehicleContact } from './vehicle-physics.js';
 import { createJuice } from './juice.js';
 import { touch, setControl } from './touch.js';
 import { createArena } from './arena.js';
 import { createAdventure } from './adventure.js';
 import { createSumo, SUMO_ARENAS, SUMO_RIVAL_COLS, SUMO_RIVAL_IDS } from './sumo.js';
-import { CARS, getCar, carGeo, tintPart } from './cars-data.js';
+import { CARS, getCar, carBodyGeo as carGeo, carWheelSet, tintPart } from './cars-data.js';
 import { economy } from './economy.js';
 import { missionsInit, missionEvent, missionState, missionsCompleted, MISSIONS } from './missions.js';
 import { cloud } from './cloud.js';
@@ -1234,14 +1234,61 @@ buildWorld(TRACKS.city);
 const arena = createArena(canvasTex);
 scene.add(arena.group, camera);
 /* ---------- cars ---------- */
-const SPORT_GEO = buildCarGeometry(SPORT);
+const SPORT_GEO = carGeo('cruiser');
 const carMat = new THREE.MeshPhysicalMaterial({ vertexColors: true, metalness: 0.55, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.05 });
 carMat.envMap = scene.environment; carMat.envMapIntensity = 1.3; /* real showroom reflections on the paint (scaled per time of day) */
+/* ROLLING WHEELS — each wheel is its own mesh inside a pivot: pivot turns (front steering), mesh spins with distance.
+   Works for every car (built-in or real model) and for rivals/police alike: speed is read from how far the car moved. */
+const wheelColored = new Map(); const wheelMatGlb = new Map();
+function procWheels(id) {
+  return carWheelSet(id).map(w => {
+    let geo = wheelColored.get(w.geo);
+    if (!geo) { geo = w.geo.clone(); colorize(geo, 0xffffff); wheelColored.set(w.geo, geo); }
+    return { ...w, geo: geo.clone(), mat: carMat }; /* own copy: sumo dents recolour the rival's geometry */
+  });
+}
+const rollingCars = new Set();
+function setWheels(g, list) {
+  if (g.wheelPivots) for (const pv of g.wheelPivots) g.remove(pv);
+  g.wheelPivots = [];
+  for (const w of list) {
+    const pv = new THREE.Group(); pv.position.set(w.x, w.y, w.z);
+    const m = new THREE.Mesh(w.geo, w.mat); m.castShadow = true; pv.add(m);
+    pv.userData = { m, front: w.front, r: w.r, side: w.x < 0 ? -1 : 1 };
+    g.add(pv); g.wheelPivots.push(pv);
+  }
+  g.userData.roll = g.userData.roll || { lp: null, yaw: 0, st: 0, spin: 0 };
+  rollingCars.add(g);
+}
+const _rf = new THREE.Vector3();
+function rollCars(dt) {
+  if (dt <= 0) return;
+  for (const g of rollingCars) {
+    if (!g.wheelPivots || !g.wheelPivots.length || !g.parent || !g.visible) continue;
+    const R = g.userData.roll;
+    if (!R.lp) { R.lp = g.position.clone(); R.yaw = g.rotation.y; continue; }
+    _rf.set(Math.sin(g.rotation.y), 0, Math.cos(g.rotation.y));
+    const dx = g.position.x - R.lp.x, dz = g.position.z - R.lp.z;
+    let d = dx * _rf.x + dz * _rf.z;
+    R.lp.copy(g.position);
+    let dy = g.rotation.y - R.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); R.yaw = g.rotation.y;
+    if (Math.abs(d) > Math.max(3, dt * 320)) d = 0; /* respawn / teleport: don't spin like crazy */
+    const v = d / dt, yawRate = dy / dt;
+    const tgt = Math.abs(v) > 2 ? Math.max(-0.5, Math.min(0.5, Math.atan(2.7 * yawRate / Math.max(Math.abs(v), 3)) * (v < 0 ? -1 : 1))) : 0;
+    R.st += (tgt - R.st) * Math.min(1, dt * 12);
+    for (const pv of g.wheelPivots) {
+      const u = pv.userData;
+      u.m.rotation.x = (u.m.rotation.x + d / u.r) % (Math.PI * 2);
+      pv.rotation.y = u.front ? R.st : 0;
+    }
+  }
+}
 function makeCar(color, specGeo = SPORT_GEO, tint = null) {
   const g = new THREE.Group(), geo = specGeo.clone();
   colorize(geo, color);
   if (tint) for (const [pid, hex] of Object.entries(tint)) tintPart(geo, +pid, hex);
   const body = new THREE.Mesh(geo, carMat); body.castShadow = true; g.add(body);
+  setWheels(g, procWheels(specGeo.userData.carId || 'cruiser'));
   const lamp = (w, h, z, y, x, col) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.1), new THREE.MeshBasicMaterial({ color: col, toneMapped: false })); m.position.set(x, y, z); g.add(m); };
   lamp(1.3, 0.09, -2.27, 0.7, 0, new THREE.Color(3.5, 0.2, 0.2));
   for (const sx of [-1, 1]) lamp(0.42, 0.07, 2.25, 0.62, sx * 0.62, new THREE.Color(3, 3, 2.6));
@@ -1345,7 +1392,9 @@ function rebuildCar(id) {
   const useGlb = c.glb && opt.q !== 'low'; /* LOW / SAFE mode keeps the light built-in body */
   const glb = useGlb ? glbCarReady(c.glb.url) : null; /* real 3D model car: use it once loaded, procedural twin until then */
   if (useGlb && !glb) loadGlbCar(c.glb, renderer.capabilities.getMaxAnisotropy()).then(() => { if (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id)) rebuildCar(economy.selected() === id ? id : CARS[gIdx].id); }).catch(e => console.warn('KSR: model failed, using built-in body', e));
+  if (glb) { glb.on.value = store.get('sr.painted', 0) ? 1 : 0; glb.paint.value.set(curColor); } /* stock colour until the player picks a paint */
   const body = new THREE.Mesh(glb ? glb.geo : paintedGeo(id, curColor), glb ? glb.mat : carMat); body.castShadow = true;
+  setWheels(car, glb ? glb.wheels.map(w => ({ ...w, mat: glb.wmat })) : procWheels(id));
   car.children.forEach(o => { if (o.isMesh && o.geometry && o.geometry.type === 'BoxGeometry') o.visible = !glb; }); /* built-in lamp bars would float on a real model */
   car.add(body);
   const bi = car.children.indexOf(body); /* keep the body FIRST — lamps/decals stay ordered behind it */
@@ -1425,7 +1474,7 @@ function restockAI(diff) {
   AI.forEach((a, k) => {
     const id = AI_TIERS[tier][k % AI_TIERS[tier].length];
     const body = a.mesh.children.find(o => o.isMesh && o.geometry && o.geometry.attributes.partId);
-    if (body) body.geometry = paintedGeo(id, parseInt(a.css.slice(1), 16));
+    if (body) { body.geometry = paintedGeo(id, parseInt(a.css.slice(1), 16)); setWheels(a.mesh, procWheels(id)); }
   });
 }
 let AIs = AI;
@@ -1929,7 +1978,7 @@ function renderTour() {
 }
 function paintPlayer(c) {
   if (curColor === c) { document.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', +b.dataset.c === c)); return; }
-  curColor = c; store.set('sr.color', c);
+  curColor = c; store.set('sr.color', c); store.set('sr.painted', 1);
   rebuildCar(economy.selected()); /* cached paint → instant swap, no geometry recolour stall */
   document.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', +b.dataset.c === c));
 }
@@ -3106,6 +3155,7 @@ function frameBody(now) {
      Only while racing — menus and the pause screen never stutter. */
   const dt = dtRaw * (state === 'race' ? juice.scale() : 1);
   if (state === 'paused') { composer.render(); return; }
+  rollCars(dtRaw);
   if (state === 'race') {
     fAcc += raw; fN++;
     if (fAcc > 2.5) { if (fAcc / fN > 1 / 36 && pr > 1.5) { pr = Math.max(1.5, pr - 0.25); renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight); } fAcc = 0; fN = 0; }
@@ -3248,6 +3298,6 @@ rebuildCar(economy.selected());
 window.addEventListener('ksr-money', updateMoneyUI);
 updateMoneyUI();
 syncSegs(); applyQuality(); applyCtrl(false); gateBoot();
-if (TURBO || location.search.includes('dbg')) { window.__DBG = { get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car, adv, sumo, SUMO_ARENAS, act, startRace, fireWeapon, cycleWeapon, wpnReset, restockAI, get AMMO() { return AMMO; }, get wsel() { return wsel; }, economy, store, touch, get SC() { return SC; }, get curTrack() { return curTrack; }, get state() { return state; }, get cfgT() { return cfg.type; }, forceRace() { setState('race'); goT = 0.9; $('count').style.display = 'none'; } }; window.__SCDBG = { checks: 0 }; } /* dev test hook */
+if (TURBO || location.search.includes('dbg')) { window.__DBG = { rebuildCar, setState, glbOf: id => glbCarReady(getCar(id).glb.url), rollCars, getCar, curColorSet(c) { curColor = c; }, get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car, adv, sumo, SUMO_ARENAS, act, startRace, fireWeapon, cycleWeapon, wpnReset, restockAI, get AMMO() { return AMMO; }, get wsel() { return wsel; }, economy, store, touch, get SC() { return SC; }, get curTrack() { return curTrack; }, get state() { return state; }, get cfgT() { return cfg.type; }, forceRace() { setState('race'); goT = 0.9; $('count').style.display = 'none'; } }; window.__SCDBG = { checks: 0 }; } /* dev test hook */
 window.__KSR_OK = true; /* boot failsafe (index.html) stands down: the engine is alive */
 requestAnimationFrame(frame);
