@@ -1342,8 +1342,9 @@ function rebuildCar(id) {
   const c = getCar(id);
   const old = (car.children || []).find(o => o.isMesh && o.geometry && o.geometry.attributes.partId); /* never yank a lamp by mistake */
   if (old) car.remove(old);
-  const glb = c.glb ? glbCarReady(c.glb.url) : null; /* real 3D model car: use it once loaded, procedural twin until then */
-  if (c.glb && !glb) loadGlbCar(c.glb, renderer.capabilities.getMaxAnisotropy()).then(() => { if (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id)) rebuildCar(economy.selected() === id ? id : CARS[gIdx].id); }).catch(e => console.warn('KSR: model failed, using built-in body', e));
+  const useGlb = c.glb && opt.q !== 'low'; /* LOW / SAFE mode keeps the light built-in body */
+  const glb = useGlb ? glbCarReady(c.glb.url) : null; /* real 3D model car: use it once loaded, procedural twin until then */
+  if (useGlb && !glb) loadGlbCar(c.glb, renderer.capabilities.getMaxAnisotropy()).then(() => { if (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id)) rebuildCar(economy.selected() === id ? id : CARS[gIdx].id); }).catch(e => console.warn('KSR: model failed, using built-in body', e));
   const body = new THREE.Mesh(glb ? glb.geo : paintedGeo(id, curColor), glb ? glb.mat : carMat); body.castShadow = true;
   car.children.forEach(o => { if (o.isMesh && o.geometry && o.geometry.type === 'BoxGeometry') o.visible = !glb; }); /* built-in lamp bars would float on a real model */
   car.add(body);
