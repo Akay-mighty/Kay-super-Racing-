@@ -1359,7 +1359,8 @@ setTimeout(function () {
   ov.classList.remove('hide'); ov.style.zIndex = 999;
   var h = ov.querySelector('h1'), p = ov.querySelector('#glMsg'), tip = ov.querySelector('.gsm');
   if (h) h.textContent = 'THE ENGINE DID NOT START';
-  if (p) p.innerHTML = 'YOUR PHONE IS OUT OF MEMORY AND REFUSED THE 3D ENGINE.<br>CLOSE A FEW APPS / TABS, THEN TAP RETRY.';
+  var why = window.__BOOT_ERR || window.__BOOT_REJ || '';
+  if (p) p.innerHTML = why ? ('THE GAME HIT AN ERROR WHILE STARTING.<br>TAP RETRY. IF IT REPEATS, SEND ME THIS LINE:<br><span style="font-size:11px;word-break:break-all;opacity:.85">' + String(why).replace(/</g, '&lt;').slice(0, 220) + '</span>') : 'THE 3D ENGINE TOOK TOO LONG TO START.<br>CLOSE A FEW APPS / TABS, THEN TAP RETRY.';
   if (tip) tip.textContent = 'IF IT KEEPS HAPPENING, RESTART YOUR PHONE TO FREE RAM';
   var b = ov.querySelector('button'); if (b) b.textContent = 'RETRY';
   var boot = document.getElementById('boot'); if (boot) boot.style.opacity = '.25';
