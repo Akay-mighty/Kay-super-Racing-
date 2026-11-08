@@ -23,7 +23,14 @@ export function loadGlbCar(def, maxAniso = 8) {
         const geos = []; let mat = null;
         gltf.scene.traverse(o => {
           if (!o.isMesh) return;
-          const g = o.geometry.clone(); g.applyMatrix4(o.matrixWorld);
+          const g = o.geometry.clone();
+          for (const nm of ['position', 'normal', 'uv', 'color']) { /* quantized (int16) models: convert to float before transforming */
+            const at = g.attributes[nm]; if (!at || at.array instanceof Float32Array) continue;
+            const f = new Float32Array(at.count * at.itemSize);
+            for (let i = 0; i < at.count; i++) { f[i * at.itemSize] = at.getX(i); if (at.itemSize > 1) f[i * at.itemSize + 1] = at.getY(i); if (at.itemSize > 2) f[i * at.itemSize + 2] = at.getZ(i); }
+            g.setAttribute(nm, new THREE.BufferAttribute(f, at.itemSize));
+          }
+          g.applyMatrix4(o.matrixWorld);
           for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv' && k !== 'color') g.deleteAttribute(k);
           if (!g.attributes.color) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3));
           if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
@@ -40,6 +47,7 @@ export function loadGlbCar(def, maxAniso = 8) {
         geo.setAttribute('partId', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count), 1)); /* all body */
         geo.computeBoundingBox(); geo.computeBoundingSphere();
         const m = new THREE.MeshStandardMaterial({ map: mat && mat.map || null, vertexColors: !(mat && mat.map), side: THREE.DoubleSide, color: 0xffffff, roughness: def.rough ?? 0.4, metalness: def.metal ?? 0.25, envMapIntensity: 1.0 });
+        if (m.map && def.nearest) { m.map.magFilter = m.map.minFilter = THREE.NearestFilter; m.map.generateMipmaps = false; }
         if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = maxAniso; m.map.needsUpdate = true; }
         const out = { geo, mat: m }; cache.set(def.url, out); resolve(out);
       } catch (e) { cache.delete(def.url); reject(e); }

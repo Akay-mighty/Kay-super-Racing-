@@ -93,6 +93,13 @@ export const CARS = [
     stats: { top: 140, accel: 76, steer: 2.2, drift: 1.8, fly: false }
   },
   {
+    id: 'overlander', name: 'OVERLANDER', price: 900000, tag: 'SUMO BRUTE',
+    desc: 'A heavy expedition truck with big off-road wheels. Built to shove rivals off the arena.',
+    glb: { url: '/models/overlander.glb', len: 3.9, rotY: -Math.PI / 2, rough: 0.6, metal: 0.05, nearest: true },
+    spec: cloneSport(s => { s.name = 'overlander'; s.wheelRadius = 0.45; s.chrome = false; }),
+    stats: { top: 125, accel: 70, steer: 2.3, drift: 1.7, fly: false }
+  },
+  {
     id: 'ghost', name: 'GHOST X PROTO', price: 1000000, tag: 'FLYING \u2708 KING', fly: true,
     desc: 'The endgame. Fastest car in the game AND it flies.',
     spec: cloneSport(s => {
