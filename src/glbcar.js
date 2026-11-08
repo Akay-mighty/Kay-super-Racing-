@@ -34,7 +34,8 @@ export function loadGlbCar(def, maxAniso = 8) {
           for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv' && k !== 'color') g.deleteAttribute(k);
           if (!g.attributes.color) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3));
           if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
-          if (g.index) { const n = g.toNonIndexed(); g.dispose(); geos.push(n); } else geos.push(g);
+          if (!g.index) { const n = g.attributes.position.count, ix = new Uint32Array(n); for (let i = 0; i < n; i++) ix[i] = i; g.setIndex(new THREE.BufferAttribute(ix, 1)); } /* keep indexed: 3x less memory on phones */
+          geos.push(g);
           if (!mat) mat = o.material;
         });
         const geo = mergeGeometries(geos); if (!geo) throw new Error('empty model');
