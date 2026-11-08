@@ -1296,6 +1296,15 @@ function makeCar(color, specGeo = SPORT_GEO, tint = null) {
     const f = new THREE.Mesh(new THREE.ConeGeometry(0.26, 2.4, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 1.2, 4), transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
     f.rotation.x = -Math.PI / 2; f.position.set(x, 0.5, -3.5); f.visible = false; g.add(f); return f;
   });
+  /* DOWNWARD THRUSTERS — fire when flying (FL.on). Positioned under the chassis, pointing down. */
+  g.thrusters = [-0.5, 0.5].map(x => {
+    const t = new THREE.Mesh(new THREE.ConeGeometry(0.18, 1.6, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.2, 0.8, 0.3), transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    t.rotation.x = Math.PI; /* point downward */
+    t.position.set(x, -0.2, -0.3); t.visible = false; g.add(t); return t;
+  });
+  /* UNDERGLOW — a soft emissive disc under the car when flying */
+  g.underglow = new THREE.Mesh(new THREE.CircleGeometry(1.8, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.6, 1.5), transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+  g.underglow.rotation.x = -Math.PI / 2; g.underglow.position.y = -0.5; g.add(g.underglow);
   g.rotation.order = 'YXZ'; scene.add(g); return g;
 }
 
@@ -1806,6 +1815,8 @@ function resetWorld(c) {
   restockAI(c.diff);
   smoke.forEach(o => { o.life = 0; o.s.visible = false; });
   car.flames.forEach(f => { f.visible = false; });
+  if (car.thrusters) car.thrusters.forEach(t => { t.visible = false; t.material.opacity = 0; });
+  if (car.underglow) car.underglow.material.opacity = 0;
   Object.assign(A, { score: 0, comboT: 0, hold: 0, mult: 1, maxMult: 1, cones: 0, dur: c.dur || 90, t: c.dur || 90, hit: 0 });
   Object.assign(FL, { on: false, alt: 0, tgt: 0, land: false, time: 0 }); flyWant = 0; document.body.classList.remove('flying');
   Object.assign(RD, { pts: 0, hold: 0, comboT: 0, mult: 1, maxMult: 1, pads: 0 });
@@ -2156,7 +2167,12 @@ function stepPlayer(dt, racing) {
     if (!FL.on && flyWant > 0) {
       flyWant -= dt;
       if (P.fuel < 1) { if (flyWant <= 0) toast('FLIGHT TANK EMPTY', '#ff8a6b'); }
-      else if (fwd > 8) { flyWant = 0; FL.on = true; FL.alt = 0.8; FL.tgt = 20; FL.land = false; P.vel.addScaledVector(f, 6); sfxWhoosh(); toast('FLIGHT MODE \u2708', '#8df'); }
+      else if (fwd > 8) { flyWant = 0; FL.on = true; FL.alt = 0.8; FL.tgt = 20; FL.land = false; P.vel.addScaledVector(f, 6); sfxWhoosh(); toast('FLIGHT MODE \u2708', '#8df');
+        /* Takeoff dust burst */
+        puff(car.localToWorld(V3(0, 0.1, 0)), V3(0, 0.8, 0), 2.5);
+        juice.burst(car.position.x, car.position.y + 0.1, car.position.z, 14, 0xffaa44, 8, 1.5, 8);
+        shake = Math.max(shake, 0.25);
+      }
       else if (flyWant <= 0) toast('GO FASTER TO TAKE OFF', '#ff8a6b');
     }
     if (FL.on && !FL.land && k.down) FL.tgt = Math.max(3, FL.tgt - 22 * dt); /* hold brake to descend */
@@ -2357,6 +2373,9 @@ function stepPlayer(dt, racing) {
   car.rotation.x = pitch - (P.jy > 0 ? clamp(P.jv * 0.011, -0.3, 0.3) : 0) + (FL.on ? clamp((FL.tgt - FL.alt) * 0.014, -0.12, 0.16) - 0.05 : 0);
   car.rotation.z = clamp(-slip * 0.012, -0.12, 0.12) + (FL.on ? -clamp((k.left ? 1 : 0) - (k.right ? 1 : 0) || gp.steer, -1, 1) * 0.14 : 0);
   car.flames.forEach(fl => { fl.visible = boosting || FL.on; if (boosting) { fl.scale.set(1, 0.9 + Math.random() * 0.7, 1); fl.material.opacity = 0.6 + Math.random() * 0.35; } else if (FL.on) { fl.scale.set(0.7, 0.7 + Math.random() * 0.5, 0.7); fl.material.opacity = 0.35 + Math.random() * 0.25; } });
+  /* THRUSTER VFX: downward flames + underglow when flying */
+  if (car.thrusters) car.thrusters.forEach(th => { th.visible = FL.on; if (FL.on) { th.scale.set(0.6 + Math.random() * 0.4, 0.5 + Math.random() * 0.8, 0.6 + Math.random() * 0.4); th.material.opacity = 0.4 + Math.random() * 0.4; } else { th.material.opacity = 0; } });
+  if (car.underglow) car.underglow.material.opacity = FL.on ? 0.15 + Math.random() * 0.1 : 0;
   car.updateMatrixWorld();
   if (!FL.on) {
     if ((Math.abs(slip) > 5 && sp > 22) || (boosting && Math.random() < 0.5)) for (const sx of [-1, 1]) if (Math.random() < 0.8) puff(car.localToWorld(V3(sx * 1.05, 0.3, -1.6)), P.vel, boosting ? 0.8 : 1.2);

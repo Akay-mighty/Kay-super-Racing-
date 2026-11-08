@@ -121,6 +121,25 @@ export const CARS = [
       s.cabin.roofY = s.cabin.roofY.map(([z, v]) => [z, v * 0.84]); s.chrome = false; s.wheelRadius = 0.39;
     }),
     stats: { top: 132, accel: 68, steer: 2.25, drift: 1.85, fly: true }
+  },
+  {
+    id: 'roadster', name: 'FLYING ROADSTER', price: 600000, tag: 'GLB \u2708', fly: true,
+    desc: 'The real flying Tesla. Press F to ignite the thrusters and soar over the city!',
+    glb: { url: '/models/flying-tesla.glb', len: 4.6, rotY: 0, rough: 0.15, metal: 0.85, paintFrom: [0.9, 0.9, 0.9], wheels: { r: 0.36, y: 0.34, zf: 1.15, zr: -1.35, xin: 0.58 } },
+    spec: cloneSport(s => {
+      s.name = 'roadster'; s.cabin.roofY = s.cabin.roofY.map(([z, v]) => [z, v * 0.82]);
+      s.cabin.cowl = 0.55; s.chrome = false; s.wheelRadius = 0.36;
+    }),
+    stats: { top: 120, accel: 58, steer: 2.14, drift: 1.82, fly: true }
+  },
+  {
+    id: 'sample', name: 'SAMPLE GT', price: 500000, tag: 'GLB MODEL',
+    desc: 'A custom 3D model car. Paint it any colour and hit the track.',
+    glb: { url: '/models/sample-car.glb', len: 4.4, rotY: 0, rough: 0.3, metal: 0.35, paintFrom: [0.8, 0.8, 0.8], wheels: { r: 0.33, y: 0.32, zf: 1.2, zr: -1.25, xin: 0.6 } },
+    spec: cloneSport(s => {
+      s.name = 'sample'; s.chrome = false; s.wheelRadius = 0.33;
+    }),
+    stats: { top: 115, accel: 60, steer: 2.1, drift: 1.8, fly: false }
   }
 ];
 
