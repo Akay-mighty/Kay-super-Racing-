@@ -100,25 +100,11 @@ export const CARS = [
     stats: { top: 125, accel: 70, steer: 2.3, drift: 1.7, fly: false }
   },
   {
-    id: 'venom', name: 'VENOM GT', price: 450000, tag: 'REAL MODEL',
-    desc: 'A low, wide grand tourer with a real-model body. Paint it any colour.',
-    glb: { url: '/models/venom.glb', cleanWheels: true, wheelScale: 0.88, wheelInset: 0.06, len: 4.5, rotY: 0, rough: 0.35, metal: 0.3, paintFrom: [0.8, 0.8, 0.8], wheels: { r: 0.3, y: 0.29, zf: 1.25, zr: -1.22, xin: 0.62 } },
-    spec: cloneSport(s => { s.name = 'venom'; s.chrome = false; s.wheelRadius = 0.3; }),
-    stats: { top: 118, accel: 64, steer: 2.2, drift: 1.8, fly: false }
-  },
-  {
     id: 'stallion', name: 'STALLION', price: 300000, tag: 'MUSCLE',
-    desc: 'Long hood, loud attitude. Muscle-car model, ready for any paint job.',
-    glb: { url: '/models/stallion.glb', cleanWheels: true, wheelScale: 0.88, wheelInset: 0.06, len: 4.5, rotY: 0, rough: 0.35, metal: 0.3, paintFrom: [0.8, 0.8, 0.8], wheels: { r: 0.31, y: 0.32, zf: 1.3, zr: -1.26, xin: 0.65 } },
+    desc: 'Retro hot-rod with flames and attitude. Real model, ready for any paint job.',
+    glb: { url: '/models/stallion.glb', len: 4.5, rotY: 0, rough: 0.4, metal: 0.2, clearcoat: 0.2, paintFrom: [0.00015, 0.187, 0.022], wheels: { r: 0.31, y: 0.31, zf: 1.6, zr: -1.2, xin: 0.65 } },
     spec: cloneSport(s => { s.name = 'stallion'; s.chrome = false; s.wheelRadius = 0.31; }),
     stats: { top: 112, accel: 62, steer: 2.15, drift: 1.85, fly: false }
-  },
-  {
-    id: 'hatch', name: 'HATCH GT', price: 260000, tag: 'REAL MODEL',
-    desc: 'Pocket-rocket hatchback. Real 3D model, any paint you like.',
-    glb: { url: '/models/hatch.glb', cleanWheels: true, wheelScale: 0.88, wheelInset: 0.06, len: 4.2, rotY: Math.PI, rough: 0.3, metal: 0.35, paintFrom: [0.8, 0.8, 0.8], wheels: { r: 0.37, y: 0.37, zf: 1.22, zr: -1.35, xin: 0.5 } },
-    spec: cloneSport(s => { s.name = 'hatch'; s.chrome = false; s.wheelRadius = 0.37; }),
-    stats: { top: 108, accel: 58, steer: 2.25, drift: 1.9, fly: false }
   },
   {
     id: 'ghost', name: 'GHOST X PROTO', price: 1000000, tag: 'FLYING \u2708 KING', fly: true,
@@ -131,8 +117,8 @@ export const CARS = [
   },
   {
     id: 'roadster', name: 'FLYING ROADSTER', price: 600000, tag: 'GLB \u2708', fly: true,
-    desc: 'The real flying Tesla. Press F to ignite the thrusters and soar over the city!',
-    glb: { url: '/models/flying-tesla.glb', cleanWheels: true, wheelScale: 0.88, wheelInset: 0.06, len: 4.5, rotY: Math.PI, rough: 0.3, metal: 0.45, clearcoat: 0.15, paintFrom: [0.9, 0.9, 0.9], wheels: { r: 0.37, y: 0.37, zf: 1.08, zr: -1.45, xin: 0.53 } },
+    desc: 'A real concept roadster that flies. Press F to ignite the thrusters and soar over the city!',
+    glb: { url: '/models/flying-tesla.glb', len: 4.5, rotY: 0, rough: 0.32, metal: 0.5, clearcoat: 0.2, paintFrom: [0.67, 0, 0], wheels: { r: 0.39, y: 0.397, zf: 1.29, zr: -1.6, xin: 0.72 } },
     spec: cloneSport(s => {
       s.name = 'roadster'; s.cabin.roofY = s.cabin.roofY.map(([z, v]) => [z, v * 0.82]);
       s.cabin.cowl = 0.55; s.chrome = false; s.wheelRadius = 0.36;
