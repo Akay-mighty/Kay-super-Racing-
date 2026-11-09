@@ -596,7 +596,7 @@ export function createSumo(canvasTex, ctx) {
       myStars++; roundWins++; feed('YOU WIN THE ROUND', '#7dff8a'); msg('ROUND WON!', '#7dff8a', 2.4); ctx.beep(980, 0.16, 'triangle', 0.12);
       /* CEREMONY: the round-winning moment freezes and erupts — the payoff beat */
       const Pp = ctx.pPos();
-      ctx.hitStop(0.18); ctx.fovKick(6); ctx.sparks(Pp.x, 1.2, Pp.z, 30, 0xffd166, 11, 4);
+      ctx.hitStop(0.06); ctx.fovKick(6); ctx.sparks(Pp.x, 1.2, Pp.z, 30, 0xffd166, 11, 4);
     }
     else { feed(`${winnerName} WINS THE ROUND`, '#ffd166'); msg(`${winnerName} TAKES THE ROUND`, '#ffd166', 2.4); }
     if (S.round >= S.rounds) { S.matchOver = true; }
@@ -610,13 +610,13 @@ export function createSumo(canvasTex, ctx) {
     S.alive--;
     if (how === 'ring') { /* RING OUT: explosion + heavy shake at the lip they went over — the KO must FEEL heavy */
       ctx.beep(220, 0.3, 'sawtooth', 0.1); ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 9); ctx.shake(0.45); ringFX(r.x, r.y, r.z, 0xff5c5c);
-      ctx.hitStop(0.15); ctx.fovKick(6); /* the world holds its breath as they drop */
+      ctx.hitStop(0.06); ctx.fovKick(6); /* the world holds its breath as they drop */
       ctx.sparks(r.x, (r.y || 0) + 1.2, r.z, 22, 0xff5c3c, 13, 3);
       if (byName === 'YOU') { S.myKO++; S.juice = 1; ctx.cash(600); feed('YOU PUSHED ' + r.name + ' OFF', '#7dff8a'); }
       else if (byName) feed(byName + ' PUSHED ' + r.name + ' OFF', r.css);
       else feed(r.name + ' DROPPED OFF THE EDGE', r.css);
     }
-    else { ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 10); ctx.shake(0.4); ctx.hitStop(0.12); ctx.fovKick(5); ctx.sparks(r.x, (r.y || 0) + 1, r.z, 18, 0xffa040, 11, 3); if (byName === 'YOU') { S.myKO++; S.juice = 1; ctx.cash(500); feed('YOU WRECKED ' + r.name, '#7dff8a'); } else if (byName) feed(byName + ' WRECKED ' + r.name, r.css); else feed(r.name + ' IS WRECKED', r.css); }
+    else { ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 10); ctx.shake(0.4); ctx.hitStop(0.03); ctx.fovKick(5); ctx.sparks(r.x, (r.y || 0) + 1, r.z, 18, 0xffa040, 11, 3); if (byName === 'YOU') { S.myKO++; S.juice = 1; ctx.cash(500); feed('YOU WRECKED ' + r.name, '#7dff8a'); } else if (byName) feed(byName + ' WRECKED ' + r.name, r.css); else feed(r.name + ' IS WRECKED', r.css); }
     const left = RIV.filter(q => !q.elim);
     if (!left.length) { /* every rival is gone: the round is yours if you are still rolling */
       endRound(S.myOut ? 'NOBODY' : 'YOU', how);
@@ -628,7 +628,7 @@ export function createSumo(canvasTex, ctx) {
     S.myOut = true; S.spectate = true; S.alive--;
     if (how === 'ring') { S.myRing++; if (S.lastHitBy) feed(S.lastHitBy + ' SENT YOU OFF!', '#ff6b6b'); else feed('YOU FELL OFF!', '#ff6b6b'); msg('RING OUT!', '#ff6b6b', 2.4); ctx.beep(180, 0.4, 'sawtooth', 0.12); }
     else { feed(byName ? `${byName} WRECKED YOU` : 'YOU ARE WRECKED', '#ff6b6b'); msg('WRECKED!', '#ff6b6b', 2.4); ctx.boom(ctx.pPos(), 12); }
-    ctx.hitStop(0.16); ctx.fovKick(7); /* your own demise gets the longest freeze */
+    ctx.hitStop(0.06); ctx.fovKick(7); /* your own demise */
     const Pp2 = ctx.pPos(); ctx.sparks(Pp2.x, 1.2, Pp2.z, 24, 0xff5c5c, 12, 3);
     ctx.shake(1);
     const left = RIV.filter(q => !q.elim);
@@ -640,7 +640,7 @@ export function createSumo(canvasTex, ctx) {
   /* ---------- punch (player) ---------- */
   function punch() {
     if (S.freeze || S.myOut || S.punchCd > 0 || S.phase !== 'fight') return 0;
-    S.punchCd = 2.4;
+    S.punchCd = 1.2;
     const Pp = ctx.pPos(), h = ctx.pH(), Pv = ctx.pVel();
     const fx = Math.sin(h), fz = Math.cos(h);
     const mega = S.mega > 0; if (mega) S.mega = 0;
@@ -671,7 +671,7 @@ export function createSumo(canvasTex, ctx) {
       /* THE HIT: gold screen flash + hit stop + FOV punch. The 80-130 ms the world
          freezes is what sells the power — everything after it lands harder. */
       S.juice = 1; ctx.puff(Pp, V3L(0, 1, 0), 1.6); ctx.beep(1500, 0.05, 'square', 0.05); /* top layer: a bright snap over the bass thud */
-      ctx.hitStop(mega ? 0.13 : Math.min(0.115, 0.08 + hits * 0.012));
+      ctx.hitStop(mega ? 0.06 : Math.min(0.05, 0.03 + hits * 0.008));
       ctx.fovKick(mega ? 7 : 4.5);
     }
     else ctx.beep(210, 0.05, 'sine', 0.05); /* whiff: a soft air-cut so a miss never feels like a bug */
@@ -866,7 +866,7 @@ export function createSumo(canvasTex, ctx) {
           Pv.x += nx * pw; Pv.z += nz * pw; Pv.y = 0;
           hitPower(12, `${r.name} PUNCHES YOU!`);
           ctx.sparks((Pp.x + r.x) / 2, (r.y || 0) + 1, (Pp.z + r.z) / 2, 11, 0xff5c5c, 9, 2);
-          ctx.hitStop(0.07); ctx.fovKick(4);
+          ctx.hitStop(0.04); ctx.fovKick(4);
           ctx.shake(0.5); ctx.thud();
           S.lastHitBy = r.name; S.lastHitT = tG;
         } else { /* punched a rival: shove them — and the victim holds a grudge, so the pack turns on itself */
@@ -906,7 +906,7 @@ export function createSumo(canvasTex, ctx) {
           if (S.shield <= 0) { r.hp -= clamp(mine * 0.5, 4, 14); if (r.hp <= 0) { elimRival(r, 'wreck', 'YOU'); continue; } }
           ctx.onRam(-nx, -nz, clamp(mine * 0.2, 2, 7));
           ctx.sparks((Pp.x + r.x) / 2, (r.y || 0) + 0.8, (Pp.z + r.z) / 2, 12, 0xfff0c0, 9, 2); /* metal sparks at the contact point */
-          ctx.hitStop(0.07); ctx.fovKick(3.5);
+          ctx.hitStop(0.04); ctx.fovKick(3.5);
           ctx.puff(V3L(r.x, r.y + 0.8, r.z), V3L(0, 1, 0), 1.4);
           ctx.thud(); ctx.shake(0.4);
         }
@@ -919,7 +919,7 @@ export function createSumo(canvasTex, ctx) {
           S.lastHitBy = r.name;
           ctx.onRam(nx, nz, clamp(closing * 0.28, 3, 9));
           ctx.sparks((Pp.x + r.x) / 2, (r.y || 0) + 0.8, (Pp.z + r.z) / 2, 9, 0xffb060, 8, 2);
-          ctx.hitStop(0.05);
+          ctx.hitStop(0.03);
           ctx.puff(Pp, V3L(0, 0.7, 0), 1.4);
           ctx.thud();
         }

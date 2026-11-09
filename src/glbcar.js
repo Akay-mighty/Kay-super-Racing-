@@ -30,6 +30,10 @@ export function loadGlbCar(def, maxAniso = 8) {
             for (let i = 0; i < at.count; i++) { f[i * at.itemSize] = at.getX(i); if (at.itemSize > 1) f[i * at.itemSize + 1] = at.getY(i); if (at.itemSize > 2) f[i * at.itemSize + 2] = at.getZ(i); }
             g.setAttribute(nm, new THREE.BufferAttribute(f, at.itemSize));
           }
+          /* CRITICAL: many GLB exports (scans, photogrammetry) ship WITHOUT normals.
+             Without normals, MeshStandardMaterial renders flat black — the #1 cause of "rough/destroyed" looking cars.
+             Compute them HERE, per sub-geometry, BEFORE merge (mergeGeometries drops mismatched attributes). */
+          if (!g.attributes.normal) g.computeVertexNormals();
           g.applyMatrix4(o.matrixWorld);
           for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv' && k !== 'color') g.deleteAttribute(k);
           if (!g.attributes.color) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3));
@@ -94,7 +98,7 @@ function splitWheels(geo, w) {
   const body = geo.clone(); body.setIndex(bodyIx);
   const wheels = [];
   for (const [hit, l] of lists) {
-    const k = hit % 2, side = hit >> 1 ? 1 : -1, remap = new Map(), verts = [];
+    const k = hitKey % 2, side = hitKey >> 1 ? 1 : -1, remap = new Map(), verts = [];
     for (const v of l) if (!remap.has(v)) { remap.set(v, verts.length); verts.push(v); }
     let x0 = 1e9, x1 = -1e9; for (const v of verts) { const x = pos.getX(v); if (x < x0) x0 = x; if (x > x1) x1 = x; }
     const cx = (x0 + x1) / 2, cy = w.y, cz = centres[k][0];

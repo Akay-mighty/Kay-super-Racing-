@@ -51,8 +51,8 @@ export function createJuice(scene, dotTex) {
     active = true; cloud.visible = true;
   }
 
-  function hitStop(s) { stop = Math.min(0.22, Math.max(stop, s)); }
-  const scale = () => (stop > 0 ? 0.18 : 1); /* the time-scale the frame loop multiplies dt by */
+  function hitStop(s) { stop = Math.min(0.12, Math.max(stop, s)); }
+  const scale = () => (stop > 0 ? 0.35 : 1); /* the time-scale the frame loop multiplies dt by */
 
   function update(dt) {
     if (stop > 0) stop -= dt;
