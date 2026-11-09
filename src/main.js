@@ -131,6 +131,7 @@ addEventListener('resize', () => {
    the old composer's render targets die with the context and reusing them
    is what left some phones staring at a blank screen after "restored". */
 let glLost = false, glWatch = 0;
+let SAFE_BOOT = location.search.includes('safe=1'), Q_TEMP = false, Q_ORIG = 'high'; /* Q_TEMP: quality was lowered for this session only — never saved */
 function glRecover() {
   if (glLost) return; glLost = true;
   audioUpdate(-1, false);
@@ -1398,7 +1399,7 @@ function rebuildCar(id) {
   const c = getCar(id);
   const old = (car.children || []).find(o => o.isMesh && o.geometry && o.geometry.attributes.partId); /* never yank a lamp by mistake */
   if (old) car.remove(old);
-  const useGlb = c.glb && opt.q !== 'low'; /* LOW / SAFE mode keeps the light built-in body */
+  const useGlb = c.glb && !SAFE_BOOT; /* real models show at EVERY quality level; only emergency safe mode (?safe=1 / drowning phone) keeps the light built-in body */
   const glb = useGlb ? glbCarReady(c.glb.url) : null; /* real 3D model car: use it once loaded, procedural twin until then */
   if (useGlb && !glb) loadGlbCar(c.glb, renderer.capabilities.getMaxAnisotropy()).then(() => { if (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id)) rebuildCar(economy.selected() === id ? id : CARS[gIdx].id); }).catch(e => console.warn('KSR: model failed, using built-in body', e));
   if (glb) { glb.on.value = store.get('sr.painted', 0) ? 1 : 0; glb.paint.value.set(curColor); } /* stock colour until the player picks a paint */
@@ -2124,7 +2125,7 @@ document.addEventListener('click', e => {
   else if (b.dataset.act) act(b.dataset.act);
   else if (b.dataset.c) paintPlayer(+b.dataset.c);
   else if (b.dataset.v !== undefined && b.parentElement.classList.contains('seg')) {
-    const k = b.parentElement.dataset.k; opt[k] = (k === 'laps' || k === 'diff' || k === 'dur' || k === 'rivals' || k === 'sumoTier' || k === 'sumoRivals') ? +b.dataset.v : b.dataset.v; store.set('sr.opt', opt); syncSegs();
+    const k = b.parentElement.dataset.k; opt[k] = (k === 'laps' || k === 'diff' || k === 'dur' || k === 'rivals' || k === 'sumoTier' || k === 'sumoRivals') ? +b.dataset.v : b.dataset.v; if (k === 'q') Q_TEMP = false; store.set('sr.opt', Q_TEMP ? Object.assign({}, opt, { q: Q_ORIG }) : opt); syncSegs();
     if (k === 'env') setEnv(opt.env); if (k === 'advEnv') { } if (k === 'sumoTier' || k === 'sumoRivals') { } if (k === 'laps') renderBest(); if (k === 'dur') renderArBest(); if (k === 'q') applyQuality(); if (k === 'snd') muted = opt.snd === 'off'; if (k === 'board') renderBoard(); if (k === 'ctrl') applyCtrl(true);
   }
 });
@@ -3262,13 +3263,18 @@ bootCloud();
     store.set('sr.glfix', 0);
     setTimeout(() => toast(drowning || forceSafe ? 'GRAPHICS RECOVERED · SAFE MODE FOR STABILITY' : 'GRAPHICS RECOVERED · GO RACE', '#8df'), 900);
   }
+  /* ONE-TIME RESET: older builds saved LOW graphics for good after a single GL hiccup. Back to HIGH once. */
+  if (!store.get('sr.qv2', 0)) { store.set('sr.qv2', 1); opt.q = 'high'; store.set('sr.opt', opt); store.set('sr.glfixN', 0); store.set('sr.glTries', 0); }
+  /* From now on automatic downgrades last for THIS session only (never saved), so your graphics setting can't get stuck on LOW. */
+  Q_ORIG = opt.q;
   if (drowning || forceSafe) {
-    opt.q = 'low'; store.set('sr.opt', opt);
-    setTimeout(() => toast('SAFE MODE · SWITCH TO ?unsafe=1 OR SETTINGS TO LIFT IT', '#ffd166'), 2600);
+    opt.q = 'low'; SAFE_BOOT = true; Q_TEMP = true;
+    setTimeout(() => toast('SAFE MODE THIS SESSION · GRAPHICS WILL RETURN NEXT LAUNCH', '#ffd166'), 2600);
   }
-  else if (glfixN >= 3 && opt.q !== 'low') { opt.q = 'low'; store.set('sr.opt', opt); }
-  else if (glfixN >= 1 && opt.q === 'high') { opt.q = 'med'; store.set('sr.opt', opt); }
-  if (location.search.includes('unsafe=1')) { store.set('sr.glTries', 0); if (opt.q === 'low') { opt.q = mobile ? 'med' : 'high'; store.set('sr.opt', opt); } }
+  else if (glfixN >= 1 && opt.q === 'high') { opt.q = 'med'; Q_TEMP = true; }
+  /* a calm minute of play = the phone is fine: forget the old GL trouble */
+  setTimeout(() => { if (!glLost) { store.set('sr.glfixN', 0); store.set('sr.glTries', 0); } }, 60000);
+  if (location.search.includes('unsafe=1')) { store.set('sr.glTries', 0); SAFE_BOOT = false; opt.q = store.get('sr.opt', {}).q || 'high'; }
 }
 net.init({
   THREE, scene, toast, driverName,
