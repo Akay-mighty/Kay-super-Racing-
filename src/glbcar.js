@@ -98,7 +98,7 @@ function splitWheels(geo, w) {
   const body = geo.clone(); body.setIndex(bodyIx);
   const wheels = [];
   for (const [hit, l] of lists) {
-    const k = hitKey % 2, side = hitKey >> 1 ? 1 : -1, remap = new Map(), verts = [];
+    const k = hit % 2, side = hit >> 1 ? 1 : -1, remap = new Map(), verts = [];
     for (const v of l) if (!remap.has(v)) { remap.set(v, verts.length); verts.push(v); }
     let x0 = 1e9, x1 = -1e9; for (const v of verts) { const x = pos.getX(v); if (x < x0) x0 = x; if (x > x1) x1 = x; }
     const cx = (x0 + x1) / 2, cy = w.y, cz = centres[k][0];
