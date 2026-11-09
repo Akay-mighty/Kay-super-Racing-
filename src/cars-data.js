@@ -132,7 +132,7 @@ export const CARS = [
   {
     id: 'roadster', name: 'FLYING ROADSTER', price: 600000, tag: 'GLB \u2708', fly: true,
     desc: 'The real flying Tesla. Press F to ignite the thrusters and soar over the city!',
-    glb: { url: '/models/flying-tesla.glb', len: 4.5, rotY: 0, rough: 0.15, metal: 0.85, paintFrom: [0.9, 0.9, 0.9], wheels: { r: 0.37, y: 0.37, zf: 1.45, zr: -1.08, xin: 0.53 } },
+    glb: { url: '/models/flying-tesla.glb', len: 4.5, rotY: Math.PI, rough: 0.15, metal: 0.85, paintFrom: [0.9, 0.9, 0.9], wheels: { r: 0.37, y: 0.37, zf: 1.08, zr: -1.45, xin: 0.53 } },
     spec: cloneSport(s => {
       s.name = 'roadster'; s.cabin.roofY = s.cabin.roofY.map(([z, v]) => [z, v * 0.82]);
       s.cabin.cowl = 0.55; s.chrome = false; s.wheelRadius = 0.36;
