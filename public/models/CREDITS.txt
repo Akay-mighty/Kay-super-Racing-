@@ -1,0 +1,3 @@
+flying-tesla.glb  - based on "CarConcept" from KhronosGroup/glTF-Sample-Assets (CC-BY 4.0), simplified for the game.
+stallion.glb      - based on "ToyCar" from KhronosGroup/glTF-Sample-Assets (CC-BY 4.0), simplified for the game.
+Check the licence pages in that repo for the exact credit lines.
