@@ -1402,7 +1402,13 @@ function rebuildCar(id) {
   const useGlb = c.glb && !SAFE_BOOT; /* real models show at EVERY quality level; only emergency safe mode (?safe=1 / drowning phone) keeps the light built-in body */
   const glb = useGlb ? glbCarReady(c.glb.url) : null; /* real 3D model car: use it once loaded, procedural twin until then */
   if (useGlb && !glb) loadGlbCar(c.glb, renderer.capabilities.getMaxAnisotropy()).then(() => { if (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id)) rebuildCar(economy.selected() === id ? id : CARS[gIdx].id); }).catch(e => console.warn('KSR: model failed, using built-in body', e));
-  if (glb) { glb.on.value = store.get('sr.painted', 0) ? 1 : 0; glb.paint.value.set(curColor); } /* stock colour until the player picks a paint */
+  if (glb) {
+    glb.on.value = store.get('sr.painted', 0) ? 1 : 0; glb.paint.value.set(curColor);
+    /* CRITICAL: set envMap on the GLB material so it gets environment reflections.
+       Without this, MeshPhysicalMaterial renders dark because it has nothing to reflect. */
+    glb.mat.envMap = scene.environment; glb.mat.envMapIntensity = 1.2; glb.mat.needsUpdate = true;
+    glb.wmat.envMap = scene.environment; glb.wmat.envMapIntensity = 1.2; glb.wmat.needsUpdate = true;
+  }
   const body = new THREE.Mesh(glb ? glb.geo : paintedGeo(id, curColor), glb ? glb.mat : carMat); body.castShadow = true;
   setWheels(car, glb ? glb.wheels.map(w => ({ ...w, mat: glb.wmat })) : procWheels(id));
   car.children.forEach(o => { if (o.isMesh && o.geometry && o.geometry.type === 'BoxGeometry') o.visible = !glb; }); /* built-in lamp bars would float on a real model */

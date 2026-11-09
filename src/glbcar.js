@@ -1,5 +1,5 @@
 // Kay Super Racing — loads a real 3D model (.glb) as a drop-in car body.
-// FIXED: splitWheels syntax bug, missing normals, material preservation.
+// REWRITE: proper normal handling, PBR material override, envMap integration.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
@@ -18,35 +18,40 @@ export function loadGlbCar(def, maxAniso = 8) {
     loader.load(def.url, gltf => {
       try {
         gltf.scene.updateMatrixWorld(true);
-        const geos = []; let mat = null;
+        const geos = []; let srcMat = null, hasTexture = false;
         gltf.scene.traverse(o => {
           if (!o.isMesh) return;
           const g = o.geometry.clone();
-          // Convert quantized (int16) attributes to float
+          // Convert quantized (int16) attributes to float32
           for (const nm of ['position', 'normal', 'uv', 'color']) {
             const at = g.attributes[nm]; if (!at || at.array instanceof Float32Array) continue;
             const f = new Float32Array(at.count * at.itemSize);
             for (let i = 0; i < at.count; i++) { f[i * at.itemSize] = at.getX(i); if (at.itemSize > 1) f[i * at.itemSize + 1] = at.getY(i); if (at.itemSize > 2) f[i * at.itemSize + 2] = at.getZ(i); }
             g.setAttribute(nm, new THREE.BufferAttribute(f, at.itemSize));
           }
-          // CRITICAL FIX: compute normals BEFORE merge if missing (prevents black blobs)
-          if (!g.attributes.normal) g.computeVertexNormals();
+          // ALWAYS compute normals — most GLB exports from scan/photogrammetry tools
+          // ship without normals or with broken normals. This is the #1 cause of
+          // cars looking flat, dark, or "destroyed". Force-recompute on EVERY model.
+          g.computeVertexNormals();
           g.applyMatrix4(o.matrixWorld);
           // Strip non-standard attributes
           for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv' && k !== 'color') g.deleteAttribute(k);
-          // Ensure color attribute exists (for paint system)
+          // Ensure color attribute exists (needed by the paint system + vertexColors)
           if (!g.attributes.color) g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3));
           // Ensure UV exists
           if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
           // Ensure indexed
           if (!g.index) { const n = g.attributes.position.count, ix = new Uint32Array(n); for (let i = 0; i < n; i++) ix[i] = i; g.setIndex(new THREE.BufferAttribute(ix, 1)); }
           geos.push(g);
-          // Keep the FIRST mesh's material (most models have one material)
-          if (!mat) mat = o.material;
+          // Capture the first mesh's material (most GLB models have a single material)
+          if (!srcMat) {
+            srcMat = o.material;
+            if (srcMat && srcMat.map) hasTexture = true;
+          }
         });
         const geo = mergeGeometries(geos); if (!geo) throw new Error('empty model');
-        // Safety: compute normals after merge if still missing
-        if (!geo.attributes.normal || geo.attributes.normal.count !== geo.attributes.position.count) geo.computeVertexNormals();
+        // Safety: recompute normals after merge (merge can sometimes corrupt normals)
+        geo.computeVertexNormals();
         geo.rotateY(def.rotY || 0);
         // Scale to target length
         geo.computeBoundingBox(); const b = geo.boundingBox;
@@ -58,23 +63,53 @@ export function loadGlbCar(def, maxAniso = 8) {
         geo.computeBoundingBox(); const b2 = geo.boundingBox;
         geo.translate(-(b2.min.x + b2.max.x) / 2, -b2.min.y + (def.lift || 0), -(b2.min.z + b2.max.z) / 2);
 
-        // Create material — preserve GLB texture, fallback to vertex colors
-        const hasMap = !!(mat && mat.map);
-        const m = new THREE.MeshStandardMaterial({
-          map: hasMap ? mat.map : null,
-          vertexColors: !hasMap,
+        // ===== MATERIAL CREATION =====
+        // The GLB models in this game ship with broken/missing material properties:
+        // - metallicFactor is often missing (glTF default = 0, looks like plastic)
+        // - roughnessFactor is often missing (glTF default = 1, looks matte/flat)
+        // - Some have no texture at all
+        //
+        // Solution: ALWAYS create a fresh MeshPhysicalMaterial with showroom-quality
+        // PBR defaults. If the GLB has a texture, use it. If not, use vertex colors.
+        // Override metallic/roughness with the car's def values or sensible defaults.
+
+        const useTexture = hasTexture && srcMat.map;
+        const tex = useTexture ? srcMat.map : null;
+
+        // Determine PBR values: def overrides > GLB material > safe defaults
+        const metallic = def.metal ?? (srcMat && srcMat.metalness != null ? srcMat.metalness : 0.6);
+        const roughness = def.rough ?? (srcMat && srcMat.roughness != null ? srcMat.roughness : 0.25);
+
+        const m = new THREE.MeshPhysicalMaterial({
+          map: tex,
+          vertexColors: !tex, // If no texture, use vertex colors (white = neutral)
           side: THREE.DoubleSide,
           color: 0xffffff,
-          roughness: def.rough ?? (mat ? (mat.roughness ?? 0.4) : 0.4),
-          metalness: def.metal ?? (mat ? (mat.metalness ?? 0.2) : 0.2),
-          envMapIntensity: 1.0
+          roughness: roughness,
+          metalness: metallic,
+          clearcoat: def.clearcoat ?? 0.8,      // Glossy clearcoat for car paint look
+          clearcoatRoughness: 0.08,
+          envMapIntensity: 1.2,                 // Strong environment reflections
+          flatShading: false,                    // Smooth shading (NOT flat)
         });
-        // Copy emissive if source has it
-        if (mat && mat.emissive) { m.emissive.copy(mat.emissive); m.emissiveIntensity = mat.emissiveIntensity ?? 1.0; }
-        if (m.map && def.nearest) { m.map.magFilter = m.map.minFilter = THREE.NearestFilter; m.map.generateMipmaps = false; }
-        if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = maxAniso; m.map.needsUpdate = true; }
 
-        const wm = m.clone();
+        // Copy emissive if the source material has it (for tail lights, etc.)
+        if (srcMat && srcMat.emissive) {
+          m.emissive.copy(srcMat.emissive);
+          m.emissiveIntensity = srcMat.emissiveIntensity ?? 1.0;
+        }
+
+        // Texture setup
+        if (tex) {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.anisotropy = maxAniso;
+          tex.needsUpdate = true;
+          if (def.nearest) { tex.magFilter = tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false; }
+        }
+
+        const wm = m.clone(); // Wheel material (same look, separate instance for paint system)
+
+        // ===== WHEEL SPLITTING =====
         let bodyGeo = geo, wheels = [];
         if (def.wheels) {
           try { const r = splitWheels(geo, def.wheels); bodyGeo = r.body; wheels = r.wheels; }
@@ -83,7 +118,10 @@ export function loadGlbCar(def, maxAniso = 8) {
         bodyGeo.setAttribute('partId', new THREE.BufferAttribute(new Float32Array(bodyGeo.attributes.position.count), 1));
         bodyGeo.computeBoundingBox(); bodyGeo.computeBoundingSphere();
 
-        // Paint system
+        // ===== PAINT SYSTEM =====
+        // The paint system recolours body-coloured texels when the player picks a paint colour.
+        // It uses a shader injection that compares the texel colour to def.paintFrom and
+        // replaces matching pixels with the chosen colour.
         const paint = { value: new THREE.Color(0xffffff) }, on = { value: 0 };
         const from = def.paintFrom ? new THREE.Color().setRGB(def.paintFrom[0], def.paintFrom[1], def.paintFrom[2], THREE.LinearSRGBColorSpace) : null;
         if (from) m.onBeforeCompile = sh => {
@@ -95,6 +133,7 @@ export function loadGlbCar(def, maxAniso = 8) {
               diffuseColor.rgb = mix(c0, uPaint * min(l0 / fl, 1.6), mk); }`);
         };
         m.customProgramCacheKey = () => 'ksrpaint' + (from ? 1 : 0);
+
         const out = { geo: bodyGeo, mat: m, wheels, wmat: wm, paint, on };
         cache.set(def.url, out); resolve(out);
       } catch (e) { cache.delete(def.url); reject(e); }
@@ -104,7 +143,9 @@ export function loadGlbCar(def, maxAniso = 8) {
   return p;
 }
 
-// FIXED: splitWheels — the [hit, l] destructuring was broken (missing [ and wrong variable name)
+// Cut the four wheels out of the merged body: triangles whose centre sits inside
+// a wheel cylinder (axis = X). Wheels come back origin-centred with their axle
+// position, so they can spin and steer.
 function splitWheels(geo, w) {
   const pos = geo.attributes.position, ix = geo.index.array, R = w.r * 1.06;
   const centres = [[w.zf, true], [w.zr, false]];
@@ -129,7 +170,6 @@ function splitWheels(geo, w) {
   }
   const body = geo.clone(); body.setIndex(bodyIx);
   const wheels = [];
-  // FIXED: proper destructuring [hit, l] — was broken as "it, l]" before
   for (const [hit, l] of lists) {
     const k = hit % 2, side = hit >> 1 ? 1 : -1, remap = new Map(), verts = [];
     for (const v of l) if (!remap.has(v)) { remap.set(v, verts.length); verts.push(v); }
