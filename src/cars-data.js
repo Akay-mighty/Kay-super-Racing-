@@ -114,16 +114,9 @@ export const CARS = [
     stats: { top: 112, accel: 62, steer: 2.15, drift: 1.85, fly: false }
   },
   {
-    id: 'apexrs', name: 'APEX RS', price: 520000, tag: 'REAL MODEL',
-    desc: 'Big-wing track weapon. Real 3D model, any paint you like.',
-    glb: { url: '/models/apexrs.glb', len: 4.5, rotY: 0, rough: 0.3, metal: 0.35, paintFrom: [0.8, 0.8, 0.8], wheels: { r: 0.42, y: 0.41, zf: 1.26, zr: -0.85, xin: 0.5 } },
-    spec: cloneSport(s => { s.name = 'apexrs'; s.chrome = false; s.wheelRadius = 0.42; }),
-    stats: { top: 122, accel: 66, steer: 2.2, drift: 1.8, fly: false }
-  },
-  {
     id: 'hatch', name: 'HATCH GT', price: 260000, tag: 'REAL MODEL',
     desc: 'Pocket-rocket hatchback. Real 3D model, any paint you like.',
-    glb: { url: '/models/hatch.glb', len: 4.2, rotY: 0, rough: 0.3, metal: 0.35, paintFrom: [0.8, 0.8, 0.8], wheels: { r: 0.37, y: 0.37, zf: 1.35, zr: -1.22, xin: 0.5 } },
+    glb: { url: '/models/hatch.glb', len: 4.2, rotY: Math.PI, rough: 0.3, metal: 0.35, paintFrom: [0.8, 0.8, 0.8], wheels: { r: 0.37, y: 0.37, zf: 1.22, zr: -1.35, xin: 0.5 } },
     spec: cloneSport(s => { s.name = 'hatch'; s.chrome = false; s.wheelRadius = 0.37; }),
     stats: { top: 108, accel: 58, steer: 2.25, drift: 1.9, fly: false }
   },
@@ -149,7 +142,7 @@ export const CARS = [
   {
     id: 'sample', name: 'SHADOW GT', price: 500000, tag: 'STEALTH',
     desc: 'Black stealth GT with a real 3D-model body and big aero wings.',
-    glb: { url: '/models/sample-car.glb', len: 4.4, rotY: 0, rough: 0.3, metal: 0.35, paintFrom: [0.8, 0.8, 0.8], wheels: { r: 0.33, y: 0.33, zf: 1.2, zr: -1.2, xin: 0.5 } },
+    glb: { url: '/models/sample-car.glb', len: 4.4, rotY: Math.PI, rough: 0.3, metal: 0.35, paintFrom: [0.8, 0.8, 0.8], wheels: { r: 0.33, y: 0.33, zf: 1.2, zr: -1.2, xin: 0.5 } },
     spec: cloneSport(s => {
       s.name = 'sample'; s.chrome = false; s.wheelRadius = 0.33;
     }),
