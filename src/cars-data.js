@@ -138,15 +138,6 @@ export const CARS = [
       s.cabin.cowl = 0.55; s.chrome = false; s.wheelRadius = 0.36;
     }),
     stats: { top: 120, accel: 58, steer: 2.14, drift: 1.82, fly: true }
-  },
-  {
-    id: 'sample', name: 'SHADOW GT', price: 500000, tag: 'STEALTH',
-    desc: 'Black stealth GT with a real 3D-model body and big aero wings.',
-    glb: { url: '/models/sample-car.glb', len: 4.4, rotY: Math.PI, rough: 0.3, metal: 0.35, paintFrom: [0.8, 0.8, 0.8], wheels: { r: 0.33, y: 0.33, zf: 1.2, zr: -1.2, xin: 0.5 } },
-    spec: cloneSport(s => {
-      s.name = 'sample'; s.chrome = false; s.wheelRadius = 0.33;
-    }),
-    stats: { top: 115, accel: 60, steer: 2.1, drift: 1.8, fly: false }
   }
 ];
 
