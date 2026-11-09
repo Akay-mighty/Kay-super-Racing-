@@ -87,9 +87,9 @@ export function loadGlbCar(def, maxAniso = 8) {
           color: 0xffffff,
           roughness: roughness,
           metalness: metallic,
-          clearcoat: def.clearcoat ?? 0.8,      // Glossy clearcoat for car paint look
+          clearcoat: def.clearcoat ?? 0.3,      // Glossy clearcoat for car paint look
           clearcoatRoughness: 0.08,
-          envMapIntensity: 1.2,                 // Strong environment reflections
+          envMapIntensity: 0.85,                 // Strong environment reflections
           flatShading: false,                    // Smooth shading (NOT flat)
         });
 
