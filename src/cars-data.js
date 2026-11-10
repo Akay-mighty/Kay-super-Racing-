@@ -93,6 +93,27 @@ export const CARS = [
     stats: { top: 140, accel: 76, steer: 2.2, drift: 1.8, fly: false }
   },
   {
+    id: 'revuelto', name: 'LAMBO REVUELTO', price: 3200000, tag: 'HYBRID HYPERCAR',
+    desc: 'A real V12 hybrid hypercar model. Wide, flat and brutally fast. Paint it any colour.',
+    glb: { url: '/models/revuelto.glb', len: 4.5, rotY: 0, rough: 0.3, metal: 0.35, clearcoat: 0.25, paintFrom: [1, 0.13, 0], wheels: { r: 0.33, y: 0.34, zf: 1.17, zr: -1.35, xin: 0.58 } },
+    spec: cloneSport(s => { s.name = 'revuelto'; s.wheelRadius = 0.36; s.chrome = false; }),
+    stats: { top: 152, accel: 80, steer: 2.2, drift: 1.8, fly: false }
+  },
+  {
+    id: 'artura', name: 'MCLAREN ARTURA', price: 2800000, tag: 'HYBRID GT',
+    desc: 'A real McLaren hybrid supercar model. Razor sharp in the corners.',
+    glb: { url: '/models/artura.glb', len: 4.5, rotY: 0, rough: 0.3, metal: 0.35, clearcoat: 0.25, paintFrom: [0.24, 0.46, 0.02], wheels: { r: 0.34, y: 0.34, zf: 1.16, zr: -1.45, xin: 0.64 } },
+    spec: cloneSport(s => { s.name = 'artura'; s.wheelRadius = 0.36; s.chrome = false; }),
+    stats: { top: 146, accel: 82, steer: 2.35, drift: 1.8, fly: false }
+  },
+  {
+    id: 'f40', name: 'FERRARI F40', price: 3600000, tag: 'LEGEND',
+    desc: 'The legendary F40, a real model. Raw, loud and unforgettable.',
+    glb: { url: '/models/f40.glb', len: 4.5, rotY: 0, rough: 0.3, metal: 0.35, clearcoat: 0.25, paintFrom: [0.51, 0.01, 0.01], wheels: { r: 0.33, y: 0.327, zf: 1.16, zr: -1.34, xin: 0.64 } },
+    spec: cloneSport(s => { s.name = 'f40'; s.wheelRadius = 0.36; s.chrome = false; }),
+    stats: { top: 144, accel: 76, steer: 2.05, drift: 2.0, fly: false }
+  },
+  {
     id: 'overlander', name: 'OVERLANDER', price: 900000, tag: 'SUMO BRUTE',
     desc: 'A heavy expedition truck with big off-road wheels. Built to shove rivals off the arena.',
     glb: { url: '/models/overlander.glb', len: 3.9, rotY: -Math.PI / 2, rough: 0.6, metal: 0.05, nearest: true, paintFrom: [0.91, 0.68, 0.54], wheels: { r: 0.37, y: 0.37, zf: 1.27, zr: -0.68, xin: 0.6 } },

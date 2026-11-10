@@ -1248,6 +1248,16 @@ function procWheels(id) {
     return { ...w, geo: geo.clone(), mat: carMat }; /* own copy: sumo dents recolour the rival's geometry */
   });
 }
+/* real-model cars: swap the lumpy scanned wheels for the game's crisp tyres + rims (same spot, same size) */
+function glbWheels(id, c, glb) {
+  if (!c.glb.cleanWheels) return glb.wheels.map(w => ({ ...w, mat: glb.wmat }));
+  const set = procWheels(id), k0 = c.spec.wheelRadius;
+  return glb.wheels.map(w => {
+    const ref = set.find(q => Math.sign(q.x) === (w.x < 0 ? -1 : 1)) || set[0];
+    const ws = c.glb.wheelScale || 1, geo = ref.geo.clone(); const k = w.r * ws / k0; geo.scale(k, k, k);
+    return { geo, mat: carMat, x: w.x - Math.sign(w.x) * (c.glb.wheelInset || 0), y: w.y - w.r * (1 - ws), z: w.z, front: w.front, r: w.r * ws };
+  });
+}
 const rollingCars = new Set();
 function setWheels(g, list) {
   if (g.wheelPivots) for (const pv of g.wheelPivots) g.remove(pv);
@@ -1395,23 +1405,25 @@ function renderTattoos() {
     </button>`;
   }).join('');
 }
+const GLB_FAIL = new Set(); /* models that could not load: fall back to the built-in body instead of staying invisible */
 function rebuildCar(id) {
   const c = getCar(id);
   const old = (car.children || []).find(o => o.isMesh && o.geometry && o.geometry.attributes.partId); /* never yank a lamp by mistake */
   if (old) car.remove(old);
-  const useGlb = c.glb && !SAFE_BOOT; /* real models show at EVERY quality level; only emergency safe mode (?safe=1 / drowning phone) keeps the light built-in body */
+  const useGlb = c.glb && !SAFE_BOOT && !GLB_FAIL.has(id); /* real models show at EVERY quality level; only emergency safe mode (?safe=1 / drowning phone) keeps the light built-in body */
   const glb = useGlb ? glbCarReady(c.glb.url) : null; /* real 3D model car: use it once loaded, procedural twin until then */
-  if (useGlb && !glb) loadGlbCar(c.glb, renderer.capabilities.getMaxAnisotropy()).then(() => { if (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id)) rebuildCar(economy.selected() === id ? id : CARS[gIdx].id); }).catch(e => console.warn('KSR: model failed, using built-in body', e));
+  if (useGlb && !glb) loadGlbCar(c.glb, renderer.capabilities.getMaxAnisotropy()).then(() => { if (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id)) rebuildCar(economy.selected() === id ? id : CARS[gIdx].id); }).catch(e => { console.warn('KSR: model failed, using built-in body', e); GLB_FAIL.add(id); rebuildCar(id); });
   if (glb) {
     glb.on.value = store.get('sr.painted', 0) ? 1 : 0; glb.paint.value.set(curColor);
     /* CRITICAL: set envMap on the GLB material so it gets environment reflections.
        Without this, MeshPhysicalMaterial renders dark because it has nothing to reflect. */
-    glb.mat.envMap = scene.environment; glb.mat.envMapIntensity = 1.2; glb.mat.needsUpdate = true;
-    glb.wmat.envMap = scene.environment; glb.wmat.envMapIntensity = 1.2; glb.wmat.needsUpdate = true;
+    glb.mat.envMap = scene.environment; glb.mat.envMapIntensity = 0.85; glb.mat.needsUpdate = true;
+    glb.wmat.envMap = scene.environment; glb.wmat.envMapIntensity = 0.85; glb.wmat.needsUpdate = true;
   }
   const body = new THREE.Mesh(glb ? glb.geo : paintedGeo(id, curColor), glb ? glb.mat : carMat); body.castShadow = true;
-  setWheels(car, glb ? glb.wheels.map(w => ({ ...w, mat: glb.wmat })) : procWheels(id));
-  car.children.forEach(o => { if (o.isMesh && o.geometry && o.geometry.type === 'BoxGeometry') o.visible = !glb; }); /* built-in lamp bars would float on a real model */
+  setWheels(car, glb ? glbWheels(id, c, glb) : procWheels(id));
+  car.children.forEach(o => { if (o.isMesh && o.geometry && o.geometry.type === 'BoxGeometry') o.visible = !(glb || useGlb); }); /* built-in lamp bars would float on a real model */
+  if (useGlb && !glb) { body.visible = false; (car.wheelPivots || []).forEach(w => { w.visible = false; }); } /* real model still downloading: show NOTHING instead of the built-in twin, it pops in the moment it is ready */
   car.add(body);
   const bi = car.children.indexOf(body); /* keep the body FIRST — lamps/decals stay ordered behind it */
   if (bi > 0) { car.children.splice(bi, 1); car.children.unshift(body); }
