@@ -57,11 +57,12 @@ if (!glPreflight()) {
 }
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
 const mobile = matchMedia('(any-pointer: coarse)').matches;
-let pr = Math.min(devicePixelRatio, { high: mobile ? 1.75 : 2, med: mobile ? 1.35 : 1.5, low: 1 }[store_getQ()] || 2);
+let pr = Math.min(devicePixelRatio, { high: mobile ? 1.5 : 2, med: mobile ? 1.15 : 1.5, low: 1 }[store_getQ()] || 2);
 function store_getQ() { try { const o = JSON.parse(localStorage.getItem('sr.opt') || '{}'); return o.q || (mobile ? 'med' : 'high'); } catch (e) { return mobile ? 'med' : 'high'; } }
 renderer.setPixelRatio(pr);
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = mobile ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap; /* soft = costlier; phones use the cheap one */
+if (mobile) renderer.shadowMap.autoUpdate = false; /* phones redraw the shadow map every 2nd frame (see frameBody) */
 renderer.toneMapping = THREE.NeutralToneMapping;
 document.body.prepend(renderer.domElement);
 
@@ -2105,11 +2106,11 @@ function applyCtrl(user) {
   }, !!user);
 }
 function applyQuality() {
-  pr = Math.min(devicePixelRatio, { high: mobile ? 1.75 : 2, med: mobile ? 1.35 : 1.5, low: 1 }[opt.q] || 2);
+  pr = Math.min(devicePixelRatio, { high: mobile ? 1.5 : 2, med: mobile ? 1.15 : 1.5, low: 1 }[opt.q] || 2);
   renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight);
   /* LOW now really means LOW: no bloom, no shadow pass — half the GPU work on cheap phones */
   const low = opt.q === 'low';
-  if (bloomPass) bloomPass.enabled = !low;
+  if (bloomPass) bloomPass.enabled = !mobile && !low; /* phones: no bloom — it is the heaviest pass */
   if (gradePass) { gradePass.enabled = !low; gradePass.uniforms.uSharp.value = opt.q === 'high' ? 0.85 : 0.65; }
   if (fxaaPass) fxaaPass.enabled = mobile && !low; /* low = skip both: that mode is for weak phones */
   if (renderer.shadowMap.enabled === low) {
@@ -3282,7 +3283,7 @@ function frameBody(now) {
   rollCars(dtRaw);
   if (state === 'race') {
     fAcc += raw; fN++;
-    if (fAcc > 2.5) { if (fAcc / fN > 1 / 36 && pr > 1.5) { pr = Math.max(1.5, pr - 0.25); renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight); } fAcc = 0; fN = 0; }
+    if (fAcc > 2.5) { if (fAcc / fN > 1 / 36 && pr > (mobile ? 1 : 1.5)) { pr = Math.max(mobile ? 1 : 1.5, pr - 0.25); renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight); } fAcc = 0; fN = 0; }
   } else { fAcc = 0; fN = 0; }
   if (state === 'count') {
     cdT -= dt; const n = Math.ceil(cdT); $('cd').textContent = n > 0 ? n : 'GO';
@@ -3350,8 +3351,10 @@ function frameBody(now) {
   else updateCamera(dt, out.boosting, out.sp);
   updateStreaks(dt, state === 'menu' ? 0 : out.sp, out.boosting);
   hud(dt, out.sp, out.boosting); audioUpdate(state === 'menu' ? -1 : out.sp, out.boosting, FL.on);
+  if (mobile) { shadowTick ^= 1; renderer.shadowMap.needsUpdate = !!shadowTick; }
   composer.render();
 }
+let shadowTick = 0;
 /* boot */
 muted = opt.snd === 'off';
 economy.init(); missionsInit();
