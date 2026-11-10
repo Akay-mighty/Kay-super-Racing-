@@ -134,6 +134,10 @@ let glLost = false, glWatch = 0;
 let SAFE_BOOT = location.search.includes('safe=1'), Q_TEMP = false, Q_ORIG = 'high'; /* Q_TEMP: quality was lowered for this session only — never saved */
 function glRecover() {
   if (glLost) return; glLost = true;
+  try { /* record WHY, so the next launch can tell you instead of silently dropping to LOW */
+    const gl = renderer.getContext(), dbg = gl.getExtension('WEBGL_debug_renderer_info'), inf = renderer.info;
+    store.set('sr.glWhy', { t: Date.now(), gpu: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '?', q: opt.q, pr: +pr.toFixed(2), tex: inf.memory.textures, geo: inf.memory.geometries, calls: inf.render.calls, tris: inf.render.triangles, st: state, car: economy.selected(), cause: document.hidden ? 'app was in background' : 'GPU reset while visible' });
+  } catch (e) { }
   audioUpdate(-1, false);
   if (state === 'race' || state === 'count') pause();
   show('glFix', true); const t = $('glT'); if (t) t.textContent = '7';
@@ -3362,6 +3366,7 @@ bootCloud();
   if (store.get('sr.glfix', 0)) {
     store.set('sr.glfix', 0);
     setTimeout(() => toast(drowning || forceSafe ? 'GRAPHICS RECOVERED · SAFE MODE FOR STABILITY' : 'GRAPHICS RECOVERED · GO RACE', '#8df'), 900);
+    const why = store.get('sr.glWhy', null); if (why) setTimeout(() => { toast('WHY: ' + why.cause + ' · ' + String(why.gpu).slice(0, 28) + ' · ' + why.st + ' · ' + why.q + ' x' + why.pr + ' · tex ' + why.tex + ' calls ' + why.calls, '#ffd166'); }, 4200);
   }
   /* ONE-TIME RESET: older builds saved LOW graphics for good after a single GL hiccup. Back to HIGH once. */
   if (!store.get('sr.qv2', 0)) { store.set('sr.qv2', 1); opt.q = 'high'; store.set('sr.opt', opt); store.set('sr.glfixN', 0); store.set('sr.glTries', 0); }
