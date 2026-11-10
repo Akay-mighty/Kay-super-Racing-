@@ -6,6 +6,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const cache = new Map();
+export const glbProgress = new Map(); /* url -> 0..100 while a model is downloading */
 let loader = null;
 
 export function glbCarReady(url) { const v = cache.get(url); return v && !(v instanceof Promise) ? v : null; }
@@ -136,8 +137,8 @@ export function loadGlbCar(def, maxAniso = 8) {
 
         const out = { geo: bodyGeo, mat: m, wheels, wmat: wm, paint, on };
         cache.set(def.url, out); resolve(out);
-      } catch (e) { cache.delete(def.url); reject(e); }
-    }, undefined, e => { cache.delete(def.url); reject(e); });
+      } catch (e) { cache.delete(def.url); glbProgress.delete(def.url); reject(e); }
+    }, e => { const tot = e.total > 0 ? e.total : (def.bytes || 1.6e6); glbProgress.set(def.url, Math.min(99, Math.round(e.loaded / tot * 100))); }, e => { cache.delete(def.url); glbProgress.delete(def.url); reject(e); });
   });
   cache.set(def.url, p);
   return p;
