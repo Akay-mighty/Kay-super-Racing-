@@ -95,21 +95,21 @@ export const CARS = [
   {
     id: 'revuelto', name: 'LAMBO REVUELTO', price: 3200000, tag: 'HYBRID HYPERCAR',
     desc: 'A real V12 hybrid hypercar model. Wide, flat and brutally fast. Paint it any colour.',
-    glb: { url: '/models/revuelto.glb', len: 4.5, rotY: 0, rough: 0.3, metal: 0.35, clearcoat: 0.25, paintFrom: [1, 0.13, 0], wheels: { r: 0.33, y: 0.34, zf: 1.17, zr: -1.35, xin: 0.58 } },
+    glb: { url: '/models/revuelto.glb', bytes: 1298584, len: 4.5, rotY: 0, rough: 0.3, metal: 0.35, clearcoat: 0.25, paintFrom: [1, 0.13, 0], wheels: { r: 0.33, y: 0.34, zf: 1.17, zr: -1.35, xin: 0.58 } },
     spec: cloneSport(s => { s.name = 'revuelto'; s.wheelRadius = 0.36; s.chrome = false; }),
     stats: { top: 152, accel: 80, steer: 2.2, drift: 1.8, fly: false }
   },
   {
     id: 'artura', name: 'MCLAREN ARTURA', price: 2800000, tag: 'HYBRID GT',
     desc: 'A real McLaren hybrid supercar model. Razor sharp in the corners.',
-    glb: { url: '/models/artura.glb', len: 4.5, rotY: 0, rough: 0.3, metal: 0.35, clearcoat: 0.25, paintFrom: [0.24, 0.46, 0.02], wheels: { r: 0.34, y: 0.34, zf: 1.16, zr: -1.45, xin: 0.64 } },
+    glb: { url: '/models/artura.glb', bytes: 1209224, len: 4.5, rotY: 0, rough: 0.3, metal: 0.35, clearcoat: 0.25, paintFrom: [0.24, 0.46, 0.02], wheels: { r: 0.34, y: 0.34, zf: 1.16, zr: -1.45, xin: 0.64 } },
     spec: cloneSport(s => { s.name = 'artura'; s.wheelRadius = 0.36; s.chrome = false; }),
     stats: { top: 146, accel: 82, steer: 2.35, drift: 1.8, fly: false }
   },
   {
     id: 'f40', name: 'FERRARI F40', price: 3600000, tag: 'LEGEND',
     desc: 'The legendary F40, a real model. Raw, loud and unforgettable.',
-    glb: { url: '/models/f40.glb', len: 4.5, rotY: 0, rough: 0.3, metal: 0.35, clearcoat: 0.25, paintFrom: [0.51, 0.01, 0.01], wheels: { r: 0.33, y: 0.327, zf: 1.16, zr: -1.34, xin: 0.64 } },
+    glb: { url: '/models/f40.glb', bytes: 896000, len: 4.5, rotY: 0, rough: 0.3, metal: 0.35, clearcoat: 0.25, paintFrom: [0.51, 0.01, 0.01], wheels: { r: 0.33, y: 0.327, zf: 1.16, zr: -1.34, xin: 0.64 } },
     spec: cloneSport(s => { s.name = 'f40'; s.wheelRadius = 0.36; s.chrome = false; }),
     stats: { top: 144, accel: 76, steer: 2.05, drift: 2.0, fly: false }
   },
@@ -123,7 +123,7 @@ export const CARS = [
   {
     id: 'stallion', name: 'STALLION', price: 300000, tag: 'MUSCLE',
     desc: 'Retro hot-rod with flames and attitude. Real model, ready for any paint job.',
-    glb: { url: '/models/stallion.glb', len: 4.5, rotY: 0, rough: 0.4, metal: 0.2, clearcoat: 0.2, paintFrom: [0.00015, 0.187, 0.022], wheels: { r: 0.31, y: 0.31, zf: 1.6, zr: -1.2, xin: 0.65 } },
+    glb: { url: '/models/stallion.glb', bytes: 1247308, len: 4.5, rotY: 0, rough: 0.4, metal: 0.2, clearcoat: 0.2, paintFrom: [0.00015, 0.187, 0.022], wheels: { r: 0.31, y: 0.31, zf: 1.6, zr: -1.2, xin: 0.65 } },
     spec: cloneSport(s => { s.name = 'stallion'; s.chrome = false; s.wheelRadius = 0.31; }),
     stats: { top: 112, accel: 62, steer: 2.15, drift: 1.85, fly: false }
   },
@@ -139,7 +139,7 @@ export const CARS = [
   {
     id: 'roadster', name: 'FLYING ROADSTER', price: 600000, tag: 'GLB \u2708', fly: true,
     desc: 'A real concept roadster that flies. Press F to ignite the thrusters and soar over the city!',
-    glb: { url: '/models/flying-tesla.glb', len: 4.5, rotY: 0, rough: 0.32, metal: 0.5, clearcoat: 0.2, paintFrom: [0.67, 0, 0], wheels: { r: 0.39, y: 0.397, zf: 1.29, zr: -1.6, xin: 0.72 } },
+    glb: { url: '/models/flying-tesla.glb', bytes: 3436108, len: 4.5, rotY: 0, rough: 0.32, metal: 0.5, clearcoat: 0.2, paintFrom: [0.67, 0, 0], wheels: { r: 0.39, y: 0.397, zf: 1.29, zr: -1.6, xin: 0.72 } },
     spec: cloneSport(s => {
       s.name = 'roadster'; s.cabin.roofY = s.cabin.roofY.map(([z, v]) => [z, v * 0.82]);
       s.cabin.cowl = 0.55; s.chrome = false; s.wheelRadius = 0.36;
