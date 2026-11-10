@@ -20,7 +20,7 @@ import { cloud } from './cloud.js';
 import { net } from './net.js';
 import { GhostRec, makeGhostCar } from './ghost.js';
 import { colorize } from './carcolor.js';
-import { loadGlbCar, glbCarReady } from './glbcar.js';
+import { loadGlbCar, glbCarReady, glbProgress } from './glbcar.js';
 import { DRIVERS, driverById, drvTier } from './drivers.js';
 import { TATTOOS, tatById, tatThumb, buildDecals } from './tattoos.js';
 
@@ -443,25 +443,37 @@ function buildWorld(tk) {
   right = tan.map(t => V3(-t.z, 0, t.x).normalize());
   curv = tan.map((t, i) => Math.acos(clamp(t.dot(tan[(i + 8) % N]), -1, 1)));
 
-function strip(oa, ya, ob, yb, col, shadow = true) {
-  const pos = [], cl = [], idx = [];
+function strip(oa, ya, ob, yb, col, shadow = true, tex = null) {
+  const pos = [], cl = [], idx = [], uvs = [];
   for (let i = 0; i <= N; i++) {
     const k = i % N, c = pts[k], r = right[k], q = col(i);
     pos.push(c.x + r.x * oa, c.y + ya, c.z + r.z * oa, c.x + r.x * ob, c.y + yb, c.z + r.z * ob);
-    cl.push(q.r, q.g, q.b, q.r, q.g, q.b);
+    cl.push(q.r, q.g, q.b, q.r, q.g, q.b); if (tex) { const vv = i * ds / Math.abs(ob - oa); uvs.push(0, vv, 1, vv); }
     if (i < N) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(cl, 3));
+  if (tex) g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   g.setIndex(idx); g.computeVertexNormals();
-  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.85 }));
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.85, map: tex }));
   m.receiveShadow = shadow; world.add(m); return m;
 }
 const C = s => new THREE.Color(s);
   const asph = tk.road.map(c => C(c)), rw = tk.edge.map(c => C(c)), wallC = tk.wall.map(c => C(c));
   const paintC = (tk.paint || []).map(([a, b, cs]) => [a, b, cs.map(c => C(c))]);
-  roadStrip = strip(-W, 0, W, 0, i => { const pr = paintC.find(p => i >= p[0] && i <= p[1]); return pr ? pr[2][(i >> 3) & 1] : asph[(i >> 3) & 1]; });
+  const roadTex = canvasTex(512, 512, g => { /* asphalt: grain, repairs, tyre-wear lanes and clean white edge lines */
+    g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, 512, 512);
+    const im = g.getImageData(0, 0, 512, 512), d = im.data;
+    for (let i = 0; i < d.length; i += 4) { const v = 128 + ((Math.random() - 0.5) * 70 | 0) + ((Math.random() < 0.02) ? 40 : 0); d[i] = d[i + 1] = d[i + 2] = v + 12; }
+    g.putImageData(im, 0, 0);
+    g.globalAlpha = 0.14; g.fillStyle = '#000'; for (let k = 0; k < 7; k++) g.fillRect(Math.random() * 400, Math.random() * 480, 40 + Math.random() * 90, 14 + Math.random() * 40); /* patched asphalt */
+    g.globalAlpha = 0.1; g.fillStyle = '#000'; g.fillRect(150, 0, 46, 512); g.fillRect(316, 0, 46, 512); /* worn wheel tracks */
+    g.globalAlpha = 0.35; g.strokeStyle = '#000'; g.lineWidth = 1; for (let k = 0; k < 9; k++) { g.beginPath(); let x = Math.random() * 512, y = Math.random() * 512; g.moveTo(x, y); for (let j = 0; j < 5; j++) { x += (Math.random() - 0.5) * 30; y += Math.random() * 26; g.lineTo(x, y); } g.stroke(); } /* hairline cracks */
+    g.globalAlpha = 1; g.fillStyle = '#ffffff'; g.fillRect(16, 0, 7, 512); g.fillRect(489, 0, 7, 512); /* edge lines */
+  });
+  roadTex.wrapS = roadTex.wrapT = THREE.RepeatWrapping; roadTex.anisotropy = 8;
+  roadStrip = strip(-W, 0, W, 0, i => { const pr = paintC.find(p => i >= p[0] && i <= p[1]); return pr ? pr[2][(i >> 3) & 1] : asph[(i >> 3) & 1]; }, true, roadTex);
   strip(W, 0.08, W + 2.6, 0.08, i => rw[i & 1]);
   strip(-W - 2.6, 0.08, -W, 0.08, i => rw[i & 1]);
   strip(WALL, 0, WALL, 1.5, i => wallC[(i >> 2) & 1]);
@@ -497,14 +509,37 @@ let cityMat = null;
 /* city: one merged mesh, window UVs scaled to real building size — density/height per track */
 {
   const cell = Array.from({ length: 128 }, () => Math.random());
-  const win = canvasTex(512, 512, g => {
-    g.scale(2, 2); g.fillStyle = '#aab8c6'; g.fillRect(0, 0, 256, 256);
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 8; x++) { const c = cell[y * 8 + x]; g.fillStyle = c < 0.2 ? '#ffe9a8' : (c < 0.6 ? '#2e4256' : '#3d556b'); g.fillRect(x * 32 + 5, y * 16 + 3, 22, 10); }
+  const lit = c => c < 0.2, mid = c => c >= 0.6;
+  const rr = (x, y, w, h, r, g) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  const win = canvasTex(1024, 1024, g => { /* facade: concrete + pillars + floor slabs + glass windows with sky reflection, frames and blinds */
+    g.scale(4, 4);
+    const wall = g.createLinearGradient(0, 0, 0, 256); wall.addColorStop(0, '#c3ccd6'); wall.addColorStop(1, '#9aa7b5'); g.fillStyle = wall; g.fillRect(0, 0, 256, 256);
+    for (let y = 0; y < 16; y++) {
+      g.fillStyle = 'rgba(70,82,96,.55)'; g.fillRect(0, y * 16 + 13, 256, 3); g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(0, y * 16 + 12, 256, 1);
+      for (let x = 0; x < 8; x++) {
+        const c = cell[y * 8 + x], X = x * 32 + 5, Y = y * 16 + 2;
+        g.fillStyle = 'rgba(80,92,106,.55)'; g.fillRect(x * 32, y * 16, 3, 16); g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(x * 32 + 3, y * 16, 1, 16);
+        g.fillStyle = '#1d2733'; rr(X - 1, Y - 1, 24, 12, 1.2, g); g.fill();
+        const gl = g.createLinearGradient(0, Y, 0, Y + 10);
+        if (lit(c)) { gl.addColorStop(0, '#fff2c4'); gl.addColorStop(1, '#ffc766'); }
+        else if (mid(c)) { gl.addColorStop(0, '#5b7e9c'); gl.addColorStop(0.5, '#34506a'); gl.addColorStop(1, '#1b2c3d'); }
+        else { gl.addColorStop(0, '#7ea2c1'); gl.addColorStop(0.45, '#3f5c77'); gl.addColorStop(1, '#16273a'); }
+        g.fillStyle = gl; g.fillRect(X, Y, 22, 10);
+        if (!lit(c)) { g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.moveTo(X, Y + 10); g.lineTo(X + 9, Y); g.lineTo(X + 14, Y); g.lineTo(X + 5, Y + 10); g.fill(); }
+        g.fillStyle = lit(c) ? 'rgba(70,45,10,.85)' : 'rgba(18,26,36,.9)'; g.fillRect(X + 10.5, Y, 1, 10);
+        if (c > 0.35 && c < 0.5) { g.fillStyle = 'rgba(225,215,195,.55)'; for (let k = 0; k < 4; k++) g.fillRect(X, Y + k * 2.6 + 0.5, 22, 1.2); }
+      }
+    }
   });
-  const glow = canvasTex(512, 512, g => {
-    g.scale(2, 2); g.fillStyle = '#000'; g.fillRect(0, 0, 256, 256);
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 8; x++) if (cell[y * 8 + x] < 0.5) { g.fillStyle = '#ffd890'; g.fillRect(x * 32 + 5, y * 16 + 3, 22, 10); }
+  const glow = canvasTex(1024, 1024, g => {
+    g.scale(4, 4); g.fillStyle = '#000'; g.fillRect(0, 0, 256, 256);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 8; x++) if (lit(cell[y * 8 + x]) || (cell[y * 8 + x] >= 0.2 && cell[y * 8 + x] < 0.35)) { g.fillStyle = lit(cell[y * 8 + x]) ? '#ffd890' : '#6b4a1e'; g.fillRect(x * 32 + 5, y * 16 + 2, 22, 10); }
   });
+  const rough = canvasTex(256, 256, g => { /* glass is glossy, concrete is matte */
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, 256, 256); g.fillStyle = '#5a5a5a';
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 8; x++) g.fillRect(x * 32 + 5, y * 16 + 2, 22, 10);
+  });
+  rough.wrapS = rough.wrapT = THREE.RepeatWrapping; win.anisotropy = 8;
   glow.wrapS = glow.wrapT = THREE.RepeatWrapping;
   win.wrapS = win.wrapT = THREE.RepeatWrapping;
   const geos = []; let n = 0, tries = 0;
@@ -515,15 +550,22 @@ let cityMat = null;
     if (ok && !scClear(p.x, p.z, 16)) ok = false; /* keep the shortcut alley clear */
     if (!ok) continue;
     const w = rand(22, 55), d = rand(22, 55), h = rand(35, 90) * (off < 140 ? 1 : rand(1.2, 3.2)) * tk.cityH;
-    const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv;
-    for (let f = 0; f < 6; f++) { const len = f < 2 ? d : w, vv = f < 4 ? h : d; for (let j = 0; j < 4; j++) { const i = f * 4 + j; uv.setXY(i, uv.getX(i) * len / 25.6, uv.getY(i) * vv / 57.6); } }
-    const c = new THREE.Color().setHSL(rand(0.54, 0.62), rand(0.04, 0.3), rand(0.6, 0.95)), col = new Float32Array(72);
-    for (let i = 0; i < 24; i++) col.set([c.r, c.g, c.b], i * 3);
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    g.rotateY(rand(0, 0.3)); g.translate(p.x, -2 + h / 2, p.z); geos.push(g); n++;
+    const ry = rand(0, 0.3), c = new THREE.Color().setHSL(rand(0.54, 0.62), rand(0.04, 0.3), rand(0.6, 0.95));
+    const bx = (bw, bh, bd, x, y, z, col, plain) => { /* one facade box: window UVs scaled to real size (or a blank texel for roof props) */
+      const g = new THREE.BoxGeometry(bw, bh, bd), uv = g.attributes.uv;
+      for (let f = 0; f < 6; f++) { const len = f < 2 ? bd : bw, vv = f < 4 ? bh : bd; for (let j = 0; j < 4; j++) { const i = f * 4 + j; if (plain) uv.setXY(i, 0.004, 0.996); else uv.setXY(i, uv.getX(i) * len / 25.6, uv.getY(i) * vv / 57.6); } }
+      const cl = new Float32Array(72); for (let i = 0; i < 24; i++) cl.set([col.r, col.g, col.b], i * 3);
+      g.setAttribute('color', new THREE.BufferAttribute(cl, 3));
+      g.translate(x, y, z); g.rotateY(ry); g.translate(p.x, -2, p.z); geos.push(g);
+    };
+    bx(w, h, d, 0, h / 2, 0, c, false);
+    if (h > 62 && Math.random() < 0.7) { const tw = w * rand(0.55, 0.75), td = d * rand(0.55, 0.75), th = h * rand(0.16, 0.3); bx(tw, th, td, rand(-3, 3), h + th / 2, rand(-3, 3), c.clone().multiplyScalar(0.95), false); } /* setback tier: varied skyline */
+    for (let q = 0, nq = 1 + ((Math.random() * 3) | 0); q < nq; q++) { const aw = rand(2.5, 6), ah = rand(1.2, 3.2); bx(aw, ah, rand(2.5, 6), rand(-w * 0.3, w * 0.3), h + ah / 2, rand(-d * 0.3, d * 0.3), new THREE.Color(0.42, 0.45, 0.5), true); } /* rooftop AC units / tanks */
+    if (Math.random() < 0.45) bx(0.5, rand(6, 14), 0.5, rand(-w * 0.25, w * 0.25), h + 3.5, rand(-d * 0.25, d * 0.25), new THREE.Color(0.3, 0.3, 0.33), true); /* antenna */
+    n++;
   }
   if (geos.length) {
-    const city = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshStandardMaterial({ map: win, vertexColors: true, roughness: 0.45, metalness: 0.2, emissiveMap: glow, emissive: new THREE.Color(1, 1, 1), emissiveIntensity: 0 }));
+    const city = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshStandardMaterial({ map: win, roughnessMap: rough, vertexColors: true, roughness: 0.5, metalness: 0.2, emissiveMap: glow, emissive: new THREE.Color(1, 1, 1), emissiveIntensity: 0 }));
     city.castShadow = city.receiveShadow = true; world.add(city); cityMat = city.material;
   }
 }
@@ -1405,6 +1447,22 @@ function renderTattoos() {
     </button>`;
   }).join('');
 }
+const carLoad = (() => { /* "LOADING 0-100%" + car shadow, shown while a real model downloads (instead of the built-in twin) */
+  let el = null, pct = null, bar = null, timer = 0, url = null;
+  function build() {
+    el = document.createElement('div');
+    el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);z-index:5;pointer-events:none;display:none;text-align:center;font:800 15px/1 system-ui,sans-serif;letter-spacing:.18em;color:#fff;text-shadow:0 2px 6px #000';
+    el.innerHTML = '<div style="width:230px;height:46px;margin:0 auto 14px;border-radius:50%;background:radial-gradient(ellipse at center,rgba(0,0,0,.75) 0%,rgba(0,0,0,.45) 45%,rgba(0,0,0,0) 72%);animation:carLoadPulse 1.2s ease-in-out infinite"></div><div>LOADING <span class="p">0%</span></div><div style="width:170px;height:5px;margin:9px auto 0;border-radius:3px;background:rgba(255,255,255,.22);overflow:hidden"><i class="b" style="display:block;height:100%;width:0;background:#3da0ff;border-radius:3px"></i></div>';
+    const st = document.createElement('style'); st.textContent = '@keyframes carLoadPulse{0%,100%{opacity:.55;transform:scale(.94)}50%{opacity:1;transform:scale(1.04)}}'; document.head.appendChild(st);
+    document.body.appendChild(el); pct = el.querySelector('.p'); bar = el.querySelector('.b');
+  }
+  function tick() { const v = glbProgress.get(url) || 0; pct.textContent = v + '%'; bar.style.width = v + '%'; }
+  return {
+    show(u) { let st = ''; try { st = state; } catch (e) {} const sc = document.querySelector('#menu .screen.on'), inG = st === 'menu' && sc && sc.dataset.s === 'garage'; if (!inG && st !== 'race' && st !== 'count') { this.hide(); return; } if (!el) build(); url = u; el.style.top = (inG ? '34%' : '58%'); el.style.display = 'block'; tick(); clearInterval(timer); timer = setInterval(tick, 120); },
+    done(u) { if (u === url) this.hide(); },
+    hide() { if (!el || el.style.display === 'none') return; el.style.display = 'none'; clearInterval(timer); }
+  };
+})();
 const GLB_FAIL = new Set(); /* models that could not load: fall back to the built-in body instead of staying invisible */
 function rebuildCar(id) {
   const c = getCar(id);
@@ -1412,7 +1470,7 @@ function rebuildCar(id) {
   if (old) car.remove(old);
   const useGlb = c.glb && !SAFE_BOOT && !GLB_FAIL.has(id); /* real models show at EVERY quality level; only emergency safe mode (?safe=1 / drowning phone) keeps the light built-in body */
   const glb = useGlb ? glbCarReady(c.glb.url) : null; /* real 3D model car: use it once loaded, procedural twin until then */
-  if (useGlb && !glb) loadGlbCar(c.glb, renderer.capabilities.getMaxAnisotropy()).then(() => { if (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id)) rebuildCar(economy.selected() === id ? id : CARS[gIdx].id); }).catch(e => { console.warn('KSR: model failed, using built-in body', e); GLB_FAIL.add(id); rebuildCar(id); });
+  if (useGlb && !glb) loadGlbCar(c.glb, renderer.capabilities.getMaxAnisotropy()).then(() => { carLoad.done(c.glb.url); if (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id)) rebuildCar(economy.selected() === id ? id : CARS[gIdx].id); }).catch(e => { console.warn('KSR: model failed, using built-in body', e); GLB_FAIL.add(id); carLoad.done(c.glb.url); rebuildCar(id); });
   if (glb) {
     glb.on.value = store.get('sr.painted', 0) ? 1 : 0; glb.paint.value.set(curColor);
     /* CRITICAL: set envMap on the GLB material so it gets environment reflections.
@@ -1423,7 +1481,7 @@ function rebuildCar(id) {
   const body = new THREE.Mesh(glb ? glb.geo : paintedGeo(id, curColor), glb ? glb.mat : carMat); body.castShadow = true;
   setWheels(car, glb ? glbWheels(id, c, glb) : procWheels(id));
   car.children.forEach(o => { if (o.isMesh && o.geometry && o.geometry.type === 'BoxGeometry') o.visible = !(glb || useGlb); }); /* built-in lamp bars would float on a real model */
-  if (useGlb && !glb) { body.visible = false; (car.wheelPivots || []).forEach(w => { w.visible = false; }); } /* real model still downloading: show NOTHING instead of the built-in twin, it pops in the moment it is ready */
+  if (useGlb && !glb) { body.visible = false; (car.wheelPivots || []).forEach(w => { w.visible = false; }); carLoad.show(c.glb.url); } else carLoad.hide(); /* real model still downloading: show NOTHING instead of the built-in twin, it pops in the moment it is ready */
   car.add(body);
   const bi = car.children.indexOf(body); /* keep the body FIRST — lamps/decals stay ordered behind it */
   if (bi > 0) { car.children.splice(bi, 1); car.children.unshift(body); }
