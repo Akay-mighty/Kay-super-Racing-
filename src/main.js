@@ -1336,6 +1336,30 @@ function rollCars(dt) {
     }
   }
 }
+/* realistic exhaust/thruster flame: two crossed soft quads with a hot-core gradient (white -> cyan -> blue, or white -> yellow -> orange), flickered in code. Replaces the hard plastic-looking cones. */
+const flameTexCache = {};
+function flameTex(kind) {
+  if (flameTexCache[kind]) return flameTexCache[kind];
+  const t = canvasTex(64, 256, g => {
+    const W = 64, H = 256, im = g.createImageData(W, H), d = im.data;
+    const stops = kind === 'blue' ? [[255, 255, 255], [170, 225, 255], [60, 140, 255], [20, 50, 200]] : [[255, 255, 235], [255, 215, 110], [255, 130, 30], [200, 50, 10]];
+    for (let y = 0; y < H; y++) {
+      const v = 1 - y / H; /* v=0 at the nozzle (bottom row), 1 at the tip (top row) */
+      const width = Math.max(0.06, 0.5 * (1 - v * 0.8)), fall = Math.pow(1 - v, 1.35);
+      const ci = Math.min(stops.length - 1.001, v * (stops.length - 1)), c0 = stops[ci | 0], c1 = stops[(ci | 0) + 1], f = ci - (ci | 0);
+      for (let x = 0; x < W; x++) {
+        const u = (x / (W - 1) - 0.5) / width, a = Math.max(0, Math.min(1, Math.exp(-u * u * 2.2) * fall * (v < 0.04 ? v / 0.04 : 1)));
+        const i = (y * W + x) * 4; d[i] = c0[0] + (c1[0] - c0[0]) * f; d[i + 1] = c0[1] + (c1[1] - c0[1]) * f; d[i + 2] = c0[2] + (c1[2] - c0[2]) * f; d[i + 3] = a * 255;
+      }
+    }
+    g.putImageData(im, 0, 0);
+  });
+  return (flameTexCache[kind] = t);
+}
+function makeFlame(kind, w, h) {
+  const a = new THREE.PlaneGeometry(w, h), b = a.clone(); b.rotateY(Math.PI / 2);
+  return new THREE.Mesh(mergeGeometries([a, b]), new THREE.MeshBasicMaterial({ map: flameTex(kind), color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+}
 function makeCar(color, specGeo = SPORT_GEO, tint = null) {
   const g = new THREE.Group(), geo = specGeo.clone();
   colorize(geo, color);
@@ -1346,12 +1370,12 @@ function makeCar(color, specGeo = SPORT_GEO, tint = null) {
   lamp(1.3, 0.09, -2.27, 0.7, 0, new THREE.Color(3.5, 0.2, 0.2));
   for (const sx of [-1, 1]) lamp(0.42, 0.07, 2.25, 0.62, sx * 0.62, new THREE.Color(3, 3, 2.6));
   g.flames = [-0.55, 0.55].map(x => {
-    const f = new THREE.Mesh(new THREE.ConeGeometry(0.26, 2.4, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 1.2, 4), transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    const f = makeFlame('blue', 0.75, 2.8);
     f.rotation.x = -Math.PI / 2; f.position.set(x, 0.5, -3.5); f.visible = false; g.add(f); return f;
   });
   /* DOWNWARD THRUSTERS — fire when flying (FL.on). Positioned under the chassis, pointing down. */
   g.thrusters = [-0.5, 0.5].map(x => {
-    const t = new THREE.Mesh(new THREE.ConeGeometry(0.18, 1.6, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.2, 0.8, 0.3), transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    const t = makeFlame('orange', 0.5, 1.9); t.material.opacity = 0;
     t.rotation.x = Math.PI; /* point downward */
     t.position.set(x, -0.2, -0.3); t.visible = false; g.add(t); return t;
   });
