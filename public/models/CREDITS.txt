@@ -1,3 +1,7 @@
 flying-tesla.glb  - based on "CarConcept" from KhronosGroup/glTF-Sample-Assets (CC-BY 4.0), simplified for the game.
 stallion.glb      - based on "ToyCar" from KhronosGroup/glTF-Sample-Assets (CC-BY 4.0), simplified for the game.
 Check the licence pages in that repo for the exact credit lines.
+revuelto.glb - "2024 Lamborghini Revuelto" by Ddiaz Design, https://skfb.ly/prv6Y (CC-BY 4.0)
+artura.glb   - "2023 McLaren Artura" by Ddiaz Design, https://skfb.ly/pqQZX (CC-BY 4.0)
+f40.glb      - "Ferrari f40" by Black Snow, https://skfb.ly/oRnMV (CC-BY 4.0)
+Sourced via github.com/supercar3d/supercar_3D_asssets, simplified for the game.
