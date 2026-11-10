@@ -1493,12 +1493,14 @@ const carLoad = (() => { /* "LOADING 0-100%" + car shadow, shown while a real mo
   };
 })();
 const GLB_FAIL = new Set(); /* models that could not load: fall back to the built-in body instead of staying invisible */
+const GLB_SLOW = new Set();
 function rebuildCar(id) {
   const c = getCar(id);
   const old = (car.children || []).find(o => o.isMesh && o.geometry && o.geometry.attributes.partId); /* never yank a lamp by mistake */
   if (old) car.remove(old);
   const useGlb = c.glb && !SAFE_BOOT && !GLB_FAIL.has(id); /* real models show at EVERY quality level; only emergency safe mode (?safe=1 / drowning phone) keeps the light built-in body */
   const glb = useGlb ? glbCarReady(c.glb.url) : null; /* real 3D model car: use it once loaded, procedural twin until then */
+  if (useGlb && !glb) { const sid = id; setTimeout(() => { if (!glbCarReady(c.glb.url) && !GLB_SLOW.has(sid)) { GLB_SLOW.add(sid); if (economy.selected() === sid) rebuildCar(sid); } }, 12000); } /* stalled download: never leave the car invisible */
   if (useGlb && !glb) loadGlbCar(c.glb, renderer.capabilities.getMaxAnisotropy()).then(() => { carLoad.done(c.glb.url); if (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id)) rebuildCar(economy.selected() === id ? id : CARS[gIdx].id); }).catch(e => { console.warn('KSR: model failed, using built-in body', e); GLB_FAIL.add(id); carLoad.done(c.glb.url); rebuildCar(id); });
   if (glb) {
     glb.on.value = store.get('sr.painted', 0) ? 1 : 0; glb.paint.value.set(curColor);
@@ -1507,10 +1509,12 @@ function rebuildCar(id) {
     glb.mat.envMap = scene.environment; glb.mat.envMapIntensity = 0.85; glb.mat.needsUpdate = true;
     glb.wmat.envMap = scene.environment; glb.wmat.envMapIntensity = 0.85; glb.wmat.needsUpdate = true;
   }
+  /* hold = hide the car (shadow + LOADING) ONLY in the garage preview. In a race or countdown, or after a slow download, the built-in body shows so the car is never missing. */
+  const hold = useGlb && !glb && state !== 'race' && state !== 'count' && !GLB_SLOW.has(id);
   const body = new THREE.Mesh(glb ? glb.geo : paintedGeo(id, curColor), glb ? glb.mat : carMat); body.castShadow = true;
   setWheels(car, glb ? glbWheels(id, c, glb) : procWheels(id));
-  car.children.forEach(o => { if (o.isMesh && o.geometry && o.geometry.type === 'BoxGeometry') o.visible = !(glb || useGlb); }); /* built-in lamp bars would float on a real model */
-  if (useGlb && !glb) { body.visible = false; (car.wheelPivots || []).forEach(w => { w.visible = false; }); carLoad.show(c.glb.url); } else carLoad.hide(); /* real model still downloading: show NOTHING instead of the built-in twin, it pops in the moment it is ready */
+  car.children.forEach(o => { if (o.isMesh && o.geometry && o.geometry.type === 'BoxGeometry') o.visible = !(glb || hold); }); /* built-in lamp bars would float on a real model */
+  if (hold) { body.visible = false; (car.wheelPivots || []).forEach(w => { w.visible = false; }); carLoad.show(c.glb.url); } else carLoad.hide(); /* real model still downloading: show NOTHING instead of the built-in twin, it pops in the moment it is ready */
   car.add(body);
   const bi = car.children.indexOf(body); /* keep the body FIRST — lamps/decals stay ordered behind it */
   if (bi > 0) { car.children.splice(bi, 1); car.children.unshift(body); }
@@ -1872,7 +1876,9 @@ const show = (id, on) => $(id).classList.toggle('hide', !on);
 const ord = n => n + ['th', 'st', 'nd', 'rd'][n <= 3 ? n : 0];
 
 function setState(s) {
-  state = s; document.body.classList.toggle('menu', s === 'menu'); document.body.classList.toggle('done', s === 'finished');
+  const was = state; state = s;
+  if ((s === 'race' || s === 'count') && was !== 'race' && was !== 'count' && typeof rebuildCar === 'function') { try { const b = (car.children || [])[0]; if (b && b.isMesh && !b.visible) rebuildCar(economy.selected()); } catch (e) { } } /* never start a race with the car hidden */
+  document.body.classList.toggle('menu', s === 'menu'); document.body.classList.toggle('done', s === 'finished');
 }
 function followSun() { sun.position.set(car.position.x + sunOff.x, car.position.y + sunOff.y, car.position.z + sunOff.z); sun.target.position.copy(car.position); }
 
