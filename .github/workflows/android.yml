@@ -20,7 +20,7 @@ jobs:
       - name: Put the AdMob App ID into the Android manifest
         env:
           # Add your real App ID later as a repo secret named ADMOB_APP_ID (Settings > Secrets and variables > Actions).
-          APP_ID: ${{ secrets.ADMOB_APP_ID || 'ca-app-pub-3940256099942544~3347511713' }}
+          APP_ID: ${{ secrets.ADMOB_APP_ID || 'ca-app-pub-2680005969220412~3361066948' }}
         run: |
           f=android/app/src/main/AndroidManifest.xml
           sed -i "s#</application>#    <meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"$APP_ID\"/>\n    </application>#" $f
