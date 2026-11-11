@@ -21,6 +21,7 @@ import { net } from './net.js';
 import { GhostRec, makeGhostCar } from './ghost.js';
 import { colorize } from './carcolor.js';
 import { loadGlbCar, glbCarReady, glbProgress } from './glbcar.js';
+import { ads } from './ads.js';
 import { DRIVERS, driverById, drvTier } from './drivers.js';
 import { TATTOOS, tatById, tatThumb, buildDecals } from './tattoos.js';
 
@@ -1875,9 +1876,11 @@ const opt = Object.assign({ laps: 3, diff: 1, rivals: 5, dur: 90, env: 'day', tr
 const show = (id, on) => $(id).classList.toggle('hide', !on);
 const ord = n => n + ['th', 'st', 'nd', 'rd'][n <= 3 ? n : 0];
 
+let adCash = 0;
 function setState(s) {
   const was = state; state = s;
   if ((s === 'race' || s === 'count') && was !== 'race' && was !== 'count' && typeof rebuildCar === 'function') { try { const b = (car.children || [])[0]; if (b && b.isMesh && !b.visible) rebuildCar(economy.selected()); } catch (e) { } } /* never start a race with the car hidden */
+  if (s === 'count' || s === 'menu') { adCash = 0; const ab = document.getElementById('fAd'); if (ab) ab.style.display = 'none'; }
   document.body.classList.toggle('menu', s === 'menu'); document.body.classList.toggle('done', s === 'finished');
 }
 function followSun() { sun.position.set(car.position.x + sunOff.x, car.position.y + sunOff.y, car.position.z + sunOff.z); sun.target.position.copy(car.position); }
@@ -2124,7 +2127,21 @@ function applyQuality() {
     scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
   }
 }
+/* REWARDED AD: after a race the player may watch a video to double that race's cash (Android app only) */
+function offerDouble(cash) {
+  adCash = cash; const b = $('fAd'); if (!b) return;
+  const ok = cash > 0 && ads.rewardedReady();
+  b.style.display = ok ? '' : 'none'; b.disabled = false; b.textContent = 'WATCH AD \u00b7 DOUBLE CASH +$' + cash.toLocaleString();
+}
 function act(a) {
+  if (state === 'finished' && (a === 'next' || a === 'retry' || a === 'menu')) ads.tickInterstitial();
+  if (a === 'adDouble') {
+    const b = $('fAd'), amt = adCash; if (!amt || !b || b.disabled) return;
+    b.disabled = true;
+    const started = ads.showRewarded(() => { adCash = 0; economy.add(amt); economy.saveStats(); sfxCoin(); b.style.display = 'none'; toast('DOUBLED! +$' + amt.toLocaleString(), '#7dff8a'); updateMoneyUI(); });
+    if (!started) { b.disabled = false; b.style.display = 'none'; toast('NO AD READY \u00b7 TRY LATER', '#ffd166'); }
+    return;
+  }
   if (a === 'advGo') startRace({ mode: 'adv', type: 'adv', laps: 1, diff: 1, ai: 0, env: opt.advEnv || 'day', title: 'ADVENTURE' });
   else if (a === 'advJoin') {
     const n = adv.S.near; if (!n) return;
@@ -2955,6 +2972,7 @@ function finishRace() {
   if (cfg.env === 'nightRain' && cash > 0) { const nb = Math.round(cash * 0.8); cash += nb; earnRows.push(['NIGHT CIRCUIT BONUS ×1.8', nb]); }
   if (cfg.cashMult) { const ab = Math.round(cash * (cfg.cashMult - 1)); if (ab > 0) { cash += ab; earnRows.push(['Adventure bonus ×' + cfg.cashMult.toFixed(1), ab]); } }
   economy.add(cash);
+  offerDouble(cash);
   let misDone = missionEvent('finish', 1);
   if (!arenaOn && place <= 3) misDone = misDone.concat(missionEvent('podium', 1));
   if (!arenaOn && place === 1 && cfg.ai) misDone = misDone.concat(missionEvent('win', 1));
@@ -3362,6 +3380,7 @@ function frameBody(now) {
 }
 let shadowTick = 0;
 /* boot */
+ads.init();
 muted = opt.snd === 'off';
 economy.init(); missionsInit();
 bootCloud();
@@ -3437,6 +3456,6 @@ rebuildCar(economy.selected());
 window.addEventListener('ksr-money', updateMoneyUI);
 updateMoneyUI();
 syncSegs(); applyQuality(); applyCtrl(false); gateBoot();
-if (TURBO || location.search.includes('dbg')) { window.__DBG = { rebuildCar, setState, glbOf: id => glbCarReady(getCar(id).glb.url), rollCars, getCar, curColorSet(c) { curColor = c; }, get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car, adv, sumo, SUMO_ARENAS, act, startRace, fireWeapon, cycleWeapon, wpnReset, restockAI, get AMMO() { return AMMO; }, get wsel() { return wsel; }, economy, store, touch, get SC() { return SC; }, get curTrack() { return curTrack; }, get state() { return state; }, get cfgT() { return cfg.type; }, forceRace() { setState('race'); goT = 0.9; $('count').style.display = 'none'; } }; window.__SCDBG = { checks: 0 }; } /* dev test hook */
+if (TURBO || location.search.includes('dbg')) { window.__DBG = { finishRace, rebuildCar, setState, glbOf: id => glbCarReady(getCar(id).glb.url), rollCars, getCar, curColorSet(c) { curColor = c; }, get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car, adv, sumo, SUMO_ARENAS, act, startRace, fireWeapon, cycleWeapon, wpnReset, restockAI, get AMMO() { return AMMO; }, get wsel() { return wsel; }, economy, store, touch, get SC() { return SC; }, get curTrack() { return curTrack; }, get state() { return state; }, get cfgT() { return cfg.type; }, forceRace() { setState('race'); goT = 0.9; $('count').style.display = 'none'; } }; window.__SCDBG = { checks: 0 }; } /* dev test hook */
 window.__KSR_OK = true; /* boot failsafe (index.html) stands down: the engine is alive */
 requestAnimationFrame(frame);
