@@ -1,0 +1,8 @@
+{
+  "appId": "com.akaymighty.ksr",
+  "appName": "Kay Super Racing",
+  "webDir": "dist",
+  "backgroundColor": "#000000",
+  "android": { "allowMixedContent": false },
+  "server": { "androidScheme": "https" }
+}
