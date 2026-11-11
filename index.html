@@ -104,6 +104,7 @@ button{font-family:var(--ft)}
 #gGoogle{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;background:#f2f4f8;color:#1f2937;border:0;border-radius:6px;font:700 14px var(--ft);letter-spacing:.08em;cursor:pointer;transition:all .12s}
 #gGoogle:hover{background:#fff;transform:translateY(-1px)}
 #gGoogle:disabled{opacity:.6}
+body.capapp #gGoogle,body.capapp .gdiv{display:none} /* Android app: Google sign-in comes later (needs a native plugin) */
 #gGoogle svg{width:18px;height:18px;flex:none}
 #gSkip{display:block;margin:13px auto 4px;background:none;border:0;color:var(--dim2);font:600 11px var(--ft);letter-spacing:.22em;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 #gSkip:hover{color:var(--dim)}
