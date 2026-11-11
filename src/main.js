@@ -3381,6 +3381,7 @@ function frameBody(now) {
 let shadowTick = 0;
 /* boot */
 ads.init();
+if (ads.native) document.body.classList.add('capapp');
 muted = opt.snd === 'off';
 economy.init(); missionsInit();
 bootCloud();

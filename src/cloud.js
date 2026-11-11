@@ -42,6 +42,7 @@ async function guard(fn, fallback) {
   try { return await fn(); }
   catch (e) { emitErr(e); return fallback; }
 }
+const IS_APP = !!(typeof window !== 'undefined' && window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
 
 export const cloud = {
@@ -60,12 +61,19 @@ export const cloud = {
   async preload() {
     if (S.app) return S.status;
     try {
-      const [{ initializeApp, getApps }, { getAuth, onAuthStateChanged, getRedirectResult }] =
+      const [{ initializeApp, getApps }, { getAuth, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, onAuthStateChanged, getRedirectResult }] =
         await Promise.all([import('firebase/app'), import('firebase/auth')]);
       const app = getApps().length ? getApps()[0] : initializeApp(CFG);
-      S.app = app; S.auth = getAuth(app);
-      /* finish a Google sign-in that used the redirect fallback */
-      try { await Promise.race([getRedirectResult(S.auth), new Promise(res => setTimeout(res, 7000))]); } catch (e) { S.redirectErr = e; }
+      S.app = app;
+      if (IS_APP) {
+        /* Android app: the normal getAuth() waits for a hidden web-page iframe that never loads inside an app, so every sign-in times out.
+           initializeAuth without the popup/redirect resolver talks to Firebase directly (email + password works). */
+        try { S.auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] }); } catch (e) { S.auth = getAuth(app); }
+      } else {
+        S.auth = getAuth(app);
+        /* finish a Google sign-in that used the redirect fallback */
+        try { await Promise.race([getRedirectResult(S.auth), new Promise(res => setTimeout(res, 7000))]); } catch (e) { S.redirectErr = e; }
+      }
       /* restore any saved session — but never hang here: race a timeout and show the gate anyway */
       await Promise.race([
         new Promise(res => { try { onAuthStateChanged(S.auth, u => { S.user = u; res(); }); } catch (e) { res(); } }),
@@ -100,6 +108,7 @@ export const cloud = {
   },
 
   async google() {
+    if (IS_APP) { const e = new Error('Google sign-in is not in the app yet'); e.code = 'auth/operation-not-supported-in-this-environment'; throw e; }
     if (!S.auth) await this.preload();
     const { signInWithPopup, signInWithRedirect, GoogleAuthProvider } = await import('firebase/auth');
     const prov = new GoogleAuthProvider(); prov.setCustomParameters({ prompt: 'select_account' });
