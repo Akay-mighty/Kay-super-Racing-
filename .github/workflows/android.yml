@@ -14,8 +14,8 @@ jobs:
         with: { distribution: temurin, java-version: 21 }
       - run: npm ci
       - run: npm run build
-      - name: Add Capacitor + AdMob (kept out of the website build)
-        run: npm i --no-save @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8 @capacitor-community/admob@8
+      - name: Add Capacitor + AdMob (saved into package.json only inside this build, so cap sync finds the AdMob plugin)
+        run: npm i @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8 @capacitor-community/admob@8
       - run: npx cap add android
       - name: Put the AdMob App ID into the Android manifest
         env:
