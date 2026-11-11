@@ -1,0 +1,35 @@
+# Builds an installable Android APK of Kay Super Racing (with AdMob) on GitHub's servers.
+# Run it: GitHub repo -> Actions -> "Android APK" -> Run workflow. Download the APK from the run's Artifacts.
+name: Android APK
+on:
+  workflow_dispatch:
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - run: npm ci
+      - run: npm run build
+      - name: Add Capacitor + AdMob (kept out of the website build)
+        run: npm i --no-save @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8 @capacitor-community/admob@8
+      - run: npx cap add android
+      - name: Put the AdMob App ID into the Android manifest
+        env:
+          # Add your real App ID later as a repo secret named ADMOB_APP_ID (Settings > Secrets and variables > Actions).
+          APP_ID: ${{ secrets.ADMOB_APP_ID || 'ca-app-pub-3940256099942544~3347511713' }}
+        run: |
+          f=android/app/src/main/AndroidManifest.xml
+          sed -i "s#</application>#    <meta-data android:name=\"com.google.android.gms.ads.APPLICATION_ID\" android:value=\"$APP_ID\"/>\n    </application>#" $f
+          grep -n "APPLICATION_ID" $f
+      - run: npx cap sync android
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KaySuperRacing-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
