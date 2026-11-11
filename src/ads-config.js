@@ -4,7 +4,7 @@
    NEVER tap your own real ads. */
 export const ADS = {
   TESTING: true,
-  rewardedId: 'ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY',     // your Rewarded ad unit id
+  rewardedId: 'ca-app-pub-2680005969220412/1869690173',     // your Rewarded ad unit id
   interstitialId: 'ca-app-pub-XXXXXXXXXXXXXXXX/ZZZZZZZZZZ', // your Interstitial ad unit id (optional)
   interstitialEvery: 3, // show one full-screen ad every N finished races (0 = never)
 };
