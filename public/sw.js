@@ -4,7 +4,8 @@ const VERSION = '__BUILD__';
 const PRECACHE = /*__PRECACHE__*/[];
 const SHELL = 'ksr-shell-' + VERSION;   /* app files for this build */
 const RUNTIME = 'ksr-runtime-v1';       /* fonts and other extras */
-const CORE = ['/', '/index.html', '/manifest.json'];
+const CORE = ['/', '/index.html', '/manifest.json', '/models/stallion.glb']; /* the free starter car works offline from the first visit */
+const MODELS = 'ksr-models-v1';        /* real 3D cars: cached after the first download, so they show offline */
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
 self.addEventListener('install', e => {
@@ -38,6 +39,14 @@ async function networkFirst(req) {
   try { const res = await fetch(req); if (res.ok) (await caches.open(RUNTIME)).put(req, res.clone()); return res; }
   catch (err) { const hit = await caches.match(req); if (hit) return hit; throw err; }
 }
+/* cars: answer from the cache at once (works offline and on bad data), refresh quietly in the background */
+async function modelFetch(req) {
+  const c = await caches.open(MODELS);
+  const hit = (await c.match(req)) || (await caches.match(req));
+  const net = fetch(req).then(res => { if (res.ok) c.put(req, res.clone()); return res; }).catch(() => null);
+  if (hit) { net.catch(() => { }); return hit; }
+  return (await net) || Response.error();
+}
 async function navigate(req) {
   try {
     const res = await timeout(fetch(req), 4000);
@@ -62,5 +71,6 @@ self.addEventListener('fetch', e => {
   if (url.pathname === '/sw.js' || url.pathname.startsWith('/admin') || url.pathname.startsWith('/__/')) return;
   if (req.mode === 'navigate') { e.respondWith(navigate(req)); return; }
   if (/^\/(assets|icons|logos)\//.test(url.pathname)) { e.respondWith(cacheFirst(req)); return; }
+  if (url.pathname.startsWith('/models/')) { e.respondWith(modelFetch(req)); return; }
   e.respondWith(networkFirst(req));
 });
