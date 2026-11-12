@@ -2128,10 +2128,18 @@ function applyQuality() {
   }
 }
 /* REWARDED AD: after a race the player may watch a video to double that race's cash (Android app only) */
+let adPoll = 0;
 function offerDouble(cash) {
   adCash = cash; const b = $('fAd'); if (!b) return;
-  const ok = cash > 0 && ads.rewardedReady();
-  b.style.display = ok ? '' : 'none'; b.disabled = false; b.textContent = 'WATCH AD \u00b7 DOUBLE CASH +$' + cash.toLocaleString();
+  clearInterval(adPoll);
+  if (!(cash > 0) || !ads.native) { b.style.display = 'none'; return; }
+  const paint = () => {
+    const ok = ads.rewardedReady();
+    b.style.display = ''; b.disabled = !ok;
+    b.textContent = ok ? 'WATCH AD \u00b7 DOUBLE CASH +$' + cash.toLocaleString() : 'AD: ' + ads.status().toUpperCase();
+    if (ok) clearInterval(adPoll);
+  };
+  paint(); let n = 0; adPoll = setInterval(() => { paint(); if (++n > 40) clearInterval(adPoll); }, 1500);
 }
 function act(a) {
   if (state === 'finished' && (a === 'next' || a === 'retry' || a === 'menu')) ads.tickInterstitial();
