@@ -121,7 +121,7 @@ export const CARS = [
     stats: { top: 125, accel: 70, steer: 2.3, drift: 1.7, fly: false }
   },
   {
-    id: 'stallion', name: 'STALLION', price: 300000, tag: 'MUSCLE',
+    id: 'stallion', name: 'STALLION', price: 0, tag: 'STARTER',
     desc: 'Retro hot-rod with flames and attitude. Real model, ready for any paint job.',
     glb: { url: '/models/stallion.glb', bytes: 1247308, len: 4.5, rotY: 0, rough: 0.4, metal: 0.2, clearcoat: 0.2, paintFrom: [0.00015, 0.187, 0.022], wheels: { r: 0.31, y: 0.31, zf: 1.6, zr: -1.2, xin: 0.65 } },
     spec: cloneSport(s => { s.name = 'stallion'; s.chrome = false; s.wheelRadius = 0.31; }),

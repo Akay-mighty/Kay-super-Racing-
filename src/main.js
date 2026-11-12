@@ -1493,6 +1493,7 @@ const carLoad = (() => { /* "LOADING 0-100%" + car shadow, shown while a real mo
     hide() { if (!el || el.style.display === 'none') return; el.style.display = 'none'; clearInterval(timer); }
   };
 })();
+const GLB_TRIES = {};
 const GLB_FAIL = new Set(); /* models that could not load: fall back to the built-in body instead of staying invisible */
 const GLB_SLOW = new Set();
 function rebuildCar(id) {
@@ -1502,7 +1503,13 @@ function rebuildCar(id) {
   const useGlb = c.glb && !SAFE_BOOT && !GLB_FAIL.has(id); /* real models show at EVERY quality level; only emergency safe mode (?safe=1 / drowning phone) keeps the light built-in body */
   const glb = useGlb ? glbCarReady(c.glb.url) : null; /* real 3D model car: use it once loaded, procedural twin until then */
   if (useGlb && !glb) { const sid = id; setTimeout(() => { if (!glbCarReady(c.glb.url) && !GLB_SLOW.has(sid)) { GLB_SLOW.add(sid); if (economy.selected() === sid) rebuildCar(sid); } }, 12000); } /* stalled download: never leave the car invisible */
-  if (useGlb && !glb) loadGlbCar(c.glb, renderer.capabilities.getMaxAnisotropy()).then(() => { carLoad.done(c.glb.url); if (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id)) rebuildCar(economy.selected() === id ? id : CARS[gIdx].id); }).catch(e => { console.warn('KSR: model failed, using built-in body', e); GLB_FAIL.add(id); carLoad.done(c.glb.url); rebuildCar(id); });
+  if (useGlb && !glb) loadGlbCar(c.glb, renderer.capabilities.getMaxAnisotropy()).then(() => { carLoad.done(c.glb.url); if (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id)) rebuildCar(economy.selected() === id ? id : CARS[gIdx].id); }).catch(e => {
+    /* a flaky connection must not turn the car into the built-in body for good: retry a few times first */
+    const n = (GLB_TRIES[id] = (GLB_TRIES[id] || 0) + 1);
+    console.warn('KSR: model failed (try ' + n + ')', e);
+    if (n < 5) { setTimeout(() => { if (!GLB_FAIL.has(id) && (economy.selected() === id || (typeof gIdx === 'number' && CARS[gIdx] && CARS[gIdx].id === id))) rebuildCar(id); }, Math.min(1500 * n, 6000)); }
+    else { GLB_FAIL.add(id); carLoad.done(c.glb.url); rebuildCar(id); }
+  });
   if (glb) {
     glb.on.value = store.get('sr.painted', 0) ? 1 : 0; glb.paint.value.set(curColor);
     /* CRITICAL: set envMap on the GLB material so it gets environment reflections.

@@ -5,13 +5,15 @@ const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } ca
 const emit = () => { try { window.dispatchEvent(new Event('ksr-money')); } catch (e) { } };
 
 export const economy = {
-  money: 0, owned: [], sel: 'cruiser', stats: { earned: 0, races: 0, wins: 0 }, up: {}, wpn: [],
+  money: 0, owned: [], sel: 'stallion', stats: { earned: 0, races: 0, wins: 0 }, up: {}, wpn: [],
 
   init() {
     this.money = read(K.money, 5000);
-    this.owned = read(K.owned, ['cruiser']);
-    if (!this.owned.includes('cruiser')) this.owned.unshift('cruiser');
-    this.sel = read(K.sel, 'cruiser');
+    this.owned = read(K.owned, ['stallion']);
+    if (!Array.isArray(this.owned)) this.owned = ['stallion'];
+    if (!this.owned.includes('stallion')) this.owned.unshift('stallion'); /* the free starter car is the real-model Stallion */
+    if (!read('ksr.migStall', 0)) { write('ksr.migStall', 1); if (read(K.sel, 'cruiser') === 'cruiser') write(K.sel, 'stallion'); } /* one time: move players off the built-in starter */
+    this.sel = read(K.sel, 'stallion');
     if (!this.owned.includes(this.sel)) this.sel = this.owned[0];
     this.stats = Object.assign({ earned: 0, races: 0, wins: 0 }, read(K.stats, {}));
     this.up = read(K.up, {});
@@ -65,7 +67,7 @@ export const economy = {
   setMoney(n) { this.money = Math.max(0, Math.round(n)); this.save(); emit(); },
   unlockAll(ids) { this.owned = [...new Set([...this.owned, ...ids])]; this.save(); emit(); },
   resetAll() {
-    this.money = 5000; this.owned = ['cruiser']; this.sel = 'cruiser'; this.up = {}; this.wpn = [];
+    this.money = 5000; this.owned = ['stallion']; this.sel = 'stallion'; this.up = {}; this.wpn = [];
     this.stats = { earned: 0, races: 0, wins: 0 };
     [K.money, K.owned, K.sel, K.missions, K.daily, K.stats, K.up, K.wpn].forEach(k => write(k, null));
     this.save(); emit();
