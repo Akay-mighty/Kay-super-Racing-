@@ -13,7 +13,8 @@ export const ads = {
   async init() {
     if (!native || started) return; started = true;
     try {
-      A = cap.registerPlugin('AdMob');
+      A = (cap.Plugins && cap.Plugins.AdMob) || (typeof cap.registerPlugin === 'function' ? cap.registerPlugin('AdMob') : null);
+      if (!A) throw new Error('AdMob plugin missing in app (' + Object.keys(cap.Plugins || {}).join(',') + ')');
       await A.initialize({ initializeForTesting: !!ADS.TESTING });
       A.addListener('onRewardedVideoAdLoaded', () => { rewardedReady = true; why = 'ready'; });
       A.addListener('onRewardedVideoAdFailedToLoad', (e) => { rewardedReady = false; why = 'load failed ' + ((e && (e.message || e.code)) || '');  setTimeout(prepRewarded, 30000); });

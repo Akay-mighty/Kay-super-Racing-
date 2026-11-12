@@ -3219,8 +3219,20 @@ let pushT = 0;
 function cloudPush() {
   if (cloud.status !== 'online') return;
   clearTimeout(pushT);
-  pushT = setTimeout(() => cloud.pushProfile(driverName(), { money: economy.money, owned: economy.owned, sel: economy.sel, stats: economy.stats, missions: economy.getMissions(), daily: economy.getDaily() }), 2500);
+  pushT = setTimeout(() => { const d = profilePayload(); lastPushed = JSON.stringify(d); cloud.pushProfile(driverName(), d); }, 2500);
 }
+/* everything that must follow the player to a new phone: cash, cars, UPGRADES, weapons, tattoos, drivers, paint, rep */
+let lastPushed = '';
+function profilePayload() {
+  return {
+    money: economy.money, owned: economy.owned, sel: economy.sel, stats: economy.stats, missions: economy.getMissions(), daily: economy.getDaily(),
+    up: economy.up || {}, wpn: economy.wpn || [],
+    extra: { drv: drvOwned(), driver: drvId(), tats: tatsOwned(), tat: tatMap(), rep: store.get('ksr.rep', 0) || 0, color: curColor, painted: store.get('sr.painted', 0) || 0 }
+  };
+}
+/* tattoo/paint/driver changes do not touch cash, so also push whenever the payload changed */
+setInterval(() => { try { if (cloud.status === 'online' && JSON.stringify(profilePayload()) !== lastPushed) cloudPush(); } catch (e) { } }, 15000);
+addEventListener('visibilitychange', () => { try { if (document.hidden && cloud.status === 'online' && JSON.stringify(profilePayload()) !== lastPushed) { clearTimeout(pushT); const d = profilePayload(); lastPushed = JSON.stringify(d); cloud.pushProfile(driverName(), d); } } catch (e) { } });
 async function cloudSyncIn() {
   if (cloud.status !== 'online') return;
   const remote = await cloud.pullProfile(driverName());
@@ -3240,9 +3252,22 @@ async function cloudSyncIn() {
     }
     economy.setMissions(cur); missionsInit();
   }
+  /* upgrades: per car, per stat, keep the highest level from either side */
+  const mx = (a, b) => { const o = Object.assign({}, a || {}); for (const k in (b || {})) { const x = o[k], y = b[k]; o[k] = (x && typeof x === 'object' && y && typeof y === 'object') ? mx(x, y) : (typeof y === 'number' ? Math.max(typeof x === 'number' ? x : 0, y) : (x === undefined ? y : x)); } return o; };
+  if (remote.up && typeof remote.up === 'object') { const u = mx(economy.up, remote.up); if (JSON.stringify(u) !== JSON.stringify(economy.up || {})) { economy.up = u; merged = true; } }
+  if (Array.isArray(remote.wpn)) { const w = [...new Set([...(economy.wpn || []), ...remote.wpn])]; if (w.length !== (economy.wpn || []).length) { economy.wpn = w; merged = true; } }
+  const rx = remote.extra;
+  if (rx && typeof rx === 'object') {
+    if (Array.isArray(rx.drv)) { const d = [...new Set([...drvOwned(), ...rx.drv])]; if (d.length !== drvOwned().length) { store.set('ksr.drv', d); merged = true; } }
+    if (rx.driver && rx.driver !== drvId() && drvId() === 'kay' && (rx.drv || []).includes(rx.driver)) { store.set('ksr.driver', rx.driver); merged = true; }
+    if (Array.isArray(rx.tats)) { const t = [...new Set([...tatsOwned(), ...rx.tats])]; if (t.length !== tatsOwned().length) { store.set('ksr.tats', t); merged = true; } }
+    if (rx.tat && typeof rx.tat === 'object') { const m = tatMap(); let ch = false; for (const k in rx.tat) if (!(k in m)) { m[k] = rx.tat[k]; ch = true; } if (ch) { store.set('ksr.tat', m); merged = true; } }
+    if ((rx.rep || 0) > (store.get('ksr.rep', 0) || 0)) { store.set('ksr.rep', rx.rep); merged = true; }
+    if (rx.painted && !store.get('sr.painted', 0) && typeof rx.color === 'number') { curColor = rx.color; store.set('sr.color', rx.color); store.set('sr.painted', 1); merged = true; }
+  }
   const rd = remote.daily;
   if (rd && rd.last && !(economy.getDaily() && economy.getDaily().last >= rd.last)) { economy.setDaily(rd); merged = true; }
-  if (merged) { economy.save(); updateMoneyUI(); toast('CLOUD: PROGRESS RESTORED \u2601', '#8df'); }
+  if (merged) { economy.save(); updateMoneyUI(); try { rebuildCar(economy.selected()); } catch (e) { } toast('CLOUD: PROGRESS RESTORED \u2601', '#8df'); }
   cloudPush();
 }
 function bootCloud() {
