@@ -1665,6 +1665,7 @@ addEventListener('keydown', e => {
   keys[e.code] = true;
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.code === 'KeyR' && ['race', 'count', 'paused', 'finished'].includes(state) && !(cfg.mode === 'tour' && P.finished)) retry();
+  if (e.code === 'KeyV' && (state === 'race' || state === 'count')) cycleView();
   if (e.code === 'Escape' || e.code === 'KeyP') { if (state === 'paused') resume(); else pause(); }
   if (e.code === 'KeyT') respawn();
   if (e.code === 'KeyE') { if (cfg.type === 'adv' && state === 'race') { if (adv.S.near) { if (!e.repeat) act('advJoin'); } else fireWeapon(); } else if (!e.repeat) usePowerup(); }
@@ -1959,7 +1960,7 @@ let ncIntroT = 0;
 function startRace(c) {
   show('menu', false); show('pause', false); show('finish', false); if ($('fglobal')) $('fglobal').textContent = '';
   if (c.mode === 'mp' && c.netSlot === undefined) c.netSlot = net.mySlot;
-  resetWorld(c); setupGhost();
+  resetWorld(c); setupGhost(); if (car) car.visible = true;
   if ((c.type === 'adv' && c.mode !== 'mp') || c.type === 'sumo') { setState('race'); $('count').style.display = 'none'; } /* solo free-roam: no countdown */
   else { setState('count'); cdT = 3; $('cd').textContent = '3'; ['l1', 'l2', 'l3'].forEach(l => $(l).className = ''); $('count').style.display = 'flex'; }
   updateWpnHud();
@@ -2611,13 +2612,25 @@ function stepAI(dt, racing) {
   });
 }
 
+/* CAMERA VIEWS: 0 FAR (default: wide + high so you can see rivals coming from behind), 1 NORMAL, 2 ROAD (bumper cam, car hidden), 3 TOP-DOWN */
+const VIEWS = ['FAR', 'NORMAL', 'ROAD', 'TOP'];
+let viewMode = 0; try { viewMode = clamp(parseInt(localStorage.getItem('ksr.view') || '0', 10) || 0, 0, 3); } catch (e) { }
+function cycleView() {
+  viewMode = (viewMode + 1) % VIEWS.length; try { localStorage.setItem('ksr.view', viewMode); } catch (e) { }
+  const b = $('viewBtn'); if (b) b.textContent = 'VIEW\n' + VIEWS[viewMode];
+  if (car) car.visible = viewMode !== 2; toast('CAMERA: ' + VIEWS[viewMode], '#8be5ff');
+}
 function updateCamera(dt, boosting, sp) {
+  if (car) car.visible = viewMode !== 2;
+  const vm = viewMode, vk = vm === 0 ? 1.55 : vm === 3 ? 0.4 : 1, hk = vm === 0 ? 1.5 : 1;
   camYaw += angDiff(P.h, camYaw) * (1 - Math.exp(-6 * dt));
-  const pk = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 0.9 : 1, smk = cfg.type === 'sumo' ? 0.66 : 1, d = (7.4 + sp * 0.025) * pk * smk, want = V3(car.position.x - Math.sin(camYaw) * d, car.position.y + (3.0 + sp * 0.006) * Math.pow(pk, 0.7) * (cfg.type === 'sumo' ? 0.72 : 1), car.position.z - Math.cos(camYaw) * d);
-  camera.position.lerp(want, 1 - Math.exp(-9 * dt));
+  const pk = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 0.9 : 1, smk = cfg.type === 'sumo' ? 0.66 : 1, d = (7.4 + sp * 0.025) * pk * (cfg.type === 'sumo' ? (vm === 0 ? 1 : 0.66) : 1) * vk, want = V3(car.position.x - Math.sin(camYaw) * d, car.position.y + (3.0 + sp * 0.006) * Math.pow(pk, 0.7) * (cfg.type === 'sumo' ? (vm === 0 ? 1 : 0.72) : 1) * hk, car.position.z - Math.cos(camYaw) * d);
+  if (vm === 3) { want.set(car.position.x - Math.sin(camYaw) * 3, car.position.y + 30 * Math.pow(pk, 0.5), car.position.z - Math.cos(camYaw) * 3); }
+  else if (vm === 2) { want.set(car.position.x + Math.sin(camYaw) * 1.5, car.position.y + 0.95, car.position.z + Math.cos(camYaw) * 1.5); }
+  camera.position.lerp(want, vm === 2 ? 1 : 1 - Math.exp(-9 * dt));
   const sh = shake + clamp(sp - 40, 0, 70) * 0.0007 + (boosting ? 0.03 : 0);
   camera.position.x += rand(-1, 1) * sh; camera.position.y += rand(-1, 1) * sh;
-  const la = cfg.type === 'sumo' ? 7 : 9; camera.lookAt(car.position.x + Math.sin(camYaw) * la, car.position.y + 1.2, car.position.z + Math.cos(camYaw) * la);
+  const la = cfg.type === 'sumo' ? 7 : 9; camera.lookAt(car.position.x + Math.sin(camYaw) * (vm === 3 ? 4 : vm === 2 ? 20 : la * (vm === 0 ? 1.4 : 1)), car.position.y + (vm === 3 ? 0 : vm === 2 ? 0.9 : vm === 0 ? 0.6 : 1.2), car.position.z + Math.cos(camYaw) * (vm === 3 ? 4 : vm === 2 ? 20 : la * (vm === 0 ? 1.4 : 1)));
   /* IMPACT WOBBLE: position jitter alone reads as static. A short smooth roll +
      pitch wobble scaled by the same shake value makes the chassis feel like it
      has MASS — the camera is being thrown around by the hit, not twitching. */
@@ -2805,7 +2818,7 @@ function sumoIntroCam(dt) {
   const d = (3.6 + 3.9 * e) * pk, hgt = 1.15 + 1.6 * e;
   camera.position.set(car.position.x + Math.sin(ang) * d, car.position.y + hgt, car.position.z + Math.cos(ang) * d);
   camera.lookAt(car.position.x, car.position.y + 0.85 + 0.6 * e, car.position.z);
-  camera.fov += ((66 - 14 * (1 - e)) - camera.fov) * 0.2; camera.updateProjectionMatrix();
+  if (car) car.visible = true; camera.fov += ((66 - 14 * (1 - e)) - camera.fov) * 0.2; camera.updateProjectionMatrix();
   camYaw = P.h; sky.position.copy(camera.position); followSun();
 }
 /* spectate camera: slow orbit over the remaining fight */
@@ -3583,3 +3596,5 @@ syncSegs(); applyQuality(); applyCtrl(false); gateBoot();
 if (TURBO || location.search.includes('dbg')) { window.__DBG = { finishRace, rebuildCar, setState, glbOf: id => glbCarReady(getCar(id).glb.url), rollCars, getCar, curColorSet(c) { curColor = c; }, get tH() { return tH; }, get pts() { return pts; }, get tan() { return tan; }, P, FL, keys, N, get CS() { return CS; }, PU, TRAF, Rockets, Oils, AIs, get raceCoins() { return raceCoins; }, get raceGems() { return raceGems; }, usePowerup, fireRocket, dropOil, coinData, gemData, car, adv, sumo, SUMO_ARENAS, act, startRace, fireWeapon, cycleWeapon, wpnReset, restockAI, get AMMO() { return AMMO; }, get wsel() { return wsel; }, economy, store, touch, get SC() { return SC; }, get curTrack() { return curTrack; }, get state() { return state; }, get cfgT() { return cfg.type; }, forceRace() { setState('race'); goT = 0.9; $('count').style.display = 'none'; } }; window.__SCDBG = { checks: 0 }; } /* dev test hook */
 window.__KSR_OK = true; /* boot failsafe (index.html) stands down: the engine is alive */
 requestAnimationFrame(frame);
+
+{ const vb = document.getElementById('viewBtn'); if (vb) { vb.textContent = 'VIEW\n' + VIEWS[viewMode]; vb.addEventListener('click', e => { e.stopPropagation(); cycleView(); }); } }
