@@ -1960,7 +1960,7 @@ function startRace(c) {
   show('menu', false); show('pause', false); show('finish', false); if ($('fglobal')) $('fglobal').textContent = '';
   if (c.mode === 'mp' && c.netSlot === undefined) c.netSlot = net.mySlot;
   resetWorld(c); setupGhost();
-  if (c.type === 'adv' && c.mode !== 'mp') { setState('race'); $('count').style.display = 'none'; } /* solo free-roam: no countdown */
+  if ((c.type === 'adv' && c.mode !== 'mp') || c.type === 'sumo') { setState('race'); $('count').style.display = 'none'; } /* solo free-roam: no countdown */
   else { setState('count'); cdT = 3; $('cd').textContent = '3'; ['l1', 'l2', 'l3'].forEach(l => $(l).className = ''); $('count').style.display = 'flex'; }
   updateWpnHud();
   if (c.env === 'nightRain') { const iv = $('ncIntro'); iv.classList.add('show'); clearTimeout(ncIntroT); ncIntroT = setTimeout(() => iv.classList.remove('show'), 2400); }
@@ -2759,6 +2759,13 @@ function sumoUI(dt) {
   const rEl = $('sumoRound'); if (rEl) rEl.textContent = 'ROUND ' + S.round + '/' + S.rounds;
   const aEl = $('sumoAlive'); if (aEl) aEl.textContent = S.alive + ' LEFT';
   const pb = $('sumoPow'); if (pb) { pb.firstElementChild.style.width = Math.round(S.pow) + '%'; pb.classList.toggle('low', S.pow < 30); }
+  const cn = $('sumoCount'), fd = $('sumoFade');
+  if (cn) {
+    const ph = S.phase === 'intro' && !S.spectate, n = ph ? Math.ceil(S.phaseT) : 0, show = ph && n >= 1 && n <= 3 ? String(n) : '';
+    if (cn.dataset.n !== show) { cn.dataset.n = show; cn.textContent = show; cn.classList.remove('pop'); void cn.offsetWidth; if (show) { cn.classList.add('pop'); beep(show === '1' ? 880 : 620, 0.12, 'square', 0.1); } }
+    cn.style.display = show ? 'block' : 'none';
+  }
+  if (fd) fd.style.opacity = S.phase === 'intro' ? Math.max(0, 1 - (S.introMax - S.phaseT) / 0.6).toFixed(2) : 0;
   const hitOv = $('sumoHit'); if (hitOv) hitOv.style.opacity = (S.juice * 0.55).toFixed(3); /* gold flash while YOUR hits land */
   const pcd = $('sumoPunch'), pf = $('sumoPunchF');
   if (pcd) {
@@ -2789,6 +2796,17 @@ function sumoUI(dt) {
     if (S.msg && S.msg.t > 0) { msgEl.textContent = S.msg.txt; msgEl.style.color = S.msg.col; msgEl.classList.add('show'); }
     else msgEl.classList.remove('show');
   }
+}
+/* ROUND INTRO CAMERA (like Sumo Cars): starts low in FRONT of your car on the puncher, swings round the side
+   and settles into the chase view behind it just as the 3-2-1 ends. Eased so the end matches updateCamera. */
+function sumoIntroCam(dt) {
+  const S = sumo.S, k = clamp(1 - S.phaseT / (S.introMax || 4), 0, 1), e = k * k * (3 - 2 * k);
+  const ang = P.h + Math.PI * e, pk = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 0.9 : 1;
+  const d = (3.6 + 3.9 * e) * pk, hgt = 1.15 + 1.6 * e;
+  camera.position.set(car.position.x + Math.sin(ang) * d, car.position.y + hgt, car.position.z + Math.cos(ang) * d);
+  camera.lookAt(car.position.x, car.position.y + 0.85 + 0.6 * e, car.position.z);
+  camera.fov += ((66 - 14 * (1 - e)) - camera.fov) * 0.2; camera.updateProjectionMatrix();
+  camYaw = P.h; sky.position.copy(camera.position); followSun();
 }
 /* spectate camera: slow orbit over the remaining fight */
 let sumoCamA = 0;
@@ -3475,7 +3493,8 @@ function frameBody(now) {
     if (camera.aspect < 1) look.y -= 1.9; /* portrait: car sits in the top half, above the menu sheet */
     camera.lookAt(look);
     camera.fov += (45 - camera.fov) * 0.08; camera.updateProjectionMatrix(); sky.position.copy(camera.position); followSun();
-  } else if (cfg.type === 'sumo' && sumo.S.spectate && state === 'race') sumoCam(dt);
+  } else if (cfg.type === 'sumo' && sumo.S.phase === 'intro' && !sumo.S.spectate && state === 'race') sumoIntroCam(dt);
+  else if (cfg.type === 'sumo' && sumo.S.spectate && state === 'race') sumoCam(dt);
   else updateCamera(dt, out.boosting, out.sp);
   updateStreaks(dt, state === 'menu' ? 0 : out.sp, out.boosting);
   hud(dt, out.sp, out.boosting); audioUpdate(state === 'menu' ? -1 : out.sp, out.boosting, FL.on);

@@ -39,7 +39,7 @@ export function createSumo(canvasTex, ctx) {
   const dummy = new THREE.Object3D();
   /* S: the state main.js reads for the HUD */
   const S = {
-    tier: 0, rivals: 3, rounds: ROUNDS, round: 1, t: 75, phase: 'intro', phaseT: 2.2,
+    tier: 0, rivals: 3, rounds: ROUNDS, round: 1, t: 75, phase: 'intro', phaseT: 4.2, introMax: 4.2,
     alive: 4, freeze: true, myOut: false, spectate: false, matchOver: false,
     pow: 100, hitFlash: 0, punchCd: 0, punchMax: 1.2, pun: null, mega: 0, shield: 0, myKO: 0, myRing: 0,
     stars: {}, feed: [], msg: null, itemT: 6, env: 'day',
@@ -617,7 +617,7 @@ export function createSumo(canvasTex, ctx) {
   /* ---------- round flow ---------- */
   function startRound(round) {
     if (floorMatRef) floorMatRef.color.setHex(ROUND_COLS[(round - 1) % ROUND_COLS.length]); /* repaint the slab every round */
-    S.round = round; S.phase = 'intro'; S.phaseT = round === 1 ? 2.4 : 2.2; S.freeze = true;
+    S.round = round; S.phase = 'intro'; S.phaseT = S.introMax = round === 1 ? 4.2 : 3.4; S.freeze = true; /* cinematic: fade in, hero orbit, 3-2-1 */
     S.t = SUMO_ARENAS[S.tier].t; S.itemT = rand(6, 9);
     S.feed.length = 0; /* stale "VEX WINS THE ROUND" must not bleed into the next ROUND — FIGHT */
     S.lastHitBy = ''; S.lastHitT = -99; S.juice = 0;
