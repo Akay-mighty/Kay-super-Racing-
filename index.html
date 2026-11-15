@@ -402,6 +402,11 @@ body.sumo #sumoFeed{display:flex}
 #sumoFeed .sf{padding:4px 9px;border-radius:7px;background:rgba(7,11,20,.78);border-right:3px solid #fff;font:800 10.5px var(--ft);letter-spacing:.07em;color:#fff}
 #sumoMsg{display:none;top:24%;left:50%;transform:translateX(-50%);font:900 italic clamp(26px,7.4vw,54px)/1 var(--fd);letter-spacing:.05em;text-align:center;text-shadow:0 3px 24px rgba(0,0,0,.7),0 0 30px rgba(255,77,216,.4);white-space:nowrap;animation:sumoPop .4s ease-out}
 #sumoMsg.show{display:block}
+#sumoCount{display:none;top:30%;left:50%;transform:translateX(-50%);font:900 italic clamp(110px,34vw,260px)/1 var(--fd);color:#fff;text-shadow:0 6px 0 rgba(30,60,140,.55),0 0 50px rgba(120,190,255,.7);pointer-events:none}
+#sumoCount.pop{animation:cntPop .9s ease-out both}
+@keyframes cntPop{0%{transform:translateX(-50%) scale(1.9);opacity:0}25%{transform:translateX(-50%) scale(1);opacity:1}100%{transform:translateX(-50%) scale(.85);opacity:.6}}
+#sumoFade{display:none;position:fixed;inset:0;background:#000;pointer-events:none;z-index:3}
+body.sumo #sumoFade{display:block}
 @keyframes sumoPop{0%{transform:translateX(-50%) scale(.6);opacity:0}70%{transform:translateX(-50%) scale(1.08)}100%{transform:translateX(-50%) scale(1);opacity:1}}
 #sumoPunch{display:none;bottom:calc(max(26px,env(safe-area-inset-bottom)) + 18px);left:50%;transform:translateX(-50%);width:min(230px,64vw);padding:7px 12px 8px;border-radius:11px;background:rgba(7,11,20,.78);border:1px solid rgba(255,255,255,.25);backdrop-filter:blur(8px);flex-direction:column;gap:4px;pointer-events:none}
 body.sumo #sumoPunch{display:flex}
@@ -447,7 +452,7 @@ body.sumo.touch #sumoCar{bottom:calc(max(26px,env(safe-area-inset-bottom)) + 300
 body.sumo #sumoQuit{display:block}
 body.sumo #pauseRetry{display:block}
 body.sumo #advHud,body.sumo #advNav,body.sumo #advPrompt,body.sumo #advExit,body.sumo #wpnSwap,body.sumo #bShoot{display:none!important}
-body.menu #sumoHud,body.menu #sumoBoard,body.menu #sumoFeed,body.menu #sumoMsg,body.menu #sumoPunch,body.menu #sumoHit,body.menu #sumoCar{display:none!important}
+body.menu #sumoHud,body.menu #sumoBoard,body.menu #sumoFeed,body.menu #sumoMsg,body.menu #sumoCount,body.menu #sumoFade,body.menu #sumoPunch,body.menu #sumoHit,body.menu #sumoCar{display:none!important}
 .seg button.lock{opacity:.42;filter:grayscale(.7)}
 .mdCard.mc7{background:linear-gradient(155deg,rgba(64,16,52,.92),rgba(10,8,24,.96));border:1px solid rgba(255,77,216,.4)}
 #ncIntro{position:fixed;inset:0;z-index:7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(ellipse at center,rgba(6,10,26,.86),rgba(2,3,8,.96));opacity:0;pointer-events:none;transition:opacity .45s}
@@ -1100,7 +1105,8 @@ body{font-family:var(--ft)}
 <div id="sumoBoard" class="hud"></div>
 <div id="sumoFeed" class="hud"></div>
 <div id="sumoMsg" class="hud"></div>
-<div id="sumoPunch" class="hud"><small id="sumoPunchN">BASIC PUNCH · LV1</small><span id="sumoPunchL">PUNCH!</span><div id="sumoPunchBar"><i id="sumoPunchF"></i></div></div>
+<div id="sumoCount" class="hud"></div><div id="sumoFade"></div>
+  <div id="sumoPunch" class="hud"><small id="sumoPunchN">BASIC PUNCH · LV1</small><span id="sumoPunchL">PUNCH!</span><div id="sumoPunchBar"><i id="sumoPunchF"></i></div></div>
 <div id="sumoHit" class="hud"></div>
 <div id="heatVig" class="hud"></div>
 <div id="sumoCar" class="hud">KAY CRUISER</div>
