@@ -296,6 +296,7 @@ body.adv #bGas{display:flex}
 #ainfo{display:none;top:16px;left:16px;background:var(--glass);border-left:4px solid var(--gold);padding:9px 18px 9px 14px;border-radius:0 6px 6px 0;min-width:180px;backdrop-filter:blur(8px)}
 body.arena #ainfo{display:block}body.arena #info,body.arena #mm{display:none}
 #ascore{font:900 italic 38px/1 var(--fd)}#acombo{font:700 13px var(--ft);letter-spacing:.16em;color:var(--gold);margin:3px 0}#atime{font:700 14px var(--ft);letter-spacing:.12em}
+#viewBtn{position:fixed;top:calc(max(10px,env(safe-area-inset-top)) + 52px);right:max(12px,env(safe-area-inset-right));height:36px;width:44px;padding:0;border-radius:6px;border:1px solid var(--line2);background:var(--glass);color:#8be5ff;font:800 9.5px/1.15 var(--ft);letter-spacing:1.5px;white-space:pre;z-index:4;cursor:pointer;backdrop-filter:blur(6px)}
 #pauseBtn{position:fixed;top:max(10px,env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));width:44px;height:44px;border-radius:6px;border:1px solid var(--line2);background:var(--glass);color:#fff;font:800 15px var(--ft);letter-spacing:2px;z-index:4;cursor:pointer;backdrop-filter:blur(8px)}
 #paintBtn{display:none;position:fixed;top:max(10px,env(safe-area-inset-top));left:calc(50% + 28px);width:44px;height:44px;border-radius:6px;border:1px solid var(--line2);background:var(--glass);font-size:19px;z-index:4;cursor:pointer;align-items:center;justify-content:center}
 body.arena #paintBtn{display:flex}
@@ -564,8 +565,8 @@ body.touch .tk{display:block}
 @keyframes cfFall{to{transform:translateY(115vh) rotate(720deg);opacity:.7}}
 
 /* ============ STATE VISIBILITY ============ */
-body.menu #info,body.menu #mm,body.menu #speedo,body.menu #altwrap,body.menu #touch,body.menu #pauseBtn,body.menu #fx,body.menu #toast,body.menu #count,body.menu #driftHud,body.menu #ainfo,body.menu #paintBtn,body.menu #paintBar,body.menu #coinHud,body.menu #puHud{display:none!important}
-body.done #touch,body.done #pauseBtn,body.done #paintBar,body.done #paintBtn{display:none!important}
+body.menu #info,body.menu #mm,body.menu #speedo,body.menu #altwrap,body.menu #touch,body.menu #pauseBtn,body.menu #viewBtn,body.menu #fx,body.menu #toast,body.menu #count,body.menu #driftHud,body.menu #ainfo,body.menu #paintBtn,body.menu #paintBar,body.menu #coinHud,body.menu #puHud{display:none!important}
+body.done #touch,body.done #pauseBtn,body.done #viewBtn,body.done #paintBar,body.done #paintBtn{display:none!important}
 body.touch #info{transform:scale(.72);transform-origin:top left;top:max(10px,env(safe-area-inset-top));left:12px}
 body.touch #mm{left:auto;bottom:auto;right:12px;top:max(10px,env(safe-area-inset-top));width:100px;height:100px}
 /* touch: pause + adventure-exit sit LEFT of the minimap, never on top of it */
@@ -1141,6 +1142,7 @@ body{font-family:var(--ft)}
 <div id="ainfo" class="hud"><div id="ascore">0</div><div id="acombo">DRIFT TO SCORE</div><div id="atime">0:00.00</div></div>
 <button id="paintBtn" type="button" aria-label="Paint">&#127912;</button>
 <div id="paintBar"></div>
+<button id="viewBtn" type="button" aria-label="Change camera view">VIEW</button>
 <button id="pauseBtn" type="button" aria-label="Pause">II</button>
 <section id="touch" hidden aria-label="Touch controls">
   <div id="stick"><span id="knob"></span></div>
