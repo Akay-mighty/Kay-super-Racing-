@@ -15,6 +15,7 @@ import { createAdventure } from './adventure.js';
 import { createSumo, SUMO_ARENAS, SUMO_RIVAL_COLS, SUMO_RIVAL_IDS } from './sumo.js';
 import { CARS, getCar, carBodyGeo as carGeo, carWheelSet, tintPart } from './cars-data.js';
 import { economy } from './economy.js';
+import { PUNCHERS, MAX_LV, getPuncher, punchStats, punchBars, upgradeCost, upgradeGate } from './punchers.js';
 import { missionsInit, missionEvent, missionState, missionsCompleted, MISSIONS } from './missions.js';
 import { cloud } from './cloud.js';
 import { net } from './net.js';
@@ -1787,6 +1788,8 @@ const sumoCtx = {
   boom: (p, n) => boomFX(sumoW(V3(p.x, p.y, p.z)), n),
   sparks: (x, y, z, n, c, s, up) => juice.burst(x, y + (cfg.type === 'sumo' ? SUMO_ALT : 0), z, n, c, s, up),
   hitStop: s2 => juice.hitStop(s2),
+  slowmo: (d, k) => juice.slowmo(d, k),
+  puncher: () => ({ id: economy.punSel(), lv: Math.max(1, economy.punLv(economy.punSel())) }), /* what is equipped + its upgrade level */
   fovKick: v => { fovKick = Math.max(fovKick, v); },
   nitroAdd: n => { P.nitro = Math.min(1, P.nitro + n); },
   cash: n => { economy.add(n); sfxCoin(); },
@@ -2242,6 +2245,8 @@ document.addEventListener('click', e => {
   if (gt) { document.querySelectorAll('.gTab').forEach(b => b.classList.toggle('on', b === gt)); document.querySelectorAll('.gSec').forEach(x => x.classList.toggle('on', x.dataset.gt === gt.dataset.gt)); sfxPad(); renderGarage(); return; }
   const tt = e.target.closest('[data-tat]'); /* tattoo card: buy once, fit per car */
   if (tt && tt.dataset.tat) { tatClick(tt.dataset.tat); return; }
+  const pb2 = e.target.closest('[data-pun],[data-punup]');
+  if (pb2 && !pb2.disabled) { if (pb2.dataset.punup) punClick(pb2.dataset.punup, true); else punClick(pb2.dataset.pun, false); return; }
   const wb = e.target.closest('[data-wpn]'); /* arsenal card: buy / equip a weapon */
   if (wb && wb.dataset.wpn) { wpnClick(wb.dataset.wpn); return; }
   const ga = e.target.closest('[data-garr]'); /* garage arrows: browse cars, preview in the showroom */
@@ -2760,7 +2765,13 @@ function sumoUI(dt) {
     const rdy = S.punchCd <= 0 && !S.freeze && !S.myOut;
     pcd.classList.toggle('rdy', rdy);
     pcd.classList.toggle('mega', S.mega > 0);
-    if (pf) pf.style.width = Math.round(clamp(1 - S.punchCd / 2.4, 0, 1) * 100) + '%';
+    if (pf) pf.style.width = Math.round(clamp(1 - S.punchCd / (S.punchMax || 2.4), 0, 1) * 100) + '%';
+    const pn = $('sumoPunchN'), pp = S.pun;
+    if (pn && pp) {
+      pn.textContent = pp.name + ' \u00b7 LV' + pp.lv;
+      pcd.style.setProperty('--pcc', pp.css);
+      pcd.classList.toggle('pro', pp.id !== 'basic' || pp.lv > 1);
+    }
     const lbl = $('sumoPunchL'); if (lbl) lbl.textContent = S.myOut ? 'OUT · ' + fmt0(Math.max(0, S.t)) : S.freeze ? 'GET READY' : rdy ? (S.mega ? 'MEGA PUNCH!' : 'PUNCH!') : 'PUNCH ' + S.punchCd.toFixed(1);
   }
   const board = $('sumoBoard');
@@ -3142,7 +3153,7 @@ function renderGarage() {
 /* ARSENAL tab: buy weapons once, they load into every Adventure session */
 function renderArsenal() {
   const list = $('wpnList'); if (!list) return;
-  list.innerHTML = '<div class="lbl" style="margin:2px 0 8px">ADVENTURE ARSENAL · BUY ONCE, FIRE FOREVER · SWAP WITH Q OR THE GOLD BUTTON</div>' + WEAPONS.map(w => {
+  list.innerHTML = punchersHTML() + '<div class="lbl" style="margin:14px 0 8px">ADVENTURE ARSENAL · BUY ONCE, FIRE FOREVER · SWAP WITH Q OR THE GOLD BUTTON</div>' + WEAPONS.map(w => {
     const has = economy.wpnHas(w.id);
     return `<button type="button" class="drvCard${has ? ' eq' : ' lock'}" data-wpn="${w.id}">
       <span class="dvAva">${w.name[0]}</span>
@@ -3151,6 +3162,53 @@ function renderArsenal() {
     </button>`;
   }).join('');
 }
+/* SUMO PUNCHERS: buy -> equip -> upgrade. Numbers come from punchers.js so card, HUD and hit always agree. */
+function punchersHTML() {
+  const rl = repLvlOf();
+  const cards = PUNCHERS.map(p => {
+    const lv = economy.punLv(p.id), own = lv > 0, eq = own && economy.punSel() === p.id;
+    const st = punchStats(p.id, own ? lv : 1), bars = punchBars(p.id, own ? lv : 1);
+    const pips = Array.from({ length: MAX_LV }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');
+    let act;
+    if (!own) {
+      const no = economy.money < p.price;
+      act = `<button type="button" class="pnBtn go${no ? ' no' : ''}" data-pun="${p.id}">BUY<small>$${p.price.toLocaleString()}</small></button>`;
+    } else {
+      const eqB = eq ? `<button type="button" class="pnBtn max" disabled>EQUIPPED<small>USED IN SUMO</small></button>` : `<button type="button" class="pnBtn go" data-pun="${p.id}">EQUIP<small>USE IN SUMO</small></button>`;
+      let upB;
+      if (lv >= MAX_LV) upB = `<button type="button" class="pnBtn max" disabled>MAX LEVEL<small>FULLY UPGRADED</small></button>`;
+      else {
+        const cost = upgradeCost(p.id, lv), gate = upgradeGate(lv);
+        if (gate > rl) upB = `<button type="button" class="pnBtn no" data-punup="${p.id}">LOCKED<small>NEEDS RESPECT LV${gate + 1}</small></button>`;
+        else upB = `<button type="button" class="pnBtn up${economy.money < cost ? ' no' : ''}" data-punup="${p.id}">UPGRADE \u2192 LV${lv + 1}<small>$${cost.toLocaleString()}</small></button>`;
+      }
+      act = eqB + upB;
+    }
+    return `<div class="pnCard${eq ? ' eq' : ''}${own ? '' : ' lock'}" style="--pc:${p.css}">
+      <div class="pnTop"><span class="dvAva">${p.short[0]}</span><span><b>${p.name}<em class="${eq ? 'on' : ''}">${eq ? 'EQUIPPED' : own ? 'OWNED' : 'LOCKED'}</em></b><small>${p.desc}</small></span></div>
+      <div class="pnLv">${pips}<span>LV ${own ? lv : 0}/${MAX_LV}</span></div>
+      <div class="pnBars"><span>POWER</span><s><i style="width:${Math.round(bars.power * 100)}%"></i></s><em>${st.force.toFixed(0)}</em>
+        <span>LAUNCH</span><s><i style="width:${Math.round(bars.launch * 100)}%"></i></s><em>${st.lift.toFixed(1)}</em>
+        <span>SPEED</span><s><i style="width:${Math.round(bars.speed * 100)}%"></i></s><em>${st.cd.toFixed(2)}s</em></div>
+      <div class="pnAct">${act}</div></div>`;
+  }).join('');
+  return '<div class="lbl pnHead">SUMO PUNCHERS \u00b7 BUY \u2192 EQUIP \u2192 UPGRADE \u00b7 STRONGER PUNCH = EASIER RING-OUTS</div>' + cards;
+}
+function punClick(id, up) {
+  const p = getPuncher(id), lv = economy.punLv(id);
+  if (up) {
+    if (lv < 1 || lv >= MAX_LV) return;
+    const gate = upgradeGate(lv), cost = upgradeCost(id, lv);
+    if (gate > repLvlOf()) { toast(`${p.name} LV${lv + 1} NEEDS RESPECT LV${gate + 1}`, '#ffd166'); beep(220, 0.2, 'square', 0.1); return; }
+    if (economy.punUp(id, cost, MAX_LV)) { sfxMission(); confetti(28); toast(`${p.name} \u2192 LEVEL ${lv + 1}! HITS HARDER`, '#7dff8a'); renderArsenal(); cloudPushSoon(); }
+    else { toast(`NEED $${(cost - economy.money).toLocaleString()} MORE`, '#ff7b7b'); beep(220, 0.2, 'square', 0.1); }
+    return;
+  }
+  if (lv > 0) { economy.punEquip(id); toast(p.name + ' EQUIPPED FOR SUMO', '#8be5ff'); sfxPad(); renderArsenal(); cloudPushSoon(); return; }
+  if (economy.punBuy(id, p.price)) { sfxMission(); confetti(40); toast(p.name + ' BOUGHT & EQUIPPED! GO SUMO', '#7dff8a'); renderArsenal(); cloudPushSoon(); }
+  else { toast(`NEED $${(p.price - economy.money).toLocaleString()} MORE FOR ${p.name}`, '#ff7b7b'); beep(220, 0.2, 'square', 0.1); }
+}
+function cloudPushSoon() { try { updateMoneyUI(); if (cloud.status === 'online') cloudPush(); } catch (e) { } }
 function wpnClick(id) {
   const w = WEAPONS.find(x => x.id === id); if (!w) return;
   if (economy.wpnHas(id)) { wsel = id; store.set('ksr.wsel', id); toast(w.name + ' EQUIPPED FOR ADVENTURE', '#8be5ff'); sfxPad(); renderArsenal(); return; }
@@ -3233,7 +3291,7 @@ let lastPushed = '';
 function profilePayload() {
   return {
     money: economy.money, owned: economy.owned, sel: economy.sel, stats: economy.stats, missions: economy.getMissions(), daily: economy.getDaily(),
-    up: economy.up || {}, wpn: economy.wpn || [],
+    up: economy.up || {}, wpn: economy.wpn || [], pun: economy.pun || null,
     extra: { drv: drvOwned(), driver: drvId(), tats: tatsOwned(), tat: tatMap(), rep: store.get('ksr.rep', 0) || 0, color: curColor, painted: store.get('sr.painted', 0) || 0 }
   };
 }
@@ -3263,6 +3321,12 @@ async function cloudSyncIn() {
   const mx = (a, b) => { const o = Object.assign({}, a || {}); for (const k in (b || {})) { const x = o[k], y = b[k]; o[k] = (x && typeof x === 'object' && y && typeof y === 'object') ? mx(x, y) : (typeof y === 'number' ? Math.max(typeof x === 'number' ? x : 0, y) : (x === undefined ? y : x)); } return o; };
   if (remote.up && typeof remote.up === 'object') { const u = mx(economy.up, remote.up); if (JSON.stringify(u) !== JSON.stringify(economy.up || {})) { economy.up = u; merged = true; } }
   if (Array.isArray(remote.wpn)) { const w = [...new Set([...(economy.wpn || []), ...remote.wpn])]; if (w.length !== (economy.wpn || []).length) { economy.wpn = w; merged = true; } }
+  if (remote.pun && typeof remote.pun === 'object') { /* punchers: keep the higher level of each, own anything either side owns */
+    const a = economy.pun, b = economy._cleanPun(remote.pun); let ch = false;
+    for (const id in b.lv) if ((b.lv[id] | 0) > (a.lv[id] | 0)) { a.lv[id] = b.lv[id]; ch = true; }
+    if (a.lv.basic !== undefined && ch && b.lv[b.sel] && (b.lv[b.sel] | 0) >= (a.lv[a.sel] | 0) && getPuncher(b.sel).price > getPuncher(a.sel).price) a.sel = b.sel;
+    if (ch) merged = true;
+  }
   const rx = remote.extra;
   if (rx && typeof rx === 'object') {
     if (Array.isArray(rx.drv)) { const d = [...new Set([...drvOwned(), ...rx.drv])]; if (d.length !== drvOwned().length) { store.set('ksr.drv', d); merged = true; } }

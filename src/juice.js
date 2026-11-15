@@ -29,7 +29,7 @@ export function createJuice(scene, dotTex) {
   const cloud = new THREE.Points(geo, mat);
   cloud.frustumCulled = false; cloud.visible = false; cloud.renderOrder = 9;
   scene.add(cloud);
-  let head = 0, stop = 0, active = false;
+  let head = 0, stop = 0, active = false, slowT = 0, slowK = 1;
   const tint = new THREE.Color();
 
   /* spawn a burst: world position, count, hex colour, speed, upward bias, gravity */
@@ -52,10 +52,14 @@ export function createJuice(scene, dotTex) {
   }
 
   function hitStop(s) { stop = Math.min(0.12, Math.max(stop, s)); }
-  const scale = () => (stop > 0 ? 0.35 : 1); /* the time-scale the frame loop multiplies dt by */
+  /* SLOW-MO: a longer, deeper dip than hit stop (the cinematic beat when you knock a rival off the arena).
+     duration is in REAL seconds; k is the time-scale (0.3 = 30% speed). */
+  function slowmo(d, k = 0.3) { slowT = Math.min(1.2, Math.max(slowT, d)); slowK = Math.min(slowK, k); }
+  const scale = () => (stop > 0 ? Math.min(0.35, slowT > 0 ? slowK : 1) : slowT > 0 ? slowK : 1); /* the time-scale the frame loop multiplies dt by */
 
   function update(dt) {
     if (stop > 0) stop -= dt;
+    if (slowT > 0) { slowT -= dt / Math.max(0.1, scale()); if (slowT <= 0) { slowT = 0; slowK = 1; } }
     if (!active) return;
     let any = false;
     for (let i = 0; i < N; i++) {
@@ -76,8 +80,8 @@ export function createJuice(scene, dotTex) {
     life.fill(0); col.fill(0); pos.fill(0);
     for (let i = 0; i < N; i++) pos[i * 3 + 1] = -9999;
     geo.attributes.position.needsUpdate = true; geo.attributes.color.needsUpdate = true;
-    active = false; cloud.visible = false; stop = 0;
+    active = false; cloud.visible = false; stop = 0; slowT = 0; slowK = 1;
   }
 
-  return { burst, hitStop, scale, update, reset };
+  return { burst, hitStop, slowmo, scale, update, reset };
 }

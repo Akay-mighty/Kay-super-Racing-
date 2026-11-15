@@ -4,6 +4,7 @@
 // (right mouse / E / PUNCH button), grab items, smash the props.
 // Round-based like a fighting game: RING OUT / WRECKED feed, scoreboard, announcements.
 import * as THREE from 'three';
+import { punchStats } from './punchers.js';
 
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -40,7 +41,7 @@ export function createSumo(canvasTex, ctx) {
   const S = {
     tier: 0, rivals: 3, rounds: ROUNDS, round: 1, t: 75, phase: 'intro', phaseT: 2.2,
     alive: 4, freeze: true, myOut: false, spectate: false, matchOver: false,
-    pow: 100, hitFlash: 0, punchCd: 0, mega: 0, shield: 0, myKO: 0, myRing: 0,
+    pow: 100, hitFlash: 0, punchCd: 0, punchMax: 1.2, pun: null, mega: 0, shield: 0, myKO: 0, myRing: 0,
     stars: {}, feed: [], msg: null, itemT: 6, env: 'day',
     juice: 0, lastHitT: -99 /* juice = gold flash when YOU land a hit; lastHitT = time of the last hit you took */
   };
@@ -443,25 +444,45 @@ export function createSumo(canvasTex, ctx) {
   function clearItems() { items.forEach(it => { arenaRoot.remove(it.grp); it.grp.traverse(o => { if (o.geometry && o.geometry !== propGeo.plank) o.geometry.dispose(); }); }); items.length = 0; }
 
 
-  /* ---------- SPRING PUNCH: a coil shoots out of the car's nose and shoves what it hits ---------- */
+  /* ---------- PUNCHERS: the fist that shoots out of the car's nose ----------
+     kind 'spring' = coil + disc, 'ram' = steel piston + flat head, 'glove' = golden boxing glove,
+     'rocket' = red rocket fist with a flame. punchers.js decides which one you own and how strong it is. */
   const coilGeo = (() => {
     const pts = [], TURNS = 7, N = 90;
     for (let i = 0; i <= N; i++) { const a = i / N * TURNS * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * 0.42, Math.sin(a) * 0.42, i / N)); }
     return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 160, 0.1, 8, false);
   })();
   const coilMat = new THREE.MeshStandardMaterial({ color: 0xdfe6ee, metalness: 0.85, roughness: 0.25, emissive: 0x4a5a6a });
-  const fistMat = new THREE.MeshStandardMaterial({ color: 0xff7a1a, metalness: 0.3, roughness: 0.35, emissive: 0xaa3a00 });
+  const rodGeo = new THREE.CylinderGeometry(0.2, 0.2, 1, 12).rotateX(Math.PI / 2).translate(0, 0, 0.5); /* 1 m long along +Z: scaled to the reach */
+  const rodMat = new THREE.MeshStandardMaterial({ color: 0x9aa6b6, metalness: 0.9, roughness: 0.3, emissive: 0x2a323e });
+  const fistGeo = {
+    spring: new THREE.CylinderGeometry(0.62, 0.62, 0.22, 20).rotateX(Math.PI / 2),
+    ram: new THREE.BoxGeometry(1.5, 1.15, 0.55),
+    glove: (() => { const g = new THREE.SphereGeometry(0.78, 18, 14); g.scale(1, 0.92, 0.9); return g; })(),
+    rocket: new THREE.ConeGeometry(0.55, 1.6, 16).rotateX(Math.PI / 2) /* nose points +Z */
+  };
+  const flameSprMat = new THREE.SpriteMaterial({ map: glowTex, color: 0xff8a20, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false });
   const springs = [];
   for (let i = 0; i < 4; i++) {
-    const g = new THREE.Group(), coil = new THREE.Mesh(coilGeo, coilMat), fist = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.22, 20).rotateX(Math.PI / 2), fistMat);
-    coil.frustumCulled = false; g.add(coil); g.add(fist); g.visible = false; group.add(g);
-    springs.push({ g, coil, fist, t: 0, own: null, big: false });
+    const g = new THREE.Group();
+    const coil = new THREE.Mesh(coilGeo, coilMat), rod = new THREE.Mesh(rodGeo, rodMat);
+    const fists = {};
+    for (const k in fistGeo) { const m = new THREE.Mesh(fistGeo[k], new THREE.MeshStandardMaterial({ color: 0xff7a1a, metalness: 0.3, roughness: 0.35, emissive: 0xaa3a00 })); m.visible = false; fists[k] = m; g.add(m); }
+    const flame = new THREE.Sprite(flameSprMat); flame.scale.set(2.4, 2.4, 1); flame.visible = false;
+    coil.frustumCulled = false; rod.frustumCulled = false; g.add(coil); g.add(rod); g.add(flame); g.visible = false; group.add(g);
+    springs.push({ g, coil, rod, fists, flame, t: 0, own: null, big: false, kind: 'spring', len: 3.4, sz: 1 });
   }
   const SP_T = 0.5, SP_LEN = 3.4;
-  function springFire(own, big) {
+  function springFire(own, big, st) {
     const sp = springs.find(q => q.t <= 0) || springs[0];
-    sp.t = SP_T; sp.own = own; sp.big = !!big; sp.g.visible = true;
-    sp.fist.material = big ? fistMat : fistMat;
+    const kind = st ? st.kind : 'spring';
+    sp.t = SP_T; sp.own = own; sp.big = !!big; sp.kind = kind; sp.g.visible = true;
+    sp.len = SP_LEN * (st ? st.range / 8.4 : 1); sp.sz = st ? 1 + 0.07 * (st.lv - 1) : 1;
+    for (const k in sp.fists) sp.fists[k].visible = k === kind;
+    const f = sp.fists[kind]; f.material.color.set(st ? st.col : 0xff7a1a); f.material.emissive.set(st ? st.col : 0xaa3a00).multiplyScalar(0.45);
+    sp.coil.visible = kind === 'spring'; sp.rod.visible = kind !== 'spring';
+    sp.flame.visible = kind === 'rocket';
+    if (big) f.material.emissive.set(0xff9a2f).multiplyScalar(0.8);
   }
   function stepSprings(dt) {
     for (const sp of springs) {
@@ -469,15 +490,18 @@ export function createSumo(canvasTex, ctx) {
       sp.t -= dt; const k = 1 - Math.max(0, sp.t) / SP_T; /* 0..1 */
       /* fast out (first 28%), brief hold, quick wobbly retract */
       const e = k < 0.28 ? 1 - Math.pow(1 - k / 0.28, 3) : k < 0.5 ? 1 : Math.max(0, 1 - (k - 0.5) / 0.5);
-      const wob = k > 0.28 && k < 0.5 ? Math.sin((k - 0.28) * 90) * 0.04 : 0;
-      const len = Math.max(0.05, (e + wob) * SP_LEN * (sp.big ? 1.25 : 1));
+      const wob = sp.kind === 'spring' && k > 0.28 && k < 0.5 ? Math.sin((k - 0.28) * 90) * 0.04 : 0;
+      const len = Math.max(0.05, (e + wob) * sp.len * (sp.big ? 1.25 : 1));
       let x, y, z, h;
       if (!sp.own) { sp.t = 0; sp.g.visible = false; continue; }
       if (sp.own === 'P') { const Pp = ctx.pPos(); if (!Pp) { sp.t = 0; sp.g.visible = false; continue; } h = ctx.pH(); x = Pp.x; z = Pp.z; y = ctx.pAlt ? ctx.pAlt() : 0.6; }
       else { x = sp.own.x; z = sp.own.z; y = sp.own.y; h = sp.own.h; }
       const fx = Math.sin(h), fz = Math.cos(h);
       sp.g.position.set(x + fx * 2.1, y + 0.62, z + fz * 2.1); sp.g.rotation.set(0, h, 0);
-      sp.coil.scale.set(1, 1, len); sp.fist.position.z = len + 0.09;
+      const th = sp.sz * (sp.kind === 'ram' ? 1.5 : 1);
+      sp.coil.scale.set(th, th, len); sp.rod.scale.set(th, th, len);
+      const f = sp.fists[sp.kind]; f.scale.setScalar(sp.sz); f.position.z = len + (sp.kind === 'rocket' ? 0.55 : sp.kind === 'glove' ? 0.5 : 0.09);
+      if (sp.kind === 'rocket') { sp.flame.position.z = len - 0.9; const fl = 1.6 + Math.sin(tG * 60) * 0.35; sp.flame.scale.set(fl * 1.6, fl * 1.6, 1); }
       if (sp.t <= 0) sp.g.visible = false;
     }
   }
@@ -488,11 +512,41 @@ export function createSumo(canvasTex, ctx) {
     const m = new THREE.Mesh(new THREE.TorusGeometry(1, 0.22, 8, 36).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, toneMapped: false, depthWrite: false }));
     m.visible = false; group.add(m); rings.push({ m, t: 0 });
   }
-  function ringFX(x, y, z, col) {
+  function ringFX(x, y, z, col, size = 1) {
     const r = rings.find(r => r.t <= 0) || rings[0];
-    r.t = 1; r.m.visible = true; r.m.material.color.set(col); r.m.position.set(x, y + 0.7, z); r.m.scale.setScalar(1);
+    r.t = 1; r.size = size; r.m.visible = true; r.m.material.color.set(col); r.m.position.set(x, y + 0.7, z); r.m.scale.setScalar(1);
   }
-  function stepRings(dt) { for (const r of rings) { if (r.t <= 0) continue; r.t -= dt * 2.4; r.m.scale.setScalar(1 + (1 - r.t) * 10); r.m.material.opacity = Math.max(0, r.t) * 0.85; if (r.t <= 0) r.m.visible = false; } }
+  function stepRings(dt) { for (const r of rings) { if (r.t <= 0) continue; r.t -= dt * 2.4; r.m.scale.setScalar(1 + (1 - r.t) * 10 * (r.size || 1)); r.m.material.opacity = Math.max(0, r.t) * 0.85; if (r.t <= 0) r.m.visible = false; } }
+
+  /* ---------- floating hit numbers ("80 PUNCH" like the reference): bigger puncher = bigger number ---------- */
+  const pops = [];
+  for (let i = 0; i < 6; i++) {
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+    const tex = new THREE.CanvasTexture(cv);
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false, fog: false, toneMapped: false }));
+    spr.visible = false; spr.renderOrder = 20; group.add(spr);
+    pops.push({ spr, cv, tex, t: 0, k: 1, vy: 0 });
+  }
+  function dmgPop(x, y, z, num, label, col, k = 1) {
+    const q = pops.find(p => p.t <= 0) || pops[0];
+    const g = q.cv.getContext('2d'); g.clearRect(0, 0, 256, 128);
+    g.textAlign = 'center'; g.lineJoin = 'round';
+    g.font = '900 78px Segoe UI,Arial'; g.lineWidth = 12; g.strokeStyle = 'rgba(8,10,18,.92)'; g.strokeText(String(num), 128, 62);
+    g.fillStyle = col; g.fillText(String(num), 128, 62);
+    if (label) { g.font = '900 28px Segoe UI,Arial'; g.lineWidth = 7; g.strokeText(label, 128, 108); g.fillStyle = '#fff'; g.fillText(label, 128, 108); }
+    q.tex.needsUpdate = true; q.t = 1; q.k = k; q.vy = 2.6 + k;
+    q.spr.position.set(x + rand(-0.6, 0.6), y + 2.2, z); q.spr.visible = true; q.spr.material.opacity = 1;
+    q.spr.scale.set(5.2 * k, 2.6 * k, 1);
+  }
+  function stepPops(dt) {
+    for (const q of pops) {
+      if (q.t <= 0) continue;
+      q.t -= dt * 1.05; q.spr.position.y += q.vy * dt; q.vy *= Math.exp(-2.2 * dt);
+      const pop = q.t > 0.85 ? 1 + (q.t - 0.85) * 3 : 1; /* quick overshoot "pop" in the first moment */
+      q.spr.scale.set(5.2 * q.k * pop, 2.6 * q.k * pop, 1); q.spr.material.opacity = Math.min(1, q.t * 2.2);
+      if (q.t <= 0) q.spr.visible = false;
+    }
+  }
 
   /* ---------- floating PUNCH tag over your car (the reference game rides "PUNCH 0.8"
      above the bumper — you read your cooldown without hunting the HUD) ---------- */
@@ -612,7 +666,13 @@ export function createSumo(canvasTex, ctx) {
       ctx.beep(220, 0.3, 'sawtooth', 0.1); ctx.boom(new THREE.Vector3(r.x, r.y + 1, r.z), 9); ctx.shake(0.45); ringFX(r.x, r.y, r.z, 0xff5c5c);
       ctx.hitStop(0.06); ctx.fovKick(6); /* the world holds its breath as they drop */
       ctx.sparks(r.x, (r.y || 0) + 1.2, r.z, 22, 0xff5c3c, 13, 3);
-      if (byName === 'YOU') { S.myKO++; S.juice = 1; ctx.cash(600); feed('YOU PUSHED ' + r.name + ' OFF', '#7dff8a'); }
+      if (byName === 'YOU') {
+        S.myKO++; S.juice = 1; ctx.cash(600); feed('YOU PUSHED ' + r.name + ' OFF', '#7dff8a');
+        /* the reward beat: banner, slow motion on the fall, a big number over the lip */
+        msg('KNOCK-OFF!  +600', '#ffd166', 1.5); ctx.slowmo && ctx.slowmo(0.75, 0.3); ctx.shake(0.8); ctx.fovKick(8);
+        dmgPop(r.x, (r.y || 0) + 1, r.z, '+600', 'KNOCK-OFF', '#7dff8a', 1.5);
+        ringFX(r.x, r.y, r.z, 0xffd166, 1.8);
+      }
       else if (byName) feed(byName + ' PUSHED ' + r.name + ' OFF', r.css);
       else feed(r.name + ' DROPPED OFF THE EDGE', r.css);
     }
@@ -637,42 +697,65 @@ export function createSumo(canvasTex, ctx) {
     else if (left.length === 2) msg('FINAL 2 CARS!', '#ff9a2f');
   }
 
+  /* ---------- LAUNCH: the one place a rival is hit hard enough to FLY ----------
+     force = horizontal launch speed, lift = vertical launch speed. While airborne the rival has
+     almost no drag (it keeps sailing), cannot steer, and tumbles — a strong punch near the edge
+     is a ring-out, a strong punch in the middle is a long flight across the deck. */
+  function launch(r, nx, nz, force, lift, by) {
+    r.vx = (r.vx || 0) + nx * force; r.vz = (r.vz || 0) + nz * force;
+    if (lift > 0) { r.hopV = Math.max(r.hopV || 0, lift); r.hopY = Math.max(r.hopY || 0, 0.02); }
+    r.stunT = Math.max(r.stunT || 0, 0.7 + (2 * lift) / 30); /* helpless for the whole flight */
+    r.spX = (Math.random() < 0.5 ? -1 : 1) * (1.6 + lift * 0.3); r.spZ = rand(-1, 1) * (1 + lift * 0.22);
+    r.lastHitBy = by;
+  }
+  const curPun = () => { const o = ctx.puncher ? ctx.puncher() : null; return punchStats(o ? o.id : 'basic', o ? o.lv : 1); };
+
   /* ---------- punch (player) ---------- */
   function punch() {
     if (S.freeze || S.myOut || S.punchCd > 0 || S.phase !== 'fight') return 0;
-    S.punchCd = 1.2;
-    const Pp = ctx.pPos(), h = ctx.pH(), Pv = ctx.pVel();
-    const fx = Math.sin(h), fz = Math.cos(h);
+    const st = curPun(), Pp = ctx.pPos(), h = ctx.pH();
     const mega = S.mega > 0; if (mega) S.mega = 0;
-    springFire('P', mega);
-    ringFX(Pp.x + fx * 2.4, ctx.pAlt ? ctx.pAlt() : 0.6, Pp.z + fz * 2.4, mega ? 0xff9a2f : 0xffffff);
-    ctx.beep(mega ? 120 : 150, 0.1, 'square', 0.13); ctx.thud(); ctx.shake(mega ? 0.6 : 0.35);
-    let hits = 0;
+    S.pun = st; S.punchCd = st.cd; S.punchMax = st.cd;
+    const fx = Math.sin(h), fz = Math.cos(h);
+    const k = clamp(st.power * (mega ? 1.45 : 1), 0.9, 3.6); /* impact scale: drives every bit of feedback below */
+    springFire('P', mega, st);
+    ringFX(Pp.x + fx * 2.4, ctx.pAlt ? ctx.pAlt() : 0.6, Pp.z + fz * 2.4, mega ? 0xff9a2f : st.col, 0.7 + k * 0.28);
+    ctx.beep(mega ? 110 : 150 - k * 12, 0.1, 'square', 0.13); ctx.thud(); ctx.shake(clamp(0.26 + k * 0.1, 0.3, 0.7));
+    let hits = 0, best = 0;
     for (const r of RIV) {
       if (r.elim || r.fall) continue;
       const dx = r.x - Pp.x, dz = r.z - Pp.z, d = Math.hypot(dx, dz);
-      if (d > 8.4 || d < 0.01) continue;
+      if (d > st.range + (mega ? 1 : 0) || d < 0.01) continue;
       const dot = (dx / d) * fx + (dz / d) * fz;
       if (dot < 0.25) continue; /* must be roughly in front */
-      const pw = (mega ? 30 : 21) * (0.8 + Math.min(1, 9 / d) * 0.4);
-      r.vx = (r.vx || 0) + (dx / d) * pw; r.vz = (r.vz || 0) + (dz / d) * pw;
-      r.vy = 4.5; r.airK = 0.4; r.stunT = 1.1; /* flung: the driver fights the wheel, badly */
-      r.lastHitBy = 'YOU'; r.grudge = 4; r.grudgeA = 'YOU'; /* hit a hornet: it hunts YOU now */
+      /* push mostly along the way you are FACING (a straight punch), a little toward the target */
+      let nx = fx * 0.55 + (dx / d) * 0.45, nz = fz * 0.55 + (dz / d) * 0.45; const nl = Math.hypot(nx, nz) || 1; nx /= nl; nz /= nl;
+      const force = st.force * (mega ? 1.45 : 1) * (0.82 + Math.min(1, 9 / d) * 0.36);
+      const lift = st.lift * (mega ? 1.3 : 1);
+      launch(r, nx, nz, force, lift, 'YOU');
+      r.grudge = 4; r.grudgeA = 'YOU'; /* hit a hornet: it hunts YOU now */
       r.h += rand(-0.5, 0.5);
-      r.hp -= mega ? 30 : 14; r.smokeT = 1;
-      r.hopY = 0.02; r.hopV = mega ? 5.6 : 4.2; /* knocked UP: the hit visibly lifts the car */
-      hits++;
-      ctx.sparks(r.x, (r.y || 0) + 1, r.z, mega ? 24 : 13, mega ? 0xff9a2f : 0xffd166, 10, 2.5); /* impact sparks ON the victim */
-      ctx.puff(V3L(r.x, (r.y || 0) + 1, r.z), V3L(0, 1, 0), 1.5);
+      r.hp -= st.dmg * (mega ? 2.1 : 1); r.smokeT = 1;
+      hits++; best = Math.max(best, force);
+      const ry = (r.y || 0) + 1;
+      ctx.sparks(r.x, ry, r.z, Math.round(10 * k + 6), mega ? 0xff9a2f : st.col, 8 + k * 2.2, 2.5); /* impact sparks ON the victim */
+      ctx.sparks(r.x, ry, r.z, Math.round(5 * k), 0xffffff, 12 + k * 2, 3);
+      ctx.puff(V3L(r.x, ry, r.z), V3L(0, 1, 0), 1.2 + k * 0.35);
+      ringFX(r.x, r.y || 0, r.z, mega ? 0xff9a2f : 0xffffff, 0.5 + k * 0.25);
+      dmgPop(r.x, ry, r.z, Math.round(force * 3), mega ? 'MEGA' : st.short, mega ? '#ff9a2f' : st.css, 0.8 + k * 0.3);
       if (r.hp <= 0) { elimRival(r, 'wreck', 'YOU'); }
-      else { dent(r.mesh); r.dented = true; feed('PUNCHED ' + r.name, '#ffffff'); }
+      else { dent(r.mesh); r.dented = true; feed((k > 2 ? 'SMASHED ' : 'PUNCHED ') + r.name, k > 2 ? '#ffd166' : '#ffffff'); }
     }
     if (hits) {
-      /* THE HIT: gold screen flash + hit stop + FOV punch. The 80-130 ms the world
-         freezes is what sells the power — everything after it lands harder. */
-      S.juice = 1; ctx.puff(Pp, V3L(0, 1, 0), 1.6); ctx.beep(1500, 0.05, 'square', 0.05); /* top layer: a bright snap over the bass thud */
-      ctx.hitStop(mega ? 0.06 : Math.min(0.05, 0.03 + hits * 0.008));
-      ctx.fovKick(mega ? 7 : 4.5);
+      /* THE HIT: gold flash + hit stop + FOV punch + recoil. The heavier the puncher, the longer the
+         world freezes and the harder the camera is shoved — that is what sells the weight. */
+      S.juice = 1; ctx.puff(Pp, V3L(0, 1, 0), 1.4 + k * 0.3);
+      ctx.beep(1500, 0.05, 'square', 0.05); /* top layer: a bright snap */
+      ctx.beep(Math.max(48, 95 - k * 14), 0.14 + k * 0.05, 'sawtooth', 0.12); /* bottom layer: the heavy thud */
+      ctx.hitStop(Math.min(0.12, 0.03 + k * 0.022 + (hits - 1) * 0.008));
+      ctx.fovKick(3.4 + k * 1.7);
+      ctx.shake(clamp(0.35 + k * 0.17, 0.4, 1));
+      ctx.onRam(-fx, -fz, clamp(k * 1.2, 1.4, 4.6)); /* recoil: you rock back on your own hit */
     }
     else ctx.beep(210, 0.05, 'sine', 0.05); /* whiff: a soft air-cut so a miss never feels like a bug */
     return hits;
@@ -709,6 +792,7 @@ export function createSumo(canvasTex, ctx) {
     }
     S.hitFlash = Math.max(0, S.hitFlash - dt * 1.6);
     S.punchCd = Math.max(0, S.punchCd - dt);
+    { const o = ctx.puncher ? ctx.puncher() : null, key = o ? o.id + ':' + o.lv : 'basic:1'; if (!S.pun || S.punKey !== key) { S.punKey = key; S.pun = curPun(); } } /* HUD: the equipped puncher */
     S.shield = Math.max(0, S.shield - dt);
     S.juice = Math.max(0, S.juice - dt * 2.2);
     if (S.lastHitBy && tG - S.lastHitT > 6) S.lastHitBy = ''; /* a hit 6s ago gets no credit for a fall now */
@@ -755,7 +839,7 @@ export function createSumo(canvasTex, ctx) {
       }
     }
 
-    stepProps(dt); stepRings(dt); stepSprings(dt);
+    stepProps(dt); stepRings(dt); stepSprings(dt); stepPops(dt);
     /* rim stripes breathe: slow pulse keeps the DROP ZONE loud even in calm moments */
     if (stripePulse) stripePulse.opacity = 0.68 + Math.sin(tG * 2.8) * 0.32;
     /* floodlight glow drifts a touch — the arena never feels frozen */
@@ -778,9 +862,13 @@ export function createSumo(canvasTex, ctx) {
     let aliveN = 0;
     for (const r of RIV) {
       if (r.elim) {
-        if (r.fall) { /* tumble into the clouds */
+        if (r.fall) { /* tumble into the clouds: keeps its launch momentum, spins, trails fire, splashes the cloud sea */
           r.vy -= 26 * dt; r.y += r.vy * dt; r.x += r.vx * dt; r.z += r.vz * dt;
-          r.mesh.position.set(r.x, r.y, r.z); r.mesh.rotation.x += dt * 2.4; r.mesh.rotation.z += dt * 1.7;
+          const dr = Math.exp(-0.22 * dt); r.vx *= dr; r.vz *= dr;
+          r.mesh.position.set(r.x, r.y, r.z); r.mesh.rotation.x += dt * (2.4 + (r.spX ? Math.abs(r.spX) * 0.6 : 0)); r.mesh.rotation.z += dt * (1.7 + (r.spZ || 0));
+          r.trailT = (r.trailT || 0) - dt;
+          if (r.trailT <= 0 && r.y > -40) { r.trailT = 0.07; ctx.puff(V3L(r.x, r.y + 0.4, r.z), V3L(0, 0.3, 0), 1.1); ctx.sparks(r.x, r.y + 0.5, r.z, 3, 0xff8a30, 5, 1); }
+          if (r.y < -34 && !r.splash) { r.splash = true; ringFX(r.x, -34, r.z, 0xffffff, 2.6); ctx.puff(V3L(r.x, -34, r.z), V3L(0, 3, 0), 3.2); ctx.beep(70, 0.35, 'sawtooth', 0.1); if (Math.hypot(r.x, r.z) < 120) ctx.shake(0.2); }
           if (r.y < -60) { r.mesh.visible = false; r.fall = false; }
         }
         continue;
@@ -790,8 +878,10 @@ export function createSumo(canvasTex, ctx) {
       /* falling */
       if (r.fall) { elimRivalVisual(r); continue; }
       const gy = groundAt(r.x, r.z);
-      if (gy === null) { /* over the edge: gravity takes over */
-        r.fall = true; r.vy = 0; r.vx = Math.sin(r.h) * r.speed; r.vz = Math.cos(r.h) * r.speed;
+      const flying = (r.hopY || 0) > 0.05 || (r.hopV || 0) > 0.5; /* launched and still in the air */
+      if (gy === null && !flying) { /* over the edge and out of air: gravity takes over (momentum kept) */
+        r.fall = true; r.y += (r.hopY || 0); r.vy = Math.min(0, r.hopV || 0); r.hopY = r.hopV = 0;
+        r.vx = (r.vx || 0) + Math.sin(r.h) * r.speed * 0.6; r.vz = (r.vz || 0) + Math.cos(r.h) * r.speed * 0.6;
         elimRival(r, 'ring', r.lastHitBy || ''); /* empty = nobody touched them: elimRival blames the edge, never "SOMEONE" */
         continue;
       }
@@ -799,15 +889,16 @@ export function createSumo(canvasTex, ctx) {
          While flung hard the rival can't steer — that's how punches kill near the edge. */
       if (r.vx || r.vz) {
         r.x += r.vx * dt; r.z += r.vz * dt;
-        r.vx *= Math.exp(-1.7 * dt); r.vz *= Math.exp(-1.7 * dt);
+        const drag = flying ? 0.42 : 1.7; /* airborne = almost no friction: a launched car keeps sailing */
+        r.vx *= Math.exp(-drag * dt); r.vz *= Math.exp(-drag * dt);
         if (Math.abs(r.vx) + Math.abs(r.vz) < 0.2) { r.vx = r.vz = 0; }
-        const hit2 = collide(r, 1.9, r.y);
+        const hit2 = collide(r, 1.9, r.y + (flying ? Math.max(0, r.hopY || 0) : 0));
         if (hit2.hit) { r.vx *= -0.3; r.vz *= -0.3; }
       }
       r.stunT = Math.max(0, (r.stunT || 0) - dt);
       r.shieldT = Math.max(0, (r.shieldT || 0) - dt);
       r.grudge = Math.max(0, r.grudge - dt);
-      const flung = Math.abs(r.vx) + Math.abs(r.vz) > 5 || r.stunT > 0;
+      const flung = Math.abs(r.vx) + Math.abs(r.vz) > 5 || r.stunT > 0 || flying;
       /* target: grudges first (hit a hornet, it hunts YOU — or the rival that punched it),
          then nearest alive car with the player slightly preferred */
       let tx, tz, td = 1e9, tgtIsPlayer = false;
@@ -875,8 +966,9 @@ export function createSumo(canvasTex, ctx) {
             const dq = Math.hypot(q.x - r.x, q.z - r.z);
             if (dq > 8.5) continue;
             const pw = 21 * (0.75 + r.skill * 0.5);
-            q.vx = (q.vx || 0) + (q.x - r.x) / Math.max(0.5, dq) * pw; q.vz = (q.vz || 0) + (q.z - r.z) / Math.max(0.5, dq) * pw;
-            q.hp -= 13; q.smokeT = 1; q.lastHitBy = r.name; q.stunT = 1; q.grudge = 3.5; q.grudgeA = r.name;
+            launch(q, (q.x - r.x) / Math.max(0.5, dq), (q.z - r.z) / Math.max(0.5, dq), pw, 4.2 + r.skill * 2.4, r.name);
+            q.hp -= 13; q.smokeT = 1; q.grudge = 3.5; q.grudgeA = r.name;
+            ctx.sparks(q.x, (q.y || 0) + 1, q.z, 9, 0xffd166, 8, 2);
             if (q.hp <= 0) elimRival(q, 'wreck', r.name);
           }
         }
@@ -899,9 +991,8 @@ export function createSumo(canvasTex, ctx) {
         if (mine > 7 && r.ramCd <= 0) { /* your bumper does the talking: fling them toward the edge */
           r.ramCd = 0.6; S.juice = Math.max(S.juice, 0.8);
           const pw = clamp(mine * 0.55, 8, 24);
-          r.vx = (r.vx || 0) + nx * pw; r.vz = (r.vz || 0) + nz * pw;
-          r.vy = 3.5; r.stunT = 0.9; r.lastHitBy = 'YOU'; r.grudge = 4; r.grudgeA = 'YOU';
-          r.hopY = 0.02; r.hopV = 3.4; /* rammed: they skip off the ground */
+          launch(r, nx, nz, pw, clamp(mine * 0.24, 3.2, 7.5), 'YOU'); /* rammed: they skip off the ground */
+          r.grudge = 4; r.grudgeA = 'YOU';
           Pv.x -= nx * mine * 0.22; Pv.z -= nz * mine * 0.22;
           if (S.shield <= 0) { r.hp -= clamp(mine * 0.5, 4, 14); if (r.hp <= 0) { elimRival(r, 'wreck', 'YOU'); continue; } }
           ctx.onRam(-nx, -nz, clamp(mine * 0.2, 2, 7));
@@ -924,18 +1015,30 @@ export function createSumo(canvasTex, ctx) {
           ctx.thud();
         }
       }
-      /* KNOCK-UP: punched / rammed cars briefly leave the deck. Seeing a rival's
-         wheels leave the ground is the difference between "I hit them" and "I
-         LAUNCHED them". */
-      if (r.hopY > 0 || r.hopV > 0) {
-        r.hopY += r.hopV * dt; r.hopV -= 24 * dt;
-        if (r.hopY <= 0) {
-          if (r.hopV < -4) { ctx.puff(V3L(r.x, (r.y || 0) + 0.4, r.z), V3L(0, 0.5, 0), 0.9); ctx.thud(); ctx.shake(0.12); }
+      /* KNOCK-UP / LAUNCH: punched or rammed cars leave the deck. hopY is the height above the ground,
+         hopV the vertical speed (gravity 30). Over a void the car just keeps flying — if it is still in
+         the air at the edge it sails clean out of the arena. */
+      const wasUp = (r.hopY || 0) > 0 || (r.hopV || 0) > 0;
+      if (wasUp) {
+        r.hopY += r.hopV * dt; r.hopV -= 30 * dt;
+        if (Math.random() < dt * 14 && r.hopY > 1) ctx.puff(V3L(r.x, (r.y || 0) + r.hopY, r.z), V3L(0, 0.2, 0), 0.7); /* launch trail */
+        if (r.hopY <= 0 && g2 !== null) {
+          const imp = -r.hopV;
+          if (imp > 4) {
+            ctx.puff(V3L(r.x, (r.y || 0) + 0.4, r.z), V3L(0, 0.5, 0), 0.9 + imp * 0.05); ctx.thud(); ctx.shake(clamp(imp * 0.012, 0.12, 0.5));
+            if (imp > 10) { ctx.sparks(r.x, (r.y || 0) + 0.4, r.z, Math.round(imp), 0xd9cdb0, 7, 1.5); ringFX(r.x, r.y || 0, r.z, 0xd9cdb0, 0.7); }
+          }
           r.hopY = 0; r.hopV = 0;
         }
       }
-      r.mesh.position.set(r.x, r.y + 0.04 + r.hopY, r.z);
-      r.mesh.rotation.y = r.h;
+      /* tumble while airborne, then settle back on the wheels */
+      if ((r.hopY || 0) > 0.05) { r.tumX = (r.tumX || 0) + (r.spX || 0) * dt; r.tumZ = (r.tumZ || 0) + (r.spZ || 0) * dt; }
+      else if (r.tumX || r.tumZ) {
+        r.tumX -= Math.round(r.tumX / TAU) * TAU; r.tumZ -= Math.round(r.tumZ / TAU) * TAU;
+        r.tumX *= Math.exp(-11 * dt); r.tumZ *= Math.exp(-11 * dt); if (Math.abs(r.tumX) + Math.abs(r.tumZ) < 0.01) r.tumX = r.tumZ = 0;
+      }
+      r.mesh.position.set(r.x, r.y + 0.04 + Math.max(r.hopY || 0, 0), r.z);
+      r.mesh.rotation.set(r.tumX || 0, r.h, r.tumZ || 0);
     }
     S.alive = aliveN + (S.myOut ? 0 : 1);
     /* rival vs rival separation (so they shove, not overlap) */

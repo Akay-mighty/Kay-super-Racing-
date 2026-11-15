@@ -1,11 +1,11 @@
 // Kay Super Racing — economy: cash, garage ownership, upgrades, stats, daily bonus (localStorage).
-const K = { money: 'ksr.money', owned: 'ksr.owned', sel: 'ksr.sel', missions: 'ksr.missions', daily: 'ksr.daily', stats: 'ksr.stats', up: 'ksr.up', wpn: 'ksr.wpn' };
+const K = { money: 'ksr.money', owned: 'ksr.owned', sel: 'ksr.sel', missions: 'ksr.missions', daily: 'ksr.daily', stats: 'ksr.stats', up: 'ksr.up', wpn: 'ksr.wpn', pun: 'ksr.pun' };
 const read = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } };
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ } };
 const emit = () => { try { window.dispatchEvent(new Event('ksr-money')); } catch (e) { } };
 
 export const economy = {
-  money: 0, owned: [], sel: 'stallion', stats: { earned: 0, races: 0, wins: 0 }, up: {}, wpn: [],
+  money: 0, owned: [], sel: 'stallion', stats: { earned: 0, races: 0, wins: 0 }, up: {}, wpn: [], pun: { lv: { basic: 1 }, sel: 'basic' },
 
   init() {
     this.money = read(K.money, 5000);
@@ -19,9 +19,10 @@ export const economy = {
     this.up = read(K.up, {});
     this.wpn = read(K.wpn, []);
     if (!Array.isArray(this.wpn)) this.wpn = [];
+    this.pun = this._cleanPun(read(K.pun, null));
     this.save();
   },
-  save() { write(K.money, this.money); write(K.owned, this.owned); write(K.sel, this.sel); write(K.stats, this.stats); write(K.up, this.up); write(K.wpn, this.wpn); },
+  save() { write(K.money, this.money); write(K.owned, this.owned); write(K.sel, this.sel); write(K.stats, this.stats); write(K.up, this.up); write(K.wpn, this.wpn); write(K.pun, this.pun); },
 
   add(n) { n = Math.round(n); if (!(n > 0)) return; this.money += n; this.stats.earned += n; this.save(); emit(); },
   spend(n) { n = Math.round(n); if (!(n > 0) || this.money < n) return false; this.money -= n; this.save(); emit(); return true; },
@@ -55,6 +56,30 @@ export const economy = {
     this.wpn.push(id); this.save(); emit(); return true;
   },
 
+  /* ---------- SUMO PUNCHERS: buy -> equip -> upgrade (stats live in punchers.js) ----------
+     pun = { lv: { basic: 1, ram: 3 }, sel: 'ram' } — lv > 0 means owned. */
+  _cleanPun(p) {
+    const o = { lv: { basic: 1 }, sel: 'basic' };
+    if (p && typeof p === 'object') {
+      if (p.lv && typeof p.lv === 'object') for (const k in p.lv) { const n = p.lv[k] | 0; if (n > 0) o.lv[k] = Math.min(5, n); }
+      if (p.sel && o.lv[p.sel]) o.sel = p.sel;
+    }
+    return o;
+  },
+  punLv(id) { return (this.pun.lv && this.pun.lv[id]) | 0; },
+  punSel() { return this.pun.sel; },
+  punBuy(id, price) {
+    if (this.punLv(id) > 0) return true;
+    if (!this.spend(price)) return false;
+    this.pun.lv[id] = 1; this.pun.sel = id; this.save(); emit(); return true;
+  },
+  punEquip(id) { if (this.punLv(id) < 1) return false; this.pun.sel = id; this.save(); emit(); return true; },
+  punUp(id, cost, max) {
+    const lv = this.punLv(id);
+    if (lv < 1 || lv >= max || !this.spend(cost)) return false;
+    this.pun.lv[id] = lv + 1; this.save(); emit(); return true;
+  },
+
   getMissions() { return read(K.missions, {}); },
   setMissions(m) { write(K.missions, m); },
 
@@ -67,9 +92,9 @@ export const economy = {
   setMoney(n) { this.money = Math.max(0, Math.round(n)); this.save(); emit(); },
   unlockAll(ids) { this.owned = [...new Set([...this.owned, ...ids])]; this.save(); emit(); },
   resetAll() {
-    this.money = 5000; this.owned = ['stallion']; this.sel = 'stallion'; this.up = {}; this.wpn = [];
+    this.money = 5000; this.owned = ['stallion']; this.sel = 'stallion'; this.up = {}; this.wpn = []; this.pun = { lv: { basic: 1 }, sel: 'basic' };
     this.stats = { earned: 0, races: 0, wins: 0 };
-    [K.money, K.owned, K.sel, K.missions, K.daily, K.stats, K.up, K.wpn].forEach(k => write(k, null));
+    [K.money, K.owned, K.sel, K.missions, K.daily, K.stats, K.up, K.wpn, K.pun].forEach(k => write(k, null));
     this.save(); emit();
   }
 };
